@@ -149,19 +149,19 @@ everything every story needs.
 
 ### Tests for User Story 1 (write first, must fail)
 
-- [ ] T025 [P] [US1] Write `tests/unit/test_identity.py`: `parse_identity` on the captured handshake payload → name `TANK-Gv2`, firmware 96, `firmware_untested` False; payload rewritten to `TANK-Gv2_097` via `with_payload` → firmware 97, `firmware_untested` True; payload of wrong length, without `_`, with non-numeric version, or non-ASCII → `ProtocolError("bad_identity")`
-- [ ] T026 [P] [US1] Write `tests/unit/test_discovery.py` for the pure `select_device(found, wanted_id)` function: zero matches → `NoDeviceFoundError`; one → that device; two without `wanted_id` → `MultipleDevicesError` listing both; `wanted_id` given → that device even if its name differs; advertisement name `TANK-Gv2` (Classic identity, no `_BLE`) is never matched by the name filter
-- [ ] T027 [P] [US1] Write `tests/integration/test_session_handshake.py` over `FakeTransport`: identity from capture; `drop={"query name/version": 2}` → success, 3 query frames in `.sent`; `drop=…: 3` → `HandshakeError`; first reply with `flip_checksum` then good → success on retry; no reply ever with `timeout=0.1` → raises within 1 s; fw-97 reply → warning on logger `openvave`, `identity.firmware_untested` True; transport `close()` called on success and on every error path
-- [ ] T028 [P] [US1] Write `tests/contract/test_cli_info_identity.py` calling `openvave.cli.main([...])` with an injected transport factory: human output contains `TANK-Gv2` and `firmware 96`; `--json` stdout parses and contains `schema_version` 1, `command` "info", `identity` object (name, firmware, firmware_untested, raw); exit codes 3/4/5/6/7 for injected `NoDeviceFoundError`/`MultipleDevicesError`/`BluetoothUnavailableError`/`RequestTimeoutError`/`HandshakeError`, each with `error:` on stderr, empty stdout under `--json`, no traceback; `MultipleDevicesError` lists candidates and a `--device` hint; fw-97 prints `warning:` on stderr and exits 0; `--version` prints version
+- [X] T025 [P] [US1] Write `tests/unit/test_identity.py`: `parse_identity` on the captured handshake payload → name `TANK-Gv2`, firmware 96, `firmware_untested` False; payload rewritten to `TANK-Gv2_097` via `with_payload` → firmware 97, `firmware_untested` True; payload of wrong length, without `_`, with non-numeric version, or non-ASCII → `ProtocolError("bad_identity")`
+- [X] T026 [P] [US1] Write `tests/unit/test_discovery.py` for the pure `select_device(found, wanted_id)` function: zero matches → `NoDeviceFoundError`; one → that device; two without `wanted_id` → `MultipleDevicesError` listing both; `wanted_id` given → that device even if its name differs; advertisement name `TANK-Gv2` (Classic identity, no `_BLE`) is never matched by the name filter
+- [X] T027 [P] [US1] Write `tests/integration/test_session_handshake.py` over `FakeTransport`: identity from capture; `drop={"query name/version": 2}` → success, 3 query frames in `.sent`; `drop=…: 3` → `HandshakeError`; first reply with `flip_checksum` then good → success on retry; no reply ever with `timeout=0.1` → raises within 1 s; fw-97 reply → warning on logger `openvave`, `identity.firmware_untested` True; transport `close()` called on success and on every error path
+- [X] T028 [P] [US1] Write `tests/contract/test_cli_info_identity.py` calling `openvave.cli.main([...])` with an injected transport factory: human output contains `TANK-Gv2` and `firmware 96`; `--json` stdout parses and contains `schema_version` 1, `command` "info", `identity` object (name, firmware, firmware_untested, raw); exit codes 3/4/5/6/7 for injected `NoDeviceFoundError`/`MultipleDevicesError`/`BluetoothUnavailableError`/`RequestTimeoutError`/`HandshakeError`, each with `error:` on stderr, empty stdout under `--json`, no traceback; `MultipleDevicesError` lists candidates and a `--device` hint; fw-97 prints `warning:` on stderr and exits 0; `--version` prints version
 
 ### Implementation for User Story 1
 
-- [ ] T029 [US1] Implement `src/openvave/protocol/identity.py` (`TESTED_FIRMWARE = frozenset({96})`, `parse_identity(payload) -> DeviceIdentity`) and export from `src/openvave/protocol/__init__.py` until T025 passes
-- [ ] T030 [US1] Implement `src/openvave/session.py` `TankG`: `TankG.over(transport, timeout=2.0)` async context manager — `open()`, wait 200 ms, handshake up to 3 attempts (retry on timeout or `ProtocolError`), one request in flight (asyncio.Lock), `FrameAssembler` reset per request, stray chunks traced and ignored, per-request `asyncio.timeout` → `RequestTimeoutError`, `ConnectionLostError` propagated, untested-firmware warning, `close()` always; properties `.identity`, `.device`; trace every TX/RX via `openvave.trace` — until T027 passes
-- [ ] T031 [US1] Implement `src/openvave/transport/ble.py`: `select_device` (until T026 passes); `discover(timeout)` scanning for local name `TANK-Gv2_BLE` → `list[DeviceInfo]`; `BleakTransport(device)` with characteristic UUIDs `0000ae41-0000-1000-8000-00805f9b34fb` (write without response) and `0000ae42-0000-1000-8000-00805f9b34fb` (notify), disconnect callback → `ConnectionLostError` on the pending request, bleak adapter-off/permission errors → `BluetoothUnavailableError`; add `TankG.connect(device=None, scan_timeout=5.0, timeout=2.0)` in `src/openvave/session.py` using it. This is the only module importing `bleak`
-- [ ] T032 [US1] Implement `src/openvave/cli/__init__.py` `main(argv=None, *, transport_factory=None) -> int`: argparse with global options from contracts/cli.md (`--json`, `--device`, `--scan-timeout`, `--timeout`, `--trace`, `--version`) and subcommand `info`; `asyncio.run`; `OpenvaveError.exit_code` mapping, `error:`/`hint:` lines (macOS Bluetooth permission hint for exit 5), traceback only with `OPENVAVE_DEBUG=1`, exit 1 for unexpected exceptions; `--trace` attaches a stderr handler to `openvave.trace`
-- [ ] T033 [US1] Implement `src/openvave/cli/render.py`: human identity block (`Device  TANK-Gv2  (firmware 96)`, address line when a device is known) and the JSON envelope (`schema_version` 1, `command`, `read_at` ISO 8601 UTC, `device`, `identity` with `raw` as hex) until T028 passes
-- [ ] T034 [US1] Write `tests/hardware/test_hw_identity.py` (`@pytest.mark.hardware`): `TankG.connect()` returns name `TANK-Gv2` and firmware 96 within 10 s
+- [X] T029 [US1] Implement `src/openvave/protocol/identity.py` (`TESTED_FIRMWARE = frozenset({96})`, `parse_identity(payload) -> DeviceIdentity`) and export from `src/openvave/protocol/__init__.py` until T025 passes
+- [X] T030 [US1] Implement `src/openvave/session.py` `TankG`: `TankG.over(transport, timeout=2.0)` async context manager — `open()`, wait 200 ms, handshake up to 3 attempts (retry on timeout or `ProtocolError`), one request in flight (asyncio.Lock), `FrameAssembler` reset per request, stray chunks traced and ignored, per-request `asyncio.timeout` → `RequestTimeoutError`, `ConnectionLostError` propagated, untested-firmware warning, `close()` always; properties `.identity`, `.device`; trace every TX/RX via `openvave.trace` — until T027 passes
+- [X] T031 [US1] Implement `src/openvave/transport/ble.py`: `select_device` (until T026 passes); `discover(timeout)` scanning for local name `TANK-Gv2_BLE` → `list[DeviceInfo]`; `BleakTransport(device)` with characteristic UUIDs `0000ae41-0000-1000-8000-00805f9b34fb` (write without response) and `0000ae42-0000-1000-8000-00805f9b34fb` (notify), disconnect callback → `ConnectionLostError` on the pending request, bleak adapter-off/permission errors → `BluetoothUnavailableError`; add `TankG.connect(device=None, scan_timeout=5.0, timeout=2.0)` in `src/openvave/session.py` using it. This is the only module importing `bleak`
+- [X] T032 [US1] Implement `src/openvave/cli/__init__.py` `main(argv=None, *, transport_factory=None) -> int`: argparse with global options from contracts/cli.md (`--json`, `--device`, `--scan-timeout`, `--timeout`, `--trace`, `--version`) and subcommand `info`; `asyncio.run`; `OpenvaveError.exit_code` mapping, `error:`/`hint:` lines (macOS Bluetooth permission hint for exit 5), traceback only with `OPENVAVE_DEBUG=1`, exit 1 for unexpected exceptions; `--trace` attaches a stderr handler to `openvave.trace`
+- [X] T033 [US1] Implement `src/openvave/cli/render.py`: human identity block (`Device  TANK-Gv2  (firmware 96)`, address line when a device is known) and the JSON envelope (`schema_version` 1, `command`, `read_at` ISO 8601 UTC, `device`, `identity` with `raw` as hex) until T028 passes
+- [X] T034 [US1] Write `tests/hardware/test_hw_identity.py` (`@pytest.mark.hardware`): `TankG.connect()` returns name `TANK-Gv2` and firmware 96 within 10 s
 
 ### Live verification (milestone gate)
 
@@ -170,7 +170,27 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
 - [ ] T035 [US1] Run `uv run openvave info`, `uv run openvave info --json`, `uv run openvave --trace info` and `uv run pytest --hardware tests/hardware`; confirm `TANK-Gv2 (firmware 96)`, exit 0, < 10 s, and the trace shows only `TX 00 59 11 00 00 00 ff`; record OS version, firmware and output in the PR description
 - [ ] T036 [US1] With the pedal off, run `uv run openvave info --scan-timeout 3`: `error:` on stderr, exit 3, ~3 s; with Bluetooth off: exit 5 with hint; record results in the PR
 
-**Checkpoint**: Milestone 1 DONE — MVP usable
+**Gate evidence (2026-11-16, macOS 26.5.2, local)**:
+
+- [X] `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src` (strict): clean.
+- [X] `uv run pytest -q`: **438 passed, 1 skipped** (the hardware test) on Python 3.13.12 and
+  3.11.13; `bleak` is still not imported by the hardware-free suite (lazy imports in
+  `transport/ble.py`).
+- [X] Independent criteria over `FakeTransport`: identity `TANK-Gv2` / 96 /
+  `firmware_untested = false`, first frame `00 59 11 00 00 00 ff`
+  (`test_identity_from_capture`); 2 drops → success with 3 queries, 3 drops → `HandshakeError`
+  / exit 7 (`test_two_drops_then_success`, `test_three_drops_handshake_error`,
+  `test_handshake_error_exit_7`); `info --json` has `schema_version: 1` + identity, and on
+  failure stdout is empty with the contract exit code (`test_injected_errors`).
+- [ ] T035/T036 on hardware — **blocked in the agent session**: launched from the Claude
+  desktop app, `uv run openvave --trace info` is killed by macOS TCC (SIGABRT, exit 134,
+  "attempted to access privacy-sensitive data without a usage description …
+  NSBluetoothAlwaysUsageDescription") because the responsible app has no Bluetooth usage string.
+  Must be run from Terminal/iTerm with Bluetooth permission granted. Observation for T055/T059:
+  on macOS a host app without a Bluetooth usage string crashes the process before Python can
+  map it to exit 5.
+
+**Checkpoint**: Milestone 1 DONE — MVP usable — pending hardware gate (T035/T036)
 
 ---
 
