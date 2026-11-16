@@ -161,10 +161,11 @@ Pedal owner, macOS, fw 96, phone app disconnected:
   - Evidence: `captures/fw96/20261116-step-reverb_decay.jsonl` = cycles 936–942 of session 2 (meta + handshake + 7 cycles, 5 `change` lines, no label text to review), cut with `tests/support/excerpt.py`. `test_reverb_decay_excerpt_replays_to_the_recorded_changes` replays it to the same changes, only `(preset, 15)`, reaching 0 and 127
 - [X] T033 [US1] Promote preset 15 to `confirmed` in `specs/protocol/command-layer.md` and `src/openvave/protocol/bytemap.py`, citing both sessions (2026-11-16 note + the new excerpt) per FR-010; doc↔code test green
   - Evidence: preset 15 is `confirmed` in both files, citing the probe capture and the step excerpt; doc↔code, bytemap and contract tests green
-- [ ] T034 [US1] (pending: pedal owner, own terminal) Owner runs `uv run openvave watch --json --duration 10 < /dev/null` and `uv run pytest --hardware tests/hardware/test_hw_watch.py`; record the results in the PR
-  - Not run yet. Hardware already exercised the stop paths: Ctrl-C → `stop` reason `interrupt` (4 sessions); a link drop with the tuner on (session 18:46) → `stop` reason `connection_lost`, `error: the pedal disconnected`, exit 6
+- [X] T034 [US1] Owner runs `uv run openvave watch --json --duration 10 < /dev/null` and `uv run pytest --hardware tests/hardware/test_hw_watch.py`; record the results in the PR
+  - Evidence (2026-11-16 19:16, owner, fw 96): `watch --json --duration 10 < /dev/null` printed `start` (all three regions decoded) then `stop` reason `duration`, exit 0. `pytest --hardware tests/hardware/test_hw_watch.py`: 1 passed in 7.25 s. Found on the way: `--duration` counted from the tool's start, so scanning and connecting (~6 s) ate into it; it now counts from the first poll (`test_duration_counts_from_the_first_poll_not_from_connecting`)
+  - Hardware also exercised the stop paths: Ctrl-C → `stop` reason `interrupt` (4 sessions); a link drop with the tuner on (session 18:46) → `stop` reason `connection_lost`, `error: the pedal disconnected`, exit 6
 
-**Checkpoint**: Milestone 1 DONE (MVP: the mapping tool works on hardware) — gate passed on hardware 2026-11-16 (T031–T033); T034 (scripted run + hardware pytest) still to run by the owner
+**Checkpoint**: Milestone 1 DONE (MVP: the mapping tool works on hardware) ✅ — gate passed on hardware 2026-11-16 (T031–T034)
 
 ---
 

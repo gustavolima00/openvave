@@ -79,18 +79,21 @@ def run_watch(
     *,
     cycles: Sequence[Cycle] = ({},),
     stdin: Sequence[tuple[int, str]] = (),
+    connect_seconds: float = 0.0,
     **fake_options: Any,
 ) -> Run:
     monkeypatch.chdir(tmp_path)
     scripted = ScriptedStdin(stdin)
     fake = GatedFake(watch_script(cycles), scripted, **fake_options)
+    clock = FakeClock()
 
     async def factory(
         device_id: str | None, scan_timeout: float
     ) -> tuple[Transport, DeviceInfo | None]:
+        clock.now += connect_seconds  # scanning and connecting take time
         return fake, PEDAL
 
-    code = main(["watch", *argv], transport_factory=factory, stdin=scripted, clock=FakeClock())
+    code = main(["watch", *argv], transport_factory=factory, stdin=scripted, clock=clock)
     out, err = capsys.readouterr()
     return Run(code, out, err, fake, tmp_path)
 
@@ -443,3 +446,20 @@ def test_long_labels_keep_the_value_column_aligned(
     arrows = {line.index("→") for line in lines}
     assert len(arrows) == 1, lines
     assert re.search(re.escape(BYTE_MAP_LABELS[6]) + r" +60 → 74", lines[0]), lines[0]
+
+
+def test_duration_counts_from_the_first_poll_not_from_connecting(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run = run_watch(
+        capsys,
+        monkeypatch,
+        tmp_path,
+        ["--json", "--no-record", "--duration", "2"],
+        connect_seconds=5.0,
+    )
+    assert run.code == 0, run.err
+    stop = run.events[-1]
+    assert stop["reason"] == "duration"
+    assert stop["t"] == pytest.approx(7.0, abs=0.01)  # t still counts from the tool's start
+    assert stop["cycles"] >= 4
