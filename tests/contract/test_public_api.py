@@ -37,6 +37,8 @@ CONTRACT_EXPORTS = {
     "DecodedField",
     "DecodedRegion",
     "ByteChange",
+    "WatchStart",
+    "WatchChange",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -58,6 +60,8 @@ DATACLASSES = (
     "DecodedField",
     "DecodedRegion",
     "ByteChange",
+    "WatchStart",
+    "WatchChange",
 )
 FORBIDDEN = ("write", "erase", "address")
 
@@ -133,7 +137,7 @@ def test_deprecated_known_fields_alias() -> None:
         for s in KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
     ] == [
         (6, "knob_unknown", "knob (which one: unknown)", "observed"),
-        (15, "reverb_decay", "reverb decay", "observed"),
+        (15, "reverb_decay", "reverb decay", "confirmed"),
         (16, "reverb_mix", "reverb mix?", "hypothesis"),
         (17, "ir_cab", "IR cab?", "hypothesis"),
     ]
@@ -176,3 +180,9 @@ def test_public_dataclasses_frozen(name: str) -> None:
 def test_fake_transport_satisfies_protocol() -> None:
     fake = openvave.FakeTransport.from_capture(FW96_CONNECT)
     assert isinstance(fake, openvave.Transport)
+
+
+def test_watch_event_union() -> None:
+    from openvave.models import WatchEvent
+
+    assert set(WatchEvent.__args__) == {openvave.WatchStart, openvave.WatchChange}

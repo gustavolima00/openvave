@@ -3,13 +3,17 @@
 Lifecycle: open transport → enable notifications → settle 200 ms → handshake (``0x11``, up to 3
 attempts) → reads (``0x23``) → close. Requests are strictly sequential. The transport is always
 closed on exit, whatever happened.
+
+:meth:`TankG.watch` is the only polling API: :meth:`~TankG.read` and :meth:`~TankG.snapshot` read
+once, and nothing polls unless a caller iterates ``watch()`` (spec 002 FR-001/FR-003).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+import time
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
 from datetime import UTC, datetime
 from types import TracebackType
 
@@ -19,12 +23,24 @@ from openvave.errors import (
     ProtocolError,
     RequestTimeoutError,
 )
-from openvave.models import DeviceIdentity, DeviceInfo, DeviceSnapshot, Region, RegionRead
+from openvave.models import (
+    DecodedRegion,
+    DeviceIdentity,
+    DeviceInfo,
+    DeviceSnapshot,
+    Region,
+    RegionRead,
+    WatchChange,
+    WatchEvent,
+    WatchStart,
+)
 from openvave.protocol import (
     FrameAssembler,
     build_query,
     build_read,
     decode_frame,
+    decode_region,
+    diff,
     parse_identity,
     parse_read_reply,
 )
@@ -43,6 +59,13 @@ DEFAULT_SCAN_TIMEOUT = 5.0
 
 SNAPSHOT_ORDER = (Region.DEVICE_INFO, Region.GLOBAL, Region.CURRENT_PRESET, Region.STATUS)
 """Read order of :meth:`TankG.snapshot` (the order the app and the fw96 capture use)."""
+
+WATCH_REGIONS = (Region.GLOBAL, Region.CURRENT_PRESET, Region.STATUS)
+"""Regions :meth:`TankG.watch` may poll, and its default (device info never changes)."""
+MIN_WATCH_INTERVAL = 0.2
+"""Smallest :meth:`TankG.watch` interval in seconds (research R4)."""
+
+Sleep = Callable[[float], Awaitable[object]]
 
 TransportSource = Callable[[], Awaitable[tuple[Transport, DeviceInfo | None]]]
 """Coroutine factory producing the transport to use and, if known, the device it reaches."""
@@ -135,6 +158,71 @@ class TankG:
             regions=regions,
             read_at=datetime.now(UTC),
         )
+
+    def watch(
+        self,
+        interval: float = 0.5,
+        *,
+        regions: Iterable[Region] = WATCH_REGIONS,
+        cycles: int | None = None,
+        sleep: Sleep = asyncio.sleep,
+    ) -> AsyncGenerator[WatchEvent, None]:
+        """Poll ``regions`` every ``interval`` seconds and yield what changed (read-only).
+
+        Each cycle reads the regions in order with ``0x23`` (one request in flight at a time).
+        The first cycle yields a :class:`WatchStart`; later cycles yield one
+        :class:`WatchChange` each when at least one byte differs from the previous cycle, and
+        nothing otherwise. ``interval`` is the time between cycle starts: a cycle that overruns
+        it starts the next one at once (no overlap, no backlog). ``cycles`` stops after that many
+        cycles (``None``: until the caller stops iterating). ``sleep`` is injectable for tests.
+
+        Raises :class:`ValueError` (at call time) for ``interval`` < 0.2, ``cycles`` < 1, or
+        ``regions`` that are empty, repeated or not among global / current preset / status.
+        Errors while polling (e.g. :class:`ConnectionLostError`) propagate out of the iterator.
+        """
+        if interval < MIN_WATCH_INTERVAL:
+            raise ValueError(f"interval must be at least {MIN_WATCH_INTERVAL} s, got {interval}")
+        if cycles is not None and cycles < 1:
+            raise ValueError(f"cycles must be at least 1, got {cycles}")
+        watched = tuple(regions)
+        if not watched or len(set(watched)) != len(watched):
+            raise ValueError("regions must be a non-empty sequence without repeats")
+        for region in watched:
+            if region not in WATCH_REGIONS:
+                raise ValueError(f"watch() cannot poll {region!r}")
+        return self._watch(interval, watched, cycles, sleep)
+
+    async def _watch(
+        self,
+        interval: float,
+        regions: tuple[Region, ...],
+        cycles: int | None,
+        sleep: Sleep,
+    ) -> AsyncGenerator[WatchEvent, None]:
+        identity = self.identity
+        started = time.monotonic()
+        previous: dict[Region, RegionRead] | None = None
+        cycle = 0
+        while cycles is None or cycle < cycles:
+            cycle_start = time.monotonic()
+            cycle += 1
+            reads = {region: await self.read(region) for region in regions}
+            decoded: dict[Region, DecodedRegion] = {
+                region: decode_region(read, identity.firmware) for region, read in reads.items()
+            }
+            t = time.monotonic() - started
+            if previous is None:
+                yield WatchStart(t=t, identity=identity, regions=decoded)
+            else:
+                changes = tuple(c for r in regions for c in diff(previous[r], reads[r]))
+                if changes:
+                    yield WatchChange(t=t, cycle=cycle, changes=changes, regions=decoded)
+            previous = reads
+            if cycles is not None and cycle >= cycles:
+                break
+            delay = cycle_start + interval - time.monotonic()
+            if delay > 0:
+                await sleep(delay)
 
     # -- context manager ----------------------------------------------------------------------
 

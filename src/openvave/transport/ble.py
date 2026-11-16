@@ -112,6 +112,14 @@ class BleakTransport:
     def on_notify(self, callback: Callable[[bytes], None]) -> None:
         self._callback = callback
 
+    @property
+    def att_mtu(self) -> int | None:
+        """Negotiated ATT MTU while connected (recorded in ``watch`` session records)."""
+        client = self._client
+        if client is None or not client.is_connected:
+            return None
+        return int(client.mtu_size)
+
     def on_disconnect(self, callback: Callable[[], None]) -> None:
         """Called if the link drops while open (the session fails the pending request)."""
         self._lost = callback

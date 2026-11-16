@@ -197,6 +197,36 @@ class ByteChange:
 
 
 @dataclass(frozen=True)
+class WatchStart:
+    """First event of :meth:`TankG.watch`: every watched region read once (the baseline)."""
+
+    t: float
+    """Seconds since the watch started (monotonic clock)."""
+    identity: DeviceIdentity
+    """Handshake result of the session."""
+    regions: Mapping[Region, DecodedRegion]
+    """Each watched region, decoded, in poll order."""
+
+
+@dataclass(frozen=True)
+class WatchChange:
+    """A poll cycle whose bytes differ from the previous cycle (all changes of one cycle)."""
+
+    t: float
+    """Seconds since the watch started (monotonic clock)."""
+    cycle: int
+    """Poll cycle number; the baseline cycle of :class:`WatchStart` is 1."""
+    changes: tuple[ByteChange, ...]
+    """Every changed byte of the cycle (at least one), in poll order then offset order."""
+    regions: Mapping[Region, DecodedRegion]
+    """Each watched region after the change, decoded, in poll order."""
+
+
+WatchEvent = WatchStart | WatchChange
+"""What :meth:`TankG.watch` yields."""
+
+
+@dataclass(frozen=True)
 class FieldSpec:
     """Deprecated (001): a known byte. Use :class:`ByteMapEntry` / ``BYTE_MAP`` instead."""
 

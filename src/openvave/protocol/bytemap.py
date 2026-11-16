@@ -14,6 +14,7 @@ MAP_FIRMWARE = 96
 """Firmware version the byte map was built from."""
 
 _FW96_CONNECT = "captures/fw96/20261116-probe-connect.jsonl"
+_STEP_REVERB_DECAY = "captures/fw96/20261116-step-reverb_decay.jsonl"
 
 
 def _unknown(region: Region, offset: int, notes: str) -> ByteMapEntry:
@@ -81,10 +82,10 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
         min=0,
         max=127,
         control="reverb decay knob",
-        confidence="observed",
+        confidence="confirmed",
         firmware=MAP_FIRMWARE,
-        evidence=(_FW96_CONNECT,),
-        notes="05 -> 7f with only this knob moved (2026-11-16)",
+        evidence=(_FW96_CONNECT, _STEP_REVERB_DECAY),
+        notes="only byte to move with this knob; 0..127 swept in a second session (2026-11-16)",
     ),
     ByteMapEntry(
         region=Region.CURRENT_PRESET,

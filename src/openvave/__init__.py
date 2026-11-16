@@ -14,6 +14,10 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
     async with openvave.TankG.over(fake) as pedal:        # any Transport
         ...
 
+    async with openvave.TankG.connect() as pedal:        # the only polling API
+        async for event in pedal.watch(interval=0.5):    # WatchStart, then WatchChange
+            ...
+
 Only the read-only commands ``0x11`` (query) and ``0x23`` (read) can ever be sent. The pure
 codec and the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``) live in
 :mod:`openvave.protocol`. Everything not exported here is internal.
@@ -42,6 +46,8 @@ from openvave.models import (
     Encoding,
     Region,
     RegionRead,
+    WatchChange,
+    WatchStart,
 )
 from openvave.protocol.identity import TESTED_FIRMWARE
 from openvave.session import TankG
@@ -75,5 +81,7 @@ __all__ = [
     "TankG",
     "Transport",
     "UnsafeCommandError",
+    "WatchChange",
+    "WatchStart",
     "discover",
 ]
