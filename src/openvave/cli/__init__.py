@@ -12,13 +12,14 @@ import logging
 import os
 import sys
 import traceback
-from collections.abc import Awaitable, Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime
 
 from openvave import __version__
 from openvave.cli import render
 from openvave.errors import BluetoothUnavailableError, MultipleDevicesError, OpenvaveError
-from openvave.models import DeviceInfo
+from openvave.models import DeviceInfo, Region
 from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, TankG
 from openvave.transport import Transport
 
@@ -89,6 +90,9 @@ def _parser() -> argparse.ArgumentParser:
     _global_options(common, suppress=True)
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.add_parser("info", parents=[common], help="identify the pedal and read its state regions")
+    preset = sub.add_parser("preset", parents=[common], help="read the current preset")
+    preset_sub = preset.add_subparsers(dest="action", metavar="ACTION", required=True)
+    preset_sub.add_parser("dump", parents=[common], help="print the 21-byte current preset buffer")
     return parser
 
 
@@ -139,6 +143,26 @@ async def _info(args: argparse.Namespace, factory: TransportFactory) -> str:
     return render.human_info(snapshot)
 
 
+async def _preset_dump(args: argparse.Namespace, factory: TransportFactory) -> str:
+    async def source() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    async with TankG(source, timeout=args.timeout) as pedal:
+        read = await pedal.read(Region.CURRENT_PRESET)
+        identity, device = pedal.identity, pedal.device
+    if args.json:
+        return render.dumps(render.preset_json(read, datetime.now(UTC), device, identity))
+    return render.human_preset(read, identity)
+
+
+COMMANDS: dict[
+    str, Callable[[argparse.Namespace, TransportFactory], Coroutine[None, None, str]]
+] = {
+    "info": _info,
+    "preset": _preset_dump,
+}
+
+
 def _report(err: OpenvaveError) -> None:
     print(f"error: {err}", file=sys.stderr)
     if isinstance(err, MultipleDevicesError):
@@ -178,7 +202,7 @@ def main(
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
         try:
-            output = asyncio.run(_info(args, factory))
+            output = asyncio.run(COMMANDS[args.command](args, factory))
         except OpenvaveError as err:
             if debug:
                 traceback.print_exc()

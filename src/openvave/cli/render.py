@@ -90,6 +90,15 @@ def human_info(snapshot: DeviceSnapshot) -> str:
     return human_identity(snapshot.identity, snapshot.device) + "\n\n" + "\n".join(blocks)
 
 
+def human_preset(read: RegionRead, identity: DeviceIdentity) -> str:
+    """``Current preset  (TANK-Gv2, firmware 96)   type 4 @ …`` then hex dump and known fields."""
+    header = (
+        f"{REGION_TITLES[read.region]}  ({identity.name}, firmware {identity.firmware})   "
+        f"{region_spec(read.region)}"
+    )
+    return "\n".join([header, *hex_dump(read.data), *field_lines(read)])
+
+
 def device_json(device: DeviceInfo | None) -> dict[str, Any] | None:
     if device is None:
         return None
@@ -145,6 +154,15 @@ def info_json(snapshot: DeviceSnapshot) -> dict[str, Any]:
     document["regions"] = {
         region.name.lower(): region_json(read) for region, read in snapshot.regions.items()
     }
+    return document
+
+
+def preset_json(
+    read: RegionRead, read_at: datetime, device: DeviceInfo | None, identity: DeviceIdentity
+) -> dict[str, Any]:
+    """The ``openvave preset dump --json`` document (``contracts/preset-dump.schema.json``)."""
+    document = envelope("preset dump", read_at, device, identity)
+    document["preset"] = region_json(read)
     return document
 
 
