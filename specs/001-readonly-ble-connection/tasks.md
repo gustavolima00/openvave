@@ -189,6 +189,13 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
   Must be run from Terminal/iTerm with Bluetooth permission granted. Observation for T055/T059:
   on macOS a host app without a Bluetooth usage string crashes the process before Python can
   map it to exit 5.
+- [X] Hardware, user's shell (macOS 26.5.2, fw 96): `uv run openvave info --json` → exit 0,
+  `device.name` `TANK-Gv2_BLE` (RSSI −77), identity `TANK-Gv2` / 96 / `firmware_untested`
+  false, `raw` = the captured handshake payload byte-for-byte. An earlier `uv run openvave info`
+  (pedal not advertising) → `error: no TANK-Gv2_BLE found` + hint, the exit-3 path.
+- [ ] Still to run for T035/T036: human `info`, `--trace info` (only `TX 00 59 11 00 00 00 ff`),
+  `pytest --hardware tests/hardware`, timing < 10 s, `--scan-timeout 3` with pedal off
+  (exit code + ~3 s), Bluetooth off → exit 5.
 
 **Checkpoint**: Milestone 1 DONE — MVP usable — pending hardware gate (T035/T036)
 
