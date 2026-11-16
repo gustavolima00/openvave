@@ -52,19 +52,27 @@ def select_device(found: Sequence[DeviceInfo], wanted_id: str | None) -> DeviceI
     return matches[0]
 
 
+def error_message(err: BaseException) -> str:
+    """Human message of an exception: its first string argument (bleak errors carry extra
+    arguments such as a reason enum), else ``str(err)``, else the class name."""
+    if err.args and isinstance(err.args[0], str) and err.args[0]:
+        return err.args[0]
+    return str(err) or type(err).__name__
+
+
 def _map_bleak_error(err: BaseException, during: str) -> Exception:
     """Translate a bleak/OS error into an openvave error."""
     import bleak.exc
 
     not_available = getattr(bleak.exc, "BleakBluetoothNotAvailableError", None)
     if not_available is not None and isinstance(err, not_available):
-        return BluetoothUnavailableError(f"Bluetooth unavailable: {err}")
-    text = str(err).lower()
+        return BluetoothUnavailableError(f"Bluetooth unavailable: {error_message(err)}")
+    text = error_message(err).lower()
     if any(k in text for k in ("powered off", "turned off", "unauthorized", "not authorized")):
-        return BluetoothUnavailableError(f"Bluetooth unavailable: {err}")
+        return BluetoothUnavailableError(f"Bluetooth unavailable: {error_message(err)}")
     if isinstance(err, PermissionError):
-        return BluetoothUnavailableError(f"Bluetooth permission denied: {err}")
-    return ConnectionLostError(f"{during} failed: {err or type(err).__name__}")
+        return BluetoothUnavailableError(f"Bluetooth permission denied: {error_message(err)}")
+    return ConnectionLostError(f"{during} failed: {error_message(err)}")
 
 
 async def _scan(timeout: float) -> dict[str, tuple[BLEDevice, DeviceInfo]]:
@@ -131,7 +139,7 @@ class BleakTransport:
         try:
             await client.write_gatt_char(WRITE_UUID, frame, response=False)
         except (BleakError, OSError) as err:
-            raise ConnectionLostError(f"write failed: {err}") from err
+            raise ConnectionLostError(f"write failed: {error_message(err)}") from err
 
     async def close(self) -> None:
         self._closing = True

@@ -55,3 +55,14 @@ def test_classic_identity_never_matches() -> None:
     with pytest.raises(NoDeviceFoundError):
         select_device([CLASSIC], None)
     assert select_device([CLASSIC, PEDAL_A], None) is PEDAL_A
+
+
+def test_error_message_uses_first_arg() -> None:
+    # bleak's BleakBluetoothNotAvailableError carries (message, reason); show only the message.
+    from openvave.transport.ble import error_message
+
+    assert error_message(Exception("Bluetooth device is turned off", 3)) == (
+        "Bluetooth device is turned off"
+    )
+    assert error_message(Exception("plain")) == "plain"
+    assert error_message(TimeoutError()) == "TimeoutError"
