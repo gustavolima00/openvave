@@ -13,6 +13,15 @@
 `confirmed` there is in scope. Anything this spec relies on that is not yet `confirmed` is
 called out explicitly.
 
+## Clarifications
+
+### Session 2026-11-16
+
+- Q: Behaviour when the handshake reports a firmware version other than 96? → A: Warn on stderr and continue; JSON output carries `firmware_untested: true`.
+- Q: Source of test fixtures? → A: Commit sanitized raw frames from the fw-96 probe capture under `captures/` first; derive all fixtures (incl. mutated negative cases) from them.
+- Q: Which OSes need real-pedal verification for v1? → A: macOS verified; Linux and Windows best-effort, documented as untested on hardware.
+- Q: Stability of `--json` output? → A: Versioned schema (`schema_version`); additive fields don't bump it, renames/removals do; raw hex always included.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Identify a connected pedal (Priority: P1)
@@ -187,8 +196,9 @@ library and asserts on the returned structured values and on the exact request b
 - **FR-012**: The system MUST NOT perform background polling; each CLI command issues only the
   requests it needs and then disconnects.
 - **FR-013**: When the handshake reports a firmware version other than `96`, the system MUST
-  [NEEDS CLARIFICATION: refuse to continue, continue with a warning on stderr, or continue
-  silently? Reads are non-destructive, but byte layouts are only confirmed for fw 96.]
+  continue with the (non-destructive) reads, print a warning on stderr naming the reported and
+  tested versions, and set `firmware_untested: true` in JSON output (`false` for fw 96). The
+  library MUST expose the same flag on its result.
 
 **Library & CLI**
 
@@ -201,6 +211,10 @@ library and asserts on the returned structured values and on the exact request b
   results go to stdout, diagnostics and errors to stderr, and failures exit non-zero with
   distinct exit codes at least for "no device found", "connection/timeout error" and "protocol
   error".
+- **FR-016a**: Every JSON document MUST carry a `schema_version`. Adding fields MUST NOT change
+  it; renaming, removing or changing the meaning of a field MUST bump it and be recorded in the
+  changelog. The raw hex of every region read MUST always be present, so newly decoded fields
+  are purely additive.
 - **FR-017**: Output MUST present undecoded bytes as raw hex with offsets and MUST label any
   interpreted field with its confidence level from the protocol docs; unknown bytes are shown as
   unknown, never guessed.
@@ -216,11 +230,13 @@ library and asserts on the returned structured values and on the exact request b
 - **FR-020**: Encoder/decoder tests MUST round-trip the fixture bytes (decode → model → encode
   yields identical bytes) for every request and reply in scope.
 - **FR-021**: Tests that need a physical pedal MUST be opt-in and excluded from CI.
-- **FR-022**: Test fixtures MUST be [NEEDS CLARIFICATION: is it acceptable to build full reply
-  frames from the recorded data payloads (header, echoed prefix and checksum reconstructed from
-  the documented format), or must sanitized raw captures from
-  `captures/private/20261116-111832-probe.jsonl` be committed under `captures/` first, so each
-  fixture cites an actual on-the-wire capture (Constitution II/III)?]
+- **FR-022**: Test fixtures MUST derive from real on-the-wire bytes: before protocol code is
+  written, the request/reply frames of the fw-96 probe
+  (`captures/private/20261116-111832-probe.jsonl`) MUST be sanitized (no device MAC, serial or
+  personal identifiers) and committed under `captures/` with firmware version, date and source
+  recorded, and `command-layer.md` MUST cite them. Negative-case fixtures (bad checksum, wrong
+  echo, split notifications, truncation) MUST be produced by documented mutations of those
+  captured frames, not written from scratch.
 
 ### Out of scope (future specs)
 
@@ -250,7 +266,8 @@ library and asserts on the returned structured values and on the exact request b
   runs.
 - **SC-002**: Values reported by `info` and `preset dump` on a fw-96 pedal match byte-for-byte
   the values the protocol docs record for the same device state.
-- **SC-003**: The full default test suite passes on a machine with no Bluetooth hardware at all.
+- **SC-003**: The full default test suite passes on macOS, Linux and Windows machines with no
+  Bluetooth hardware at all.
 - **SC-004**: An audit of the request bytes produced across the whole test suite finds zero
   frames with a command byte other than `0x11` or `0x23`.
 - **SC-005**: Every failure mode listed in Edge Cases ends with an explanatory message on stderr
@@ -271,8 +288,8 @@ library and asserts on the returned structured values and on the exact request b
   one via an explicit identifier rather than guessing.
 - Frame payload size fits the negotiated MTU for every request in scope (largest request is 15
   bytes); replies may still span notifications and are reassembled.
-- Supported platforms: [NEEDS CLARIFICATION: must v1 be verified on macOS, Linux and Windows,
-  or is macOS-only verification (the only platform tested so far) acceptable for v1, with Linux
-  and Windows as best-effort/documented-untested?]
+- Supported platforms: v1 requires hardware verification on macOS only. Linux and Windows are
+  best-effort and documented as "untested on hardware" until verified by a contributor; the
+  hardware-free test suite runs on all three.
 - The protocol docs under `specs/protocol/` are committed before or with this feature; per
   Constitution I, any new protocol finding during implementation updates them in the same PR.
