@@ -19,7 +19,7 @@ uv sync
 | # | Command | Expected |
 |---|---|---|
 | 1 | `uv run pytest` | All tests pass with Bluetooth off / no adapter; `tests/hardware` reported as skipped (SC-003) |
-| 2 | `uv run pytest tests/unit -k roundtrip` | Each of the 5 captured requests and replies in `captures/fw96/20261116-probe-connect.jsonl` round-trips byte-identically (FR-020) |
+| 2 | `uv run pytest tests/unit -k round_trip` | Each of the 5 captured requests and replies in `captures/fw96/20261116-probe-connect.jsonl` round-trips byte-identically (FR-020) |
 | 3 | `uv run pytest tests/unit -k reject` | bad marker, length mismatch, bad checksum, wrong command echo, address/length echo mismatch, short data are each rejected with their reason code (FR-005) |
 | 4 | `uv run pytest tests/integration` | Full capture replayed through `FakeTransport`: identity `TANK-Gv2`/96, four regions equal the recorded data; split-notification variants reassemble (FR-006); no-reply variant times out within `timeout` (FR-009); handshake succeeds on the 3rd attempt and fails after 3 (FR-007) |
 | 5 | `uv run pytest tests/contract` | `info`/`preset dump` JSON (from `FakeTransport`) validate against the schemas; exit codes 3–7 produced for their error conditions; stdout empty on failure with `--json` |

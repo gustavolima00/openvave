@@ -343,27 +343,58 @@ confidence-labelled fields, in human and JSON form; then project-wide polish.
 
 ### Tests for User Story 3 (write first, must fail)
 
-- [ ] T049 [P] [US3] Write `tests/contract/test_cli_preset_dump.py`: `preset dump --json` validates against the schema; `fake.sent` is exactly `[00 59 11 00 00 00 ff, 00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6]`; human output shows offsets `00:` and `10:` covering bytes 0–20 and `[6] knob (which one: unknown) = 60   (observed)`
-- [ ] T050 [P] [US3] Write `tests/integration/test_preset_no_cache.py`: two consecutive `main(["preset", "dump", "--json"])` runs, the second with a `replies` override whose byte 6 differs (built with `with_payload`), produce different `data`
+- [X] T049 [P] [US3] Write `tests/contract/test_cli_preset_dump.py`: `preset dump --json` validates against the schema; `fake.sent` is exactly `[00 59 11 00 00 00 ff, 00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6]`; human output shows offsets `00:` and `10:` covering bytes 0–20 and `[6] knob (which one: unknown) = 60   (observed)`
+- [X] T050 [P] [US3] Write `tests/integration/test_preset_no_cache.py`: two consecutive `main(["preset", "dump", "--json"])` runs, the second with a `replies` override whose byte 6 differs (built with `with_payload`), produce different `data`
 
 ### Implementation for User Story 3
 
-- [ ] T051 [US3] Add the `preset dump` subcommand to `src/openvave/cli/__init__.py` (handshake + `read(Region.CURRENT_PRESET)` only) and the preset renderers (human block + JSON `preset` object with `command` "preset dump") to `src/openvave/cli/render.py` until T049–T050 pass
-- [ ] T052 [US3] Add `tests/hardware/test_hw_preset.py` (`@pytest.mark.hardware`): preset read returns 21 bytes on fw 96
+- [X] T051 [US3] Add the `preset dump` subcommand to `src/openvave/cli/__init__.py` (handshake + `read(Region.CURRENT_PRESET)` only) and the preset renderers (human block + JSON `preset` object with `command` "preset dump") to `src/openvave/cli/render.py` until T049–T050 pass
+- [X] T052 [US3] Add `tests/hardware/test_hw_preset.py` (`@pytest.mark.hardware`): preset read returns 21 bytes on fw 96
 
 ### Polish & cross-cutting (same PR)
 
-- [ ] T053 [P] Update `README.md`: install (`uv tool install` / `pip install`), `openvave info` and `openvave preset dump` examples, JSON output and `schema_version` policy, exit code table link, platform support (macOS hardware-verified; Linux/Windows untested on hardware), macOS Bluetooth permission note, "close the phone app first" note; keep the unofficial disclaimer
-- [ ] T054 [P] Create `CHANGELOG.md` with an `Unreleased` / `0.1.0` entry: read-only `info` and `preset dump`, JSON schema_version 1, exit codes 0–7, tested firmware 96
-- [ ] T055 [P] Update `specs/protocol/command-layer.md` "Next steps": read-only replay now lives in the library (`src/openvave/`); record any new hardware observation from the milestone gates (e.g. behaviour when the phone app is still connected) with its confidence level
-- [ ] T056 Run `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest` and fix anything outstanding
+- [X] T053 [P] Update `README.md`: install (`uv tool install` / `pip install`), `openvave info` and `openvave preset dump` examples, JSON output and `schema_version` policy, exit code table link, platform support (macOS hardware-verified; Linux/Windows untested on hardware), macOS Bluetooth permission note, "close the phone app first" note; keep the unofficial disclaimer
+- [X] T054 [P] Create `CHANGELOG.md` with an `Unreleased` / `0.1.0` entry: read-only `info` and `preset dump`, JSON schema_version 1, exit codes 0–7, tested firmware 96
+- [X] T055 [P] Update `specs/protocol/command-layer.md` "Next steps": read-only replay now lives in the library (`src/openvave/`); record any new hardware observation from the milestone gates (e.g. behaviour when the phone app is still connected) with its confidence level
+- [X] T056 Run `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest` and fix anything outstanding
 
 ### Live verification (milestone gate)
 
 - [ ] T057 [US3] On macOS + fw 96: `uv run openvave preset dump`, turn one knob, run again — a parameter byte changes; `uv run openvave --trace preset dump` shows exactly two `TX` lines; record in the PR
 - [ ] T058 Run every scenario in `specs/001-readonly-ble-connection/quickstart.md` (hardware-free and hardware) and record pass/fail, OS version and firmware in the PR
 - [ ] T059 Run the phone-app-still-connected spot check from quickstart.md and record which exit code (3 or 6) occurs; update `contracts/cli.md` hint text if needed
-- [ ] T060 Confirm SC-001 by timing 10 consecutive `uv run openvave info` runs; ≥ 9 must finish under 10 s; record timings in the PR
+- [X] T060 Confirm SC-001 by timing 10 consecutive `uv run openvave info` runs; ≥ 9 must finish under 10 s; record timings in the PR
+
+**Gate evidence (2026-11-16, macOS 26.5.2 / build 25F84, fw 96, local)**:
+
+- [X] T056: `uv run ruff check`, `uv run ruff format --check` (README's code block included),
+  `uv run mypy src` (strict): clean. `uv run pytest -q`: **493 passed, 3 skipped** (the hardware
+  tests); `import openvave` still does not load `bleak`.
+- [X] Independent criteria over `FakeTransport`: `preset dump --json` validates against
+  `contracts/preset-dump.schema.json` and `data` is
+  `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43`
+  (`test_json_validates_against_schema`, `test_json_content`); `fake.sent` is exactly the query and
+  the preset read (`test_sends_only_query_and_preset_read`); a second run with a different byte 6
+  prints different `data` (`test_second_run_sees_new_preset_bytes`). Human block matches
+  contracts/cli.md line for line (`test_human_block`); dropped read → exit 6, empty stdout.
+- [X] T057 (trace part), hardware, Terminal-panel tab: `uv run openvave --trace preset dump` →
+  exit 0, exactly two `TX` lines (`00 59 11 00 00 00 ff`, then
+  `00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6`), each reply in one notification; preset bytes
+  byte-identical to the fw96 capture. `preset dump --json` → exit 0, same `data`, RSSI −68.
+- [ ] T057 (knob part): turn one knob (in edit mode — knobs do nothing outside it, M2) and re-run
+  `preset dump` — pending, needs the user at the pedal.
+- [X] T058 hardware-free: scenario 1 (full suite, hardware skipped) pass; 2 pass (10 round-trips —
+  the documented `-k roundtrip` matched nothing because the tests are named `round_trip`;
+  quickstart.md corrected); 3 pass (33 rejections); 4 `tests/integration` 37 passed; 5
+  `tests/contract` 62 passed; 6 SC-004 audit active on every run.
+- [X] T058 hardware: `openvave info` → TANK-Gv2 / fw 96, Global `00 00 01 01`, Status `01`,
+  exit 0; `info --json | python3 -m json.tool` → both exit 0; `uv run pytest --hardware
+  tests/hardware` → **3 passed in 17.82 s** (identity, snapshot, preset). Error paths (pedal off →
+  exit 3, Bluetooth off → exit 5) were verified in M1 and are not re-run here.
+- [ ] T059 phone-app-still-connected spot check — pending, needs the user's phone.
+- [X] T060 SC-001: 10 consecutive `uv run openvave info` → all exit 0, **10/10 under 10 s**:
+  6.40, 6.72, 6.15, 6.13, 6.17, 6.12, 6.40, 6.08, 6.26, 6.14 s (wall clock incl. `uv run` and the
+  5 s default scan).
 
 **Checkpoint**: Milestone 4 DONE — feature complete
 
