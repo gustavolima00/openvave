@@ -155,10 +155,19 @@ tail 0 B (the app verifies this layout for the `tankG` product).
 ## Next steps
 
 - ~~Validate the frame format on hardware~~ done: `openvave info` reads all four regions (fw 96).
+- ~~Replay **read-only** commands (`CMD_Q_NAME_AND_VER`, reads) from the library~~ done: the
+  read-only client lives in `src/openvave/` (`openvave info`, `openvave preset dump`, `TankG`). Its
+  encoder only accepts `0x11` and `0x23`; writes stay disabled until confirmed (Constitution IV).
 - Note: a macOS relay (`poc/ble_mitm.py`) is not discovered by the app, likely because it matches
   advertising data macOS cannot emit; a Linux/ESP32 relay would be needed for live app captures.
 - Correlate `0x10000004` byte positions with specific knobs: enter edit mode, then move one knob
   at a time (bytes 16/17 started above).
 - Determine what `0xE0000002/3` do (preset up/down? select index?).
-- Only after the above: replay **read-only** commands (`CMD_Q_NAME_AND_VER`, reads) from the
-  library. Writes stay disabled until confirmed (Constitution IV).
+
+### Host observations (from the 001 milestone gates)
+
+- macOS: a process launched from a host app that has no `NSBluetoothAlwaysUsageDescription` is
+  killed by TCC (SIGABRT, exit 134) on its first Bluetooth access, before Python can report an
+  error; from Terminal with Bluetooth permission it works (observed, 2026-11-16, macOS 26.5.2).
+- With the Mac's Bluetooth turned off, bleak reports it as unavailable and `openvave` exits 5
+  (observed, 2026-11-16).
