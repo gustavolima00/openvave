@@ -69,42 +69,43 @@ everything every story needs.
 
 ### Evidence (Constitution I, II, VI)
 
-- [ ] T001 Verify `specs/protocol/ble-gatt.md` and `specs/protocol/command-layer.md` are committed on this branch (they were uncommitted in the main checkout when the plan was written); if missing, stop and get them committed via `docs/constitution-v1` before continuing
-- [ ] T002 Perform the research R7 check: compare device-info bytes 19–21 (`b7 43 f3`, from `captures/private/20261116-111832-probe.jsonl`) against the pedal's BLE and Classic Bluetooth MAC addresses and any serial number; record the outcome (match / no match, without writing the MAC itself) as a note in `captures/README.md`
-- [ ] T003 Create `captures/fw96/20261116-probe-connect.jsonl` from `captures/private/20261116-111832-probe.jsonl`: first line a `{"event": "meta", ...}` record with `firmware: 96`, `platform: "macOS"`, `att_mtu: 185`, `date: "2026-11-16"`, `tool: "probe_readonly (POC)"`, `sanitized: [...]`; then the 15 `tx`/`rx-chunk`/`rx` events unchanged, except that if T002 found a match, devinfo bytes 19–21 become `00 00 00` with the frame checksum recomputed and `sanitized: ["devinfo[19:22]"]`
-- [ ] T004 [P] Write `captures/README.md`: JSONL schema (`t`, `event` ∈ meta/tx/rx-chunk/rx, `label`, `hex`, `cmd`), the meta record fields, sanitization rules (Constitution VI: no MAC/serial/account/personal preset names; raw captures stay in git-ignored `captures/private/`), and the T002 outcome
-- [ ] T005 [P] Update `specs/protocol/command-layer.md`: cite `captures/fw96/20261116-probe-connect.jsonl` as the evidence for frame format, `0x11` and `0x23`; state that multi-notification reassembly remains `observed` (every reply in the capture fit in one notification at MTU 185)
+- [X] T001 Verify `specs/protocol/ble-gatt.md` and `specs/protocol/command-layer.md` are committed on this branch (they were uncommitted in the main checkout when the plan was written); if missing, stop and get them committed via `docs/constitution-v1` before continuing
+  - *Done 2026-11-16*: missing on this branch; copied unchanged from the main checkout and committed here (`docs(protocol): …`). The copies in the main checkout are still uncommitted on `docs/constitution-v1`.
+- [X] T002 Perform the research R7 check: compare device-info bytes 19–21 (`b7 43 f3`, from `captures/private/20261116-111832-probe.jsonl`) against the pedal's BLE and Classic Bluetooth MAC addresses and any serial number; record the outcome (match / no match, without writing the MAC itself) as a note in `captures/README.md`
+- [X] T003 Create `captures/fw96/20261116-probe-connect.jsonl` from `captures/private/20261116-111832-probe.jsonl`: first line a `{"event": "meta", ...}` record with `firmware: 96`, `platform: "macOS"`, `att_mtu: 185`, `date: "2026-11-16"`, `tool: "probe_readonly (POC)"`, `sanitized: [...]`; then the 15 `tx`/`rx-chunk`/`rx` events unchanged, except that if T002 found a match, devinfo bytes 19–21 become `00 00 00` with the frame checksum recomputed and `sanitized: ["devinfo[19:22]"]`
+- [X] T004 [P] Write `captures/README.md`: JSONL schema (`t`, `event` ∈ meta/tx/rx-chunk/rx, `label`, `hex`, `cmd`), the meta record fields, sanitization rules (Constitution VI: no MAC/serial/account/personal preset names; raw captures stay in git-ignored `captures/private/`), and the T002 outcome
+- [X] T005 [P] Update `specs/protocol/command-layer.md`: cite `captures/fw96/20261116-probe-connect.jsonl` as the evidence for frame format, `0x11` and `0x23`; state that multi-notification reassembly remains `observed` (every reply in the capture fit in one notification at MTU 185)
 
 ### Scaffold
 
-- [ ] T006 Create `pyproject.toml`: name `openvave`, MIT, `requires-python = ">=3.11"`, description and README text containing "Unofficial. Not affiliated with or endorsed by M-VAVE / Cuvave", runtime dependency `bleak>=0.22`, dev dependency group `pytest`, `pytest-asyncio`, `jsonschema`, `ruff`, `mypy`; hatchling build backend; `[project.scripts] openvave = "openvave.cli:main"`; `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`, `testpaths = ["tests"]`, marker `hardware`; `[tool.ruff]` (line length 100, rules E,F,I,UP,B); `[tool.mypy] strict = true` for `src/`
-- [ ] T007 [P] Create package skeleton per plan.md: `src/openvave/__init__.py` (`__version__ = "0.1.0"`), `src/openvave/__main__.py` (calls `openvave.cli.main()`), `src/openvave/py.typed`, empty `src/openvave/protocol/__init__.py`, `src/openvave/transport/__init__.py`, `src/openvave/cli/__init__.py` (stub `main()` returning 0)
-- [ ] T008 [P] Create `.github/workflows/ci.yml`: matrix `ubuntu-latest`, `macos-latest`, `windows-latest` × Python 3.11 and 3.13; steps `uv sync`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest` (never `--hardware`)
-- [ ] T009 [P] Create `tests/conftest.py` with a `--hardware` command-line option; tests marked `hardware` are skipped unless it is given
+- [X] T006 Create `pyproject.toml`: name `openvave`, MIT, `requires-python = ">=3.11"`, description and README text containing "Unofficial. Not affiliated with or endorsed by M-VAVE / Cuvave", runtime dependency `bleak>=0.22`, dev dependency group `pytest`, `pytest-asyncio`, `jsonschema`, `ruff`, `mypy`; hatchling build backend; `[project.scripts] openvave = "openvave.cli:main"`; `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`, `testpaths = ["tests"]`, marker `hardware`; `[tool.ruff]` (line length 100, rules E,F,I,UP,B); `[tool.mypy] strict = true` for `src/`
+- [X] T007 [P] Create package skeleton per plan.md: `src/openvave/__init__.py` (`__version__ = "0.1.0"`), `src/openvave/__main__.py` (calls `openvave.cli.main()`), `src/openvave/py.typed`, empty `src/openvave/protocol/__init__.py`, `src/openvave/transport/__init__.py`, `src/openvave/cli/__init__.py` (stub `main()` returning 0)
+- [X] T008 [P] Create `.github/workflows/ci.yml`: matrix `ubuntu-latest`, `macos-latest`, `windows-latest` × Python 3.11 and 3.13; steps `uv sync`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest` (never `--hardware`)
+- [X] T009 [P] Create `tests/conftest.py` with a `--hardware` command-line option; tests marked `hardware` are skipped unless it is given
 
 ### Fixture support (tests first)
 
-- [ ] T010 [P] Write `tests/unit/test_captures.py`: loading `captures/fw96/20261116-probe-connect.jsonl` yields a meta record with firmware 96 and exactly 5 request/reply pairs keyed by label; every `tx` and `rx` frame has marker `00 59`, a length field matching its size and a valid checksum `(~sum(body)) & 0xFF`; no committed capture contains a 6-byte MAC-like pattern in `meta` or `label` fields
-- [ ] T011 [P] Write `tests/unit/test_mutations.py`: each helper changes only what it claims — `flip_checksum`, `set_command(b)`, `set_echo(type=, address=, length=)` (recomputes checksum), `with_payload(bytes)` (recomputes length + checksum), `truncate(n)`, `split(frame, n)` (n chunks concatenating to the original)
-- [ ] T012 Implement `tests/support/__init__.py`, `tests/support/captures.py` (`load_capture(path) -> Capture` with `.meta`, `.pairs: dict[label, (tx: bytes, rx: bytes)]`, `.ordered_tx`) and `tests/support/mutations.py` until T010–T011 pass
+- [X] T010 [P] Write `tests/unit/test_captures.py`: loading `captures/fw96/20261116-probe-connect.jsonl` yields a meta record with firmware 96 and exactly 5 request/reply pairs keyed by label; every `tx` and `rx` frame has marker `00 59`, a length field matching its size and a valid checksum `(~sum(body)) & 0xFF`; no committed capture contains a 6-byte MAC-like pattern in `meta` or `label` fields
+- [X] T011 [P] Write `tests/unit/test_mutations.py`: each helper changes only what it claims — `flip_checksum`, `set_command(b)`, `set_echo(type=, address=, length=)` (recomputes checksum), `with_payload(bytes)` (recomputes length + checksum), `truncate(n)`, `split(frame, n)` (n chunks concatenating to the original)
+- [X] T012 Implement `tests/support/__init__.py`, `tests/support/captures.py` (`load_capture(path) -> Capture` with `.meta`, `.pairs: dict[label, (tx: bytes, rx: bytes)]`, `.ordered_tx`) and `tests/support/mutations.py` until T010–T011 pass
 
 ### Protocol core (tests first — Constitution III)
 
-- [ ] T013 [P] Write `tests/unit/test_frame.py`: `encode_frame(0x11, b"")` == `00 59 11 00 00 00 ff`; the 4 captured read requests encode byte-identically from their (command, body); each captured reply decodes to (command, body) and re-encodes identically; rejections via mutations with reason codes `bad_marker`, `length_mismatch`, `bad_checksum`; parametrised over all 256 command bytes: only `0x11` and `0x23` encode, all others raise `UnsafeCommandError`
-- [ ] T014 [P] Write `tests/unit/test_assembler.py`: captured replies fed as one chunk, as `split(n)` for every n from 2 to len(frame), and two frames concatenated in one chunk all yield the original frames in order; a chunk not starting with `00 59` while empty is reported as stray; `reset()` discards a partial frame
-- [ ] T015 [P] Write `tests/unit/test_commands.py`: `build_query()` and `build_read(Region.X)` for all four regions equal the captured requests; `parse_read_reply(region, frame)` on captured replies returns `RegionRead` with the recorded data; mutations produce `wrong_command`, `echo_mismatch` (type, address and length separately) and `short_data`
-- [ ] T016 [P] Implement `src/openvave/errors.py` per data-model.md: `OpenvaveError` base; `NoDeviceFoundError`, `MultipleDevicesError(candidates)`, `BluetoothUnavailableError`, `ConnectionLostError`, `RequestTimeoutError`, `ProtocolError(reason)`, `HandshakeError`, `UnsafeCommandError`; each with an `exit_code` class attribute matching contracts/cli.md (3, 4, 5, 6, 6, 7, 7, 1)
-- [ ] T017 [P] Implement `src/openvave/models.py` per data-model.md: `Region` enum (type, address, length for DEVICE_INFO/GLOBAL/CURRENT_PRESET/STATUS), frozen dataclasses `RegionRead`, `DeviceInfo`, `DeviceIdentity`, `DeviceSnapshot`, and `KNOWN_FIELDS: dict[Region, list[FieldSpec]]` with exactly the documented entries (GLOBAL offset 3 `edited_flag` hypothesis; CURRENT_PRESET offset 6 `knob_unknown` observed)
-- [ ] T018 Implement `src/openvave/protocol/frame.py` (`ALLOWED_COMMANDS`, `encode_frame`, `decode_frame`, `checksum`) until T013 passes
-- [ ] T019 Implement `src/openvave/protocol/assembler.py` (`FrameAssembler.feed(chunk) -> list[bytes]`, `.reset()`, stray-chunk reporting) until T014 passes
-- [ ] T020 Implement `src/openvave/protocol/commands.py` (`build_query`, `build_read(region)` — accepts only `Region`, `parse_read_reply`) and re-export the codec API from `src/openvave/protocol/__init__.py` until T015 passes
+- [X] T013 [P] Write `tests/unit/test_frame.py`: `encode_frame(0x11, b"")` == `00 59 11 00 00 00 ff`; the 4 captured read requests encode byte-identically from their (command, body); each captured reply decodes to (command, body) and re-encodes identically; rejections via mutations with reason codes `bad_marker`, `length_mismatch`, `bad_checksum`; parametrised over all 256 command bytes: only `0x11` and `0x23` encode, all others raise `UnsafeCommandError`
+- [X] T014 [P] Write `tests/unit/test_assembler.py`: captured replies fed as one chunk, as `split(n)` for every n from 2 to len(frame), and two frames concatenated in one chunk all yield the original frames in order; a chunk not starting with `00 59` while empty is reported as stray; `reset()` discards a partial frame
+- [X] T015 [P] Write `tests/unit/test_commands.py`: `build_query()` and `build_read(Region.X)` for all four regions equal the captured requests; `parse_read_reply(region, frame)` on captured replies returns `RegionRead` with the recorded data; mutations produce `wrong_command`, `echo_mismatch` (type, address and length separately) and `short_data`
+- [X] T016 [P] Implement `src/openvave/errors.py` per data-model.md: `OpenvaveError` base; `NoDeviceFoundError`, `MultipleDevicesError(candidates)`, `BluetoothUnavailableError`, `ConnectionLostError`, `RequestTimeoutError`, `ProtocolError(reason)`, `HandshakeError`, `UnsafeCommandError`; each with an `exit_code` class attribute matching contracts/cli.md (3, 4, 5, 6, 6, 7, 7, 1)
+- [X] T017 [P] Implement `src/openvave/models.py` per data-model.md: `Region` enum (type, address, length for DEVICE_INFO/GLOBAL/CURRENT_PRESET/STATUS), frozen dataclasses `RegionRead`, `DeviceInfo`, `DeviceIdentity`, `DeviceSnapshot`, and `KNOWN_FIELDS: dict[Region, list[FieldSpec]]` with exactly the documented entries (GLOBAL offset 3 `edited_flag` hypothesis; CURRENT_PRESET offset 6 `knob_unknown` observed)
+- [X] T018 Implement `src/openvave/protocol/frame.py` (`ALLOWED_COMMANDS`, `encode_frame`, `decode_frame`, `checksum`) until T013 passes
+- [X] T019 Implement `src/openvave/protocol/assembler.py` (`FrameAssembler.feed(chunk) -> list[bytes]`, `.reset()`, stray-chunk reporting) until T014 passes
+- [X] T020 Implement `src/openvave/protocol/commands.py` (`build_query`, `build_read(region)` — accepts only `Region`, `parse_read_reply`) and re-export the codec API from `src/openvave/protocol/__init__.py` until T015 passes
 
 ### Transport interface, fake transport, trace, safety audit
 
-- [ ] T021 [P] Write `tests/unit/test_fake_transport.py`: `FakeTransport.from_capture(path)` answers each captured request with its captured reply (via `on_notify`), records every written frame in `.sent`; options `split=n` (deliver replies in n chunks), `drop={label: count}` (no reply for the first k matching requests), `disconnect_after=k`, `replies={label: bytes}` override; an unknown request raises `AssertionError` in the test
-- [ ] T022 Implement `src/openvave/transport/__init__.py` (`Transport` Protocol per contracts/library-api.md) and `src/openvave/transport/fake.py` (including its own capture-JSONL parsing for `from_capture`, so library users need nothing from `tests/`) until T021 passes
-- [ ] T023 [P] Implement `src/openvave/trace.py` (logger `openvave.trace`, `trace_tx(frame)`, `trace_rx_chunk(chunk)`, `trace_rx(frame)` emitting `TX …`/`RX …` at DEBUG) with `tests/unit/test_trace.py` asserting the line format and silence when no handler is attached
-- [ ] T024 Add the SC-004 audit to `tests/conftest.py`: a session-scoped autouse fixture that wraps `FakeTransport.write`, collects every frame written across the whole run and fails the session if any frame's command byte (offset 2) is not `0x11`/`0x23`
+- [X] T021 [P] Write `tests/unit/test_fake_transport.py`: `FakeTransport.from_capture(path)` answers each captured request with its captured reply (via `on_notify`), records every written frame in `.sent`; options `split=n` (deliver replies in n chunks), `drop={label: count}` (no reply for the first k matching requests), `disconnect_after=k`, `replies={label: bytes}` override; an unknown request raises `AssertionError` in the test
+- [X] T022 Implement `src/openvave/transport/__init__.py` (`Transport` Protocol per contracts/library-api.md) and `src/openvave/transport/fake.py` (including its own capture-JSONL parsing for `from_capture`, so library users need nothing from `tests/`) until T021 passes
+- [X] T023 [P] Implement `src/openvave/trace.py` (logger `openvave.trace`, `trace_tx(frame)`, `trace_rx_chunk(chunk)`, `trace_rx(frame)` emitting `TX …`/`RX …` at DEBUG) with `tests/unit/test_trace.py` asserting the line format and silence when no handler is attached
+- [X] T024 Add the SC-004 audit to `tests/conftest.py`: a session-scoped autouse fixture that wraps `FakeTransport.write`, collects every frame written across the whole run and fails the session if any frame's command byte (offset 2) is not `0x11`/`0x23`
 
 ### Live verification (milestone gate)
 
@@ -112,7 +113,24 @@ everything every story needs.
 - Reviewer confirms the T002/T003 sanitization decision in `captures/README.md`.
 - `uv run pytest -q` locally with Bluetooth turned off: all pass, no hardware tests collected.
 
-**Checkpoint**: Milestone 0 DONE
+**Gate evidence (2026-11-16, macOS 26 / Darwin 25.5, local)**:
+
+- [X] `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src` (strict): clean on
+  Python 3.13.12 and 3.11.13.
+- [X] `uv run pytest -q`: **373 passed** on 3.13.12 and 3.11.13; `tests/hardware` collects
+  nothing; `bleak` is never imported by the suite (checked via `sys.modules`), so it is
+  hardware-free by construction. Bluetooth was not physically switched off for this run.
+- [X] Round-trip: all 10 captured frames (5 tx, 5 rx) decode → re-encode byte-identically; the
+  4 read requests and the query encode identically from (command, body); every split of every
+  reply reassembles.
+- [X] Allowlist: all 256 command bytes tested; only `0x11`/`0x23` encode, the rest raise
+  `UnsafeCommandError`. SC-004 audit verified to fail the session on a `0x22` write
+  (temporary test, removed).
+- [ ] CI green on all 6 matrix jobs — pending: branch not pushed yet.
+- [ ] Reviewer confirms the R7 sanitization decision (no MAC match → bytes unchanged) in
+  `captures/README.md` — pending review.
+
+**Checkpoint**: Milestone 0 DONE — pending CI run and reviewer sign-off (local gate passed)
 
 ---
 
