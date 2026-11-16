@@ -15,13 +15,26 @@ from openvave.protocol import decode_frame
 from openvave.transport import Transport
 from openvave.transport.fake import FakeTransport
 from tests.support.captures import FW96_CONNECT, PRESET, REPO_ROOT, load_capture
+from tests.support.captures import QUERY as QUERY_LABEL
+from tests.support.mutations import with_payload
 
 CAP = load_capture(FW96_CONNECT)
 PEDAL = DeviceInfo("3F1A-UUID", "TANK-Gv2_BLE", -58)
 SCHEMA_PATH = (
     REPO_ROOT / "specs" / "001-readonly-ble-connection" / "contracts" / "preset-dump.schema.json"
 )
+DECODED_FIELD_SCHEMA_PATH = (
+    REPO_ROOT / "specs" / "002-preset-byte-map" / "contracts" / "decoded-field.schema.json"
+)
 ECHO_LEN = 8
+FW97_IDENTITY = b"TANK-Gv2_097".ljust(27, b"\x00")
+DECODED_LINES = [
+    "      [6]  knob (which one: unknown)   60      0–127      observed",
+    "      [15] reverb decay                 5      0–127      observed",
+    "      [16] reverb mix                   4      0–127      hypothesis ?",
+    "      [17] IR cab                      #7      selector   hypothesis ?",
+    "      unknown: 0 1 2 3 4 5 7 8 9 10 11 12 13 14 18 19 20",
+]
 QUERY = bytes.fromhex("00 59 11 00 00 00 ff")
 PRESET_READ = bytes.fromhex("00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6")
 EXPECTED_DATA = "01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43"
@@ -38,8 +51,10 @@ def factory_for(fake: FakeTransport, device: DeviceInfo | None = PEDAL) -> Facto
     return factory
 
 
-def run(capsys: pytest.CaptureFixture[str], argv: list[str]) -> tuple[int, str, str, FakeTransport]:
-    fake = FakeTransport.from_capture(FW96_CONNECT)
+def run(
+    capsys: pytest.CaptureFixture[str], argv: list[str], fake: FakeTransport | None = None
+) -> tuple[int, str, str, FakeTransport]:
+    fake = fake or FakeTransport.from_capture(FW96_CONNECT)
     code = main(argv, transport_factory=factory_for(fake))
     out, err = capsys.readouterr()
     return code, out, err, fake
@@ -100,10 +115,70 @@ def test_human_block(capsys: pytest.CaptureFixture[str]) -> None:
         "Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes",
         "  00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05",
         "  10: 04 07 43 16 43",
-        "      [6] knob (which one: unknown) = 60   (observed)",
-        "      [15] reverb decay = 5   (observed)",
-        "      [16] reverb mix? = 4   (hypothesis)",
-        "      [17] IR cab? = 7   (hypothesis)",
+        *DECODED_LINES,
+    ]
+
+
+def fw97_fake() -> FakeTransport:
+    reply = with_payload(CAP.rx(QUERY_LABEL), FW97_IDENTITY)
+    return FakeTransport.from_capture(FW96_CONNECT, replies={QUERY_LABEL: reply})
+
+
+def test_human_block_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _, _ = run(capsys, ["preset", "dump"], fw97_fake())
+    assert code == 0
+    lines = out.splitlines()
+    assert lines[0] == (
+        "Current preset  (TANK-Gv2, firmware 97)   type 4 @ 0x10000000, 21 bytes"
+        "  (decoded with the fw 96 map)"
+    )
+    assert lines[3:] == DECODED_LINES
+
+
+def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:
+    preset = preset_json(capsys)["preset"]
+    assert preset["map_firmware"] == 96
+    assert preset["unknown_offsets"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
+    decay = next(f for f in preset["fields"] if f["name"] == "reverb_decay")
+    assert decay == {
+        "offset": 15,
+        "size": 1,
+        "name": "reverb_decay",
+        "value": 5,
+        "confidence": "observed",
+        "raw": 5,
+        "mask": None,
+        "encoding": "continuous",
+        "range": {"min": 0, "max": 127},
+        "display": "5",
+        "interpreted": 5,
+        "out_of_range": False,
+    }
+    cab = next(f for f in preset["fields"] if f["name"] == "ir_cab")
+    assert (cab["encoding"], cab["display"], cab["interpreted"]) == ("selector", "#7", 7)
+
+
+def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture[str]) -> None:
+    schema = json.loads(DECODED_FIELD_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    fields = preset_json(capsys)["preset"]["fields"]
+    assert fields
+    for item in fields:
+        jsonschema.validate(item, schema, cls=jsonschema.Draft202012Validator)
+
+
+def test_json_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, err, _ = run(capsys, ["preset", "dump", "--json"], fw97_fake())
+    assert code == 0, err
+    doc = json.loads(out)
+    assert doc["schema_version"] == 1
+    assert doc["identity"]["firmware_untested"] is True
+    assert doc["preset"]["map_firmware"] == 96
+    assert [f["name"] for f in doc["preset"]["fields"]] == [
+        "knob_unknown",
+        "reverb_decay",
+        "reverb_mix",
+        "ir_cab",
     ]
 
 

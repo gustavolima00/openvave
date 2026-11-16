@@ -32,6 +32,11 @@ CONTRACT_EXPORTS = {
     "Transport",
     "FakeTransport",
     "TESTED_FIRMWARE",
+    "Encoding",
+    "ByteMapEntry",
+    "DecodedField",
+    "DecodedRegion",
+    "ByteChange",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -41,8 +46,19 @@ PROTOCOL_EXPORTS = {
     "build_read",
     "parse_read_reply",
     "parse_identity",
+    "decode_region",
+    "diff",
 }
-DATACLASSES = ("DeviceInfo", "DeviceIdentity", "RegionRead", "DeviceSnapshot")
+DATACLASSES = (
+    "DeviceInfo",
+    "DeviceIdentity",
+    "RegionRead",
+    "DeviceSnapshot",
+    "ByteMapEntry",
+    "DecodedField",
+    "DecodedRegion",
+    "ByteChange",
+)
 FORBIDDEN = ("write", "erase", "address")
 
 
@@ -89,6 +105,43 @@ def test_protocol_module_exposes_codec() -> None:
     for name in PROTOCOL_EXPORTS:
         assert callable(getattr(openvave.protocol, name)), name
         assert name in openvave.protocol.__all__
+
+
+def test_protocol_module_exposes_byte_map() -> None:
+    assert openvave.protocol.MAP_FIRMWARE == 96
+    assert isinstance(openvave.protocol.BYTE_MAP, tuple)
+    assert all(isinstance(e, openvave.ByteMapEntry) for e in openvave.protocol.BYTE_MAP)
+    assert {"BYTE_MAP", "MAP_FIRMWARE"} <= set(openvave.protocol.__all__)
+
+
+def test_encoding_closed_enum() -> None:
+    assert [e.value for e in openvave.Encoding] == [
+        "continuous",
+        "switch",
+        "selector",
+        "flag",
+        "index",
+        "unknown",
+    ]
+
+
+def test_deprecated_known_fields_alias() -> None:
+    from openvave.models import KNOWN_FIELDS, FieldSpec
+
+    assert [
+        (s.offset, s.name, s.label, s.confidence)
+        for s in KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
+    ] == [
+        (6, "knob_unknown", "knob (which one: unknown)", "observed"),
+        (15, "reverb_decay", "reverb decay", "observed"),
+        (16, "reverb_mix", "reverb mix?", "hypothesis"),
+        (17, "ir_cab", "IR cab?", "hypothesis"),
+    ]
+    assert KNOWN_FIELDS[openvave.Region.GLOBAL] == (
+        FieldSpec(3, "not_in_edit_mode", "not in edit mode", "observed"),
+    )
+    assert KNOWN_FIELDS[openvave.Region.DEVICE_INFO] == ()
+    assert KNOWN_FIELDS[openvave.Region.STATUS] == ()
 
 
 def test_tankg_has_no_write_erase_or_address_api() -> None:

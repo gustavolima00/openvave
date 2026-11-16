@@ -87,3 +87,23 @@ def test_split_rejects_bad_n() -> None:
         m.split(PRESET_RX, 0)
     with pytest.raises(ValueError):
         m.split(PRESET_RX, len(PRESET_RX) + 1)
+
+
+def test_with_region_data_rewrites_one_byte() -> None:
+    from openvave.protocol import decode_frame
+
+    out = m.with_region_data(PRESET_RX, 15, 0x40)
+    assert _valid_checksum(out)
+    frame = decode_frame(out)
+    data = frame.body[8:]
+    original = PRESET_RX[6 + 8 : -1]
+    assert data[15] == 0x40
+    assert data[:15] == original[:15] and data[16:] == original[16:]
+    assert len(out) == len(PRESET_RX)
+
+
+def test_with_region_data_offset_beyond_data() -> None:
+    with pytest.raises(ValueError):
+        m.with_region_data(PRESET_RX, 21, 0)
+    with pytest.raises(ValueError):
+        m.with_region_data(PRESET_RX, -1, 0)

@@ -99,13 +99,49 @@ Preset reading: bytes 4–17 are the 14-byte block the app rewrites when a knob 
 
 Method: poll the regions read-only while moving one control at a time (2026-11-16, fw 96).
 
-| Region | Offset | Meaning | Range | Confidence |
-|---|---|---|---|---|
-| preset | 6 | one front-panel knob (which one: TBD) | 0–127 (`0x00`–`0x7F`) | observed |
-| preset | 15 | **reverb decay** (continuous knob): `05` → `7f` when only this knob was turned to max in edit mode; no other preset byte changed | 0–127 | observed (one knob at a time, 2026-11-16) |
-| preset | 16 | reverb mix (continuous knob): `04` → `7f` when turned to max in edit mode | 0–127 | hypothesis (moved together with IR cab, see below) |
-| preset | 17 | IR cab (selector knob): `07` → `08` when turned to max in edit mode | small index | hypothesis (moved together with reverb mix, see below) |
-| global | 3 | **edit mode flag**: `1` normally, `0` while the pedal is in edit mode — flips on entering edit mode before any knob moves, stays `0` while knobs move, returns to `1` on leaving edit mode without saving | 0/1 | observed |
+One row per byte of the current preset (21), the global block (4) and the status byte (1): 26
+rows. This table is authoritative; `src/openvave/protocol/bytemap.py` mirrors it row for row, and
+`tests/unit/test_bytemap_doc.py` fails on any difference. Columns:
+
+- **Mask**: `—` for a whole byte; a bit mask for `flag` rows (several rows may share an offset).
+- **Name**: stable machine name used in JSON; `—` when the byte is unknown.
+- **Encoding**: `continuous` (integer range), `switch` (on/off raw values), `selector` (stepped
+  position), `flag` (one bit), `index` (a position, base in Notes), `unknown` (raw value only).
+- **Range**: `min–max`, or `on=<raw> off=<raw>` for a switch; `—` otherwise.
+- **Confidence**: per Constitution II. `observed` rows cite at least one committed capture;
+  `confirmed` rows cite captures from two independent sessions.
+- **Evidence**: committed capture paths. Raw session records stay in `captures/private/`.
+- **Notes**: values seen (the fw 96 value from the committed capture), controls tried, refuted
+  claims.
+
+| Region | Offset | Mask | Name | Encoding | Range | Control | Confidence | Firmware | Evidence | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| global | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
+| global | 1 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
+| global | 2 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
+| global | 3 | — | `not_in_edit_mode` | switch | on=1 off=0 | edit mode | observed | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `1` normally, `0` while the pedal is in edit mode (flips on entering edit mode before any knob moves; back to `1` on leaving without saving), 2026-11-16. fw96: `0x01` |
+| preset | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
+| preset | 1 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
+| preset | 2 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
+| preset | 3 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
+| preset | 4 | — | — | unknown | — | — | — | 96 | — | fw96: `0x0f`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 5 | — | — | unknown | — | — | — | 96 | — | fw96: `0x04`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 6 | — | `knob_unknown` | continuous | 0–127 | — | observed | 96 | `captures/fw96/20261116-probe-connect.jsonl` | moves with one front-panel knob, which one not yet identified (2026-11-16). fw96: `0x3c` |
+| preset | 7 | — | — | unknown | — | — | — | 96 | — | fw96: `0x3c`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 8 | — | — | unknown | — | — | — | 96 | — | fw96: `0x46`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 9 | — | — | unknown | — | — | — | 96 | — | fw96: `0x32`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 10 | — | — | unknown | — | — | — | 96 | — | fw96: `0x32`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 11 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 12 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 13 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 14 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
+| preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | observed | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `05` → `7f` when only this knob was turned to max in edit mode; no other preset byte changed (one knob at a time, 2026-11-16). fw96: `0x05` |
+| preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | hypothesis | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `04` → `7f` when turned to max in edit mode, in the same step as IR cab (2026-11-16); needs a one-knob step. fw96: `0x04` |
+| preset | 17 | — | `ir_cab` | selector | 0–127 | IR cab selector | hypothesis | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `07` → `08` (one step) when turned to max in edit mode, in the same step as reverb mix (2026-11-16). Range is a placeholder (7-bit): positions not yet counted. fw96: `0x07` |
+| preset | 18 | — | — | unknown | — | — | — | 96 | — | fw96: `0x43` |
+| preset | 19 | — | — | unknown | — | — | — | 96 | — | fw96: `0x16` |
+| preset | 20 | — | — | unknown | — | — | — | 96 | — | fw96: `0x43` |
+| status | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 

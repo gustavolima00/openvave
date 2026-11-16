@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Literal
@@ -89,9 +89,116 @@ class DeviceSnapshot:
     """Timezone-aware UTC time taken after the last read."""
 
 
+class Encoding(Enum):
+    """How a mapped byte is interpreted (closed set; research R2, data-model.md)."""
+
+    CONTINUOUS = "continuous"
+    """Integer ``min..max`` (a knob)."""
+    SWITCH = "switch"
+    """On/off; ``on_value`` and ``off_value`` give the raw values."""
+    SELECTOR = "selector"
+    """Position ``min..max`` of a stepped control, with optional labels."""
+    FLAG = "flag"
+    """One bit (``mask``) of a byte that packs several switches."""
+    INDEX = "index"
+    """A position (base stated in the notes), e.g. a preset number."""
+    UNKNOWN = "unknown"
+    """No known meaning; the raw value only."""
+
+
+@dataclass(frozen=True)
+class ByteMapEntry:
+    """One row of the byte map, mirrored from ``specs/protocol/command-layer.md``."""
+
+    region: Region
+    """``GLOBAL``, ``CURRENT_PRESET`` or ``STATUS`` (device info is not mapped)."""
+    offset: int
+    """Data offset within the region (``0 <= offset < region.length``)."""
+    encoding: Encoding
+    """How the byte is interpreted."""
+    firmware: int
+    """Firmware the evidence came from."""
+    name: str | None = None
+    """Stable snake_case machine name; ``None`` iff the encoding is ``UNKNOWN``."""
+    label: str = ""
+    """Human label in our own words."""
+    mask: int | None = None
+    """``None`` for a whole byte; a non-zero 8-bit mask for ``FLAG`` entries."""
+    min: int | None = None
+    """Lowest valid value (``CONTINUOUS``, ``SELECTOR``, ``INDEX``)."""
+    max: int | None = None
+    """Highest valid value (``CONTINUOUS``, ``SELECTOR``, ``INDEX``)."""
+    on_value: int | None = None
+    """Raw value meaning "on" (``SWITCH``)."""
+    off_value: int | None = None
+    """Raw value meaning "off" (``SWITCH``)."""
+    labels: Mapping[int, str] = field(default_factory=dict, hash=False)
+    """Optional position labels (``SELECTOR`` only), in our own words."""
+    control: str | None = None
+    """The physical control this byte follows, if linked."""
+    confidence: Confidence | None = None
+    """Evidence level; ``None`` iff the encoding is ``UNKNOWN``."""
+    evidence: tuple[str, ...] = ()
+    """Committed capture paths supporting the row."""
+    notes: str = ""
+    """Values seen, controls tried, refuted claims."""
+
+
+@dataclass(frozen=True)
+class DecodedField:
+    """A named :class:`ByteMapEntry` applied to the bytes of one read."""
+
+    entry: ByteMapEntry
+    """The map row."""
+    raw: int
+    """The whole byte."""
+    value: int
+    """``raw``, or ``raw & mask`` for flags (same meaning as 001's JSON ``value``)."""
+    interpreted: int | bool
+    """Value per encoding (bool for switches and flags)."""
+    display: str
+    """Human form; the raw value when :attr:`out_of_range`."""
+    out_of_range: bool
+    """True when the byte breaks the encoding's range rule (never clamped, FR-015)."""
+
+
+@dataclass(frozen=True)
+class DecodedRegion:
+    """A region read decoded with the byte map."""
+
+    read: RegionRead
+    """The raw read, unchanged."""
+    fields: tuple[DecodedField, ...]
+    """Named fields in offset (then mask) order."""
+    unknown_offsets: tuple[int, ...]
+    """Offsets with no named entry."""
+    map_firmware: int
+    """Firmware the map was built from."""
+    firmware_untested: bool
+    """True when decoding bytes from a firmware other than :attr:`map_firmware` (FR-018)."""
+
+
+@dataclass(frozen=True)
+class ByteChange:
+    """One byte that differs between two reads of the same region."""
+
+    region: Region
+    """The region."""
+    offset: int
+    """Data offset."""
+    old: int
+    """Value before."""
+    new: int
+    """Value after (``!= old``)."""
+    field: ByteMapEntry | None = None
+    """The whole-byte entry, or ``None`` if the byte is unknown or holds flags."""
+    fields: tuple[ByteMapEntry, ...] = ()
+    """Every named entry on this byte (one whole-byte entry or several flags)."""
+
+
 @dataclass(frozen=True)
 class FieldSpec:
-    """A byte whose meaning is (partly) known, with its confidence level (FR-017)."""
+    """Deprecated (001): a known byte. Use :class:`ByteMapEntry` / ``BYTE_MAP`` instead."""
 
     offset: int
     name: str
@@ -99,14 +206,26 @@ class FieldSpec:
     confidence: Confidence
 
 
-KNOWN_FIELDS: Mapping[Region, tuple[FieldSpec, ...]] = {
-    Region.DEVICE_INFO: (),
-    Region.GLOBAL: (FieldSpec(3, "not_in_edit_mode", "not in edit mode", "observed"),),
-    Region.CURRENT_PRESET: (
-        FieldSpec(6, "knob_unknown", "knob (which one: unknown)", "observed"),
-        FieldSpec(15, "reverb_decay", "reverb decay", "observed"),
-        FieldSpec(16, "reverb_mix", "reverb mix?", "hypothesis"),
-        FieldSpec(17, "ir_cab", "IR cab?", "hypothesis"),
-    ),
-    Region.STATUS: (),
-}
+def _known_fields() -> Mapping[Region, tuple[FieldSpec, ...]]:
+    from openvave.protocol.bytemap import BYTE_MAP
+
+    return {
+        region: tuple(
+            FieldSpec(
+                e.offset,
+                e.name,
+                e.label + ("?" if e.confidence == "hypothesis" else ""),
+                e.confidence,
+            )
+            for e in BYTE_MAP
+            if e.region is region and e.name is not None and e.confidence is not None
+        )
+        for region in Region
+    }
+
+
+def __getattr__(name: str) -> object:
+    # Deprecated 001 alias, derived from BYTE_MAP lazily (protocol.bytemap imports this module).
+    if name == "KNOWN_FIELDS":
+        return _known_fields()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

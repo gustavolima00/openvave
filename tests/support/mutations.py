@@ -79,3 +79,19 @@ def split(frame: bytes, n: int) -> list[bytes]:
         chunks.append(frame[pos : pos + step])
         pos += step
     return chunks
+
+
+def with_region_data(frame: bytes, offset: int, value: int) -> bytes:
+    """Rewrite one data byte of a read (``0x23``) reply; checksum recomputed.
+
+    ``offset`` counts from the first data byte (after the 8-byte echo prefix). Raises
+    ``ValueError`` if it is outside the data.
+    """
+    if frame[2] != READ:
+        raise ValueError("not a read reply")
+    body = bytearray(_body(frame))
+    data_len = len(body) - 8
+    if not 0 <= offset < data_len:
+        raise ValueError(f"offset {offset} outside data (0..{data_len - 1})")
+    body[8 + offset] = value
+    return _rebuild(frame, bytes(body))

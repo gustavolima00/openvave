@@ -20,14 +20,19 @@ from tests.support.captures import (
     FW96_CONNECT,
     GLOBAL,
     PRESET,
+    QUERY,
     REPO_ROOT,
     STATUS,
     load_capture,
 )
+from tests.support.mutations import with_payload
 
 CAP = load_capture(FW96_CONNECT)
 PEDAL = DeviceInfo("3F1A-UUID", "TANK-Gv2_BLE", -58)
 SCHEMA_PATH = REPO_ROOT / "specs" / "001-readonly-ble-connection" / "contracts" / "info.schema.json"
+DECODED_FIELD_SCHEMA_PATH = (
+    REPO_ROOT / "specs" / "002-preset-byte-map" / "contracts" / "decoded-field.schema.json"
+)
 ECHO_LEN = 8
 KEY_FOR = {
     "device_info": DEVICE_INFO,
@@ -52,8 +57,10 @@ def recorded(label: str) -> bytes:
     return decode_frame(CAP.rx(label)).body[ECHO_LEN:]
 
 
-def run(capsys: pytest.CaptureFixture[str], argv: list[str]) -> tuple[int, str, str, FakeTransport]:
-    fake = FakeTransport.from_capture(FW96_CONNECT)
+def run(
+    capsys: pytest.CaptureFixture[str], argv: list[str], fake: FakeTransport | None = None
+) -> tuple[int, str, str, FakeTransport]:
+    fake = fake or FakeTransport.from_capture(FW96_CONNECT)
     code = main(argv, transport_factory=factory_for(fake))
     out, err = capsys.readouterr()
     return code, out, err, fake
@@ -97,6 +104,13 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
             "name": "not_in_edit_mode",
             "value": recorded(GLOBAL)[3],
             "confidence": "observed",
+            "raw": recorded(GLOBAL)[3],
+            "mask": None,
+            "encoding": "switch",
+            "range": None,
+            "display": "on",
+            "interpreted": True,
+            "out_of_range": False,
         }
     ]
     knob = regions["current_preset"]["fields"]
@@ -108,6 +122,23 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
     ]
     assert regions["device_info"]["fields"] == []
     assert regions["status"]["fields"] == []
+    for region in regions.values():
+        assert region["map_firmware"] == 96
+    assert regions["global"]["unknown_offsets"] == [0, 1, 2]
+    assert regions["status"]["unknown_offsets"] == [0]
+    assert regions["device_info"]["unknown_offsets"] == list(range(32))
+    assert len(regions["current_preset"]["unknown_offsets"]) == 17
+
+
+def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture[str]) -> None:
+    schema = json.loads(DECODED_FIELD_SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    doc = info_json(capsys)
+    assert doc["schema_version"] == 1
+    items = [f for region in doc["regions"].values() for f in region["fields"]]
+    assert len(items) == 5
+    for item in items:
+        jsonschema.validate(item, schema, cls=jsonschema.Draft202012Validator)
 
 
 def test_json_sends_captured_frames_in_order(capsys: pytest.CaptureFixture[str]) -> None:
@@ -139,7 +170,23 @@ def test_human_region_blocks(capsys: pytest.CaptureFixture[str]) -> None:
         assert lines[start : start + len(expected)] == expected
     assert "  00: 00 00 01 01" in lines
     assert "  10: " + recorded(DEVICE_INFO)[16:].hex(" ") in lines
-    assert "      [3] not in edit mode = 1   (observed)" in lines
+    assert "      [3]  not in edit mode            on      on/off     observed" in lines
+    assert "      unknown: 0 1 2" in lines
+    assert "      unknown: 0" in lines
+    device_block = lines[lines.index(dump_lines(recorded(DEVICE_INFO))[0]) :]
+    assert not device_block[2].startswith("      ")  # device info stays undecoded
+
+
+def test_human_untested_firmware_note(capsys: pytest.CaptureFixture[str]) -> None:
+    reply = with_payload(CAP.rx(QUERY), b"TANK-Gv2_097".ljust(27, b"\x00"))
+    fake = FakeTransport.from_capture(FW96_CONNECT, replies={QUERY: reply})
+    code, out, _, _ = run(capsys, ["info"], fake)
+    assert code == 0
+    lines = out.splitlines()
+    note = "  (decoded with the fw 96 map)"
+    assert ("Global        type 4 @ 0x20000000, 4 bytes    [meaning: unknown]" + note) in lines
+    assert ("Status        type 4 @ 0xD0000000, 1 byte     [meaning: unknown]" + note) in lines
+    assert "Device info   type 5 @ 0xD0000000, 32 bytes   [meaning: unknown]" in lines
 
 
 def test_human_omits_current_preset(capsys: pytest.CaptureFixture[str]) -> None:
