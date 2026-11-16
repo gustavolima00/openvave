@@ -17,6 +17,14 @@ while keeping unknown bytes visible as raw. No writes or erase."
 framing, handshake, the four confirmed reads, `info` / `preset dump`, JSON `fields` array with
 per-field confidence, `schema_version`).
 
+## Clarifications
+
+### Session 2026-11-16
+
+- Q: Is the mapping session a shipped CLI command or throwaway tooling? → A: Ship an explicit, read-only `openvave watch` command with stdin labels and a saved session record in `captures/private/`; only `watch` polls.
+- Q: What promotes a read-only decoding to `confirmed`? → A: The same single-control result reproduced in a second, independent session (new connection, preferably a different stored preset); one session gives at most `observed`.
+- Q: What is the completion bar for the mapping? → A: Every front-panel control tried one at a time, plus the buffer compared across several (≥5) stored presets selected on the pedal; app-only settings are out of scope.
+
 **Protocol source of truth**: [`specs/protocol/command-layer.md`](../protocol/command-layer.md),
 section "Preset / global byte map (in progress)". This feature turns that table into a complete,
 evidence-backed map and makes the library decode it.
@@ -51,7 +59,7 @@ Actors:
 
 ### User Story 1 - Map one control per step (Priority: P1)
 
-The pedal owner starts a mapping session against the connected pedal. The session reads the three
+The pedal owner runs `openvave watch` against the connected pedal. The session reads the three
 regions (preset, global, status) repeatedly and, whenever any byte changes, records which region,
 offset, old value and new value changed, together with a short label the owner typed describing
 what they just did (for example "edit mode on", "gain knob min → max", "delay footswitch off").
@@ -109,8 +117,8 @@ named or explicitly unknown.
 2. **Given** a byte whose meaning was inferred from two controls moving together (today: preset
    16 and 17), **When** it is recorded, **Then** it stays `hypothesis` until a one-control-at-a
    -time step isolates it.
-3. **Given** a finding that meets the promotion bar for `confirmed` (see FR-010), **When** it is
-   recorded, **Then** the row says `confirmed` and lists the repeat evidence.
+3. **Given** a single-control finding reproduced in a second, independent session (FR-010),
+   **When** it is recorded, **Then** the row says `confirmed` and cites both sessions.
 4. **Given** a finding contradicts an earlier row (as the "edited/unsaved" flag was refuted),
    **When** it is recorded, **Then** the old claim is corrected and the refutation is noted, not
    silently overwritten.
@@ -208,12 +216,12 @@ decoder reports the mapped index.
 
 **Mapping session (discovery workflow)**
 
-- **FR-001**: The system MUST offer a read-only way to repeatedly read the preset, global and
-  status regions and report, per change, the region, offset, old and new value, time, and the
-  owner's current free-text label. [NEEDS CLARIFICATION: Is this session a supported `openvave`
-  CLI command (e.g. `openvave watch`) shipped in this feature, or does the mapping use the
-  throwaway, git-ignored exploration helper (`poc/preset_watch.py`) plus repeated
-  `openvave preset dump`, with only the decoder shipped? Spec 001 excluded polling (FR-012).]
+- **FR-001**: The CLI MUST provide an explicit, read-only `openvave watch` command that
+  repeatedly reads the preset, global and status regions and reports, per change, the region,
+  offset, old and new value, time, and the owner's current free-text label (typed on stdin while
+  it runs). It saves a session record under `captures/private/`. Polling happens only while the
+  user runs `watch`; `info` and `preset dump` keep 001's no-polling behaviour (001 FR-012 is
+  narrowed accordingly, not removed). The library MUST expose the same capability (Constitution V).
 - **FR-002**: The mapping session MUST use only the query (`0x11`) and read (`0x23`) commands and
   only the regions already confirmed in 001 (FR-008); no write, erase, MIDI or arbitrary-address
   command may be sent.
@@ -237,14 +245,17 @@ decoder reports the mapped index.
   not the exploration tooling or procedure (Constitution I/VI).
 - **FR-009**: Each `observed` row MUST be backed by a sanitized fixture or annotated hex committed
   under `captures/` showing a step in which only that control moved.
-- **FR-010**: A row MAY be promoted to `confirmed` only when it meets an explicit, documented bar.
-  [NEEDS CLARIFICATION: What makes a read-only decoding `confirmed`? Constitution II defines
-  `confirmed` as "reproduced on hardware" — e.g. reproduced in a second independent session, or
-  across at least N different stored presets, or only once writes (a later spec) can set the value
-  and read it back?]
+- **FR-010**: A row MAY be promoted to `confirmed` only when the same single-control step gives
+  the same result (same offset(s), same encoding, consistent range) in a second, independent
+  session — a new connection, preferably on a different stored preset — with both sessions cited
+  as evidence. A single session yields at most `observed`.
 - **FR-011**: The map MUST also cover the existing hypotheses: preset 16/17 isolated one control
   at a time, preset 6 identified, global 3 (edit mode) kept or refined, status 0 explained or left
   unknown.
+- **FR-011a**: Mapping MUST include comparing the current-preset buffer across at least 5
+  different stored presets selected on the pedal (no host write), and the map MUST record, for
+  each byte that differs between presets but changes with no front-panel control, the values seen
+  per preset.
 
 **Decoding (library and CLI)**
 
@@ -287,6 +298,8 @@ decoder reports the mapped index.
 - Device-info block (type 5 @ `0xD0000000`, 32 B) decoding.
 - MIDI, the phone app's protocol beyond what reads show, factory preset content (Constitution VI:
   no vendor preset content is committed, only the byte meanings).
+- Settings reachable only from the phone app (e.g. module types/models, app-only global settings)
+  and recording the app's changes; bytes that may hold them stay unknown with per-preset values.
 - Human-friendly units (dB, ms, model names) unless the pedal itself displays them; values are
   reported in the pedal's own raw scale.
 
@@ -325,6 +338,9 @@ decoder reports the mapped index.
   byte other than `0x11` or `0x23`.
 - **SC-007**: A third party can decode a 21-byte preset dump into the same named values using only
   `command-layer.md`, without reading openvave source.
+- **SC-008**: The current-preset buffer of at least 5 different stored presets has been read and
+  compared, and every byte that differs between them is either mapped or documented as unknown
+  with its per-preset values.
 
 ## Assumptions
 
@@ -345,9 +361,7 @@ decoder reports the mapped index.
   so this map is expected to apply to them later; that is not verified here.
 - Raw session records stay in `captures/private/` (git-ignored); only sanitized excerpts used as
   evidence and fixtures are committed.
-- This feature is complete when SC-001 to SC-007 hold; bytes still unknown after all inventory
-  controls were tried are an acceptable outcome, as long as they are documented as unknown.
-  [NEEDS CLARIFICATION: Is "every front-panel control tried once" the completion bar, or must the
-  map also cover settings reachable only from the phone app (module types/models, global settings)
-  and controls that differ per preset, which would require reading many presets or app-side
-  changes?]
+- This feature is complete when SC-001 to SC-008 hold: every front-panel control in the inventory
+  has been tried one at a time, and the current-preset buffer has been compared across several
+  stored presets selected on the pedal. Bytes still unknown after that are an acceptable outcome,
+  as long as they are documented as unknown with the values seen.

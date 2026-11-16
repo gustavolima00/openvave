@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -34,13 +34,9 @@
 - **Domain vocabulary vs implementation detail**: as in 001, command bytes, addresses, region
   offsets and the CLI command names (`preset dump`, `info`) are the protocol/product surface
   (Constitution I/V), not implementation choices. No language, framework or BLE library is named.
-- **3 open [NEEDS CLARIFICATION] markers, deliberately left for `/speckit-clarify`**:
-  1. FR-001: is the mapping session a shipped `openvave` CLI command (e.g. `watch`, reversing
-     001's no-polling stance for this command only) or does mapping use the git-ignored
-     exploration helper plus repeated `preset dump`, with only the decoder shipped?
-  2. FR-010: promotion bar for `confirmed` on a read-only decoding (second independent session?
-     N stored presets? only once a later write spec can set and read back the value?).
-  3. Assumptions (completion bar): front-panel controls only, or also app-only settings
-     (module types/models, global settings) and per-preset differences?
+- **Clarified 2026-11-16** (`/speckit-clarify`, 3 questions): `openvave watch` ships as an
+  explicit read-only command (FR-001); `confirmed` needs a second independent session (FR-010);
+  completion = all front-panel controls + ≥5 stored presets compared, app-only settings out of
+  scope (FR-011a, SC-008). No markers remain.
 - Defaults taken without a marker (documented in Assumptions): ~0.5 s read interval; raw pedal
   scale for values (no dB/ms/model names); fw 96 only; stored presets (756 B) out of scope.
