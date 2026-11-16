@@ -121,28 +121,28 @@ rows. This table is authoritative; `src/openvave/protocol/bytemap.py` mirrors it
 | global | 1 | — | `bank` | index | 0–8 | preset selection | observed | 96 | `captures/fw96/20261116-step-preset_select-bank.jsonl`, `captures/fw96/20261116-step-preset_select-slots.jsonl` | Bank of the loaded preset, base 0. 9 banks × 4 slots = the app's `presetNum = 36`. Seen 0, 1, 8. fw96: `0x00` |
 | global | 2 | — | `slot` | index | 0–3 | preset selection | observed | 96 | `captures/fw96/20261116-step-preset_select-bank.jsonl`, `captures/fw96/20261116-step-preset_select-slots.jsonl` | Slot of the loaded preset, base 0 (0–3 = A–D); changes in the same cycle as the preset bytes. `0xff` seen for one cycle while a preset loaded, with every preset byte `00` (session 18:43): a loading state, flagged out of range. fw96: `0x01` (the capture is preset 1B) |
 | global | 3 | — | `not_in_edit_mode` | selector | 0–2 | edit mode, tuner | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-mode-1843.jsonl`, `captures/fw96/20261116-step-mode-1847.jsonl` | Pedal mode: `0` edit, `1` normal, `2` tuner. Edit 1 → 0 → 1 seen in four sessions, tuner 1 → 2 → 1 in three (labelled in session 18:47). Was documented as an edit-mode switch; the tuner value refutes a two-state reading. JSON name `not_in_edit_mode` kept until the 0.2.0 rename (planned: `mode`). fw96: `0x01` |
-| preset | 0 | — | `amp_on` | switch | on=1 off=0 | amp block switch | observed | 96 | `captures/fw96/20261116-step-amp_on.jsonl` | Amp block on/off; labelled off/on steps (session 18:47). `1` on every compared preset. fw96: `0x01` |
-| preset | 1 | — | `mod_on` | switch | on=1 off=0 | mod block switch | observed | 96 | `captures/fw96/20261116-step-mod_on.jsonl` | Mod block on/off; toggled twice (session 18:47). `1` only on 1D, the only compared preset with mod settings above 0. fw96: `0x00` |
-| preset | 2 | — | `delay_on` | switch | on=1 off=0 | delay block switch | observed | 96 | `captures/fw96/20261116-step-delay_on.jsonl` | Delay block on/off (session 18:47). `1` exactly on the compared presets with delay settings above 0. fw96: `0x00` |
-| preset | 3 | — | `reverb_on` | switch | on=1 off=0 | reverb block switch | observed | 96 | `captures/fw96/20261116-step-reverb_on.jsonl` | Reverb block on/off (session 18:47). `1` on every compared preset. fw96: `0x01` |
-| preset | 4 | — | `noise_gate` | continuous | 0–127 | noise gate knob | observed | 96 | `captures/fw96/20261116-step-noise_gate.jsonl` | Only byte to move with the noise gate knob (session 18:25); range seen 2–15 in the step, 0–78 across presets; ends not yet swept. fw96: `0x0f` |
-| preset | 5 | — | `amp_type` | selector | 0–127 | amp type selector | observed | 96 | `captures/fw96/20261116-step-amp_type.jsonl` | Stepped: 4 → 3 → 1 → 0 in the step (session 18:25); 0, 3, 4, 5, 8 across presets. Positions not counted yet; range is a 7-bit placeholder. fw96: `0x04` |
-| preset | 6 | — | `knob_unknown` | continuous | 0–127 | gain knob | observed | 96 | `captures/fw96/20261116-step-gain.jsonl` | Gain: the knob behind this byte, unidentified until 2026-11-16 (60 → 120 → 96 → 127, alone). JSON name `knob_unknown` kept until the 0.2.0 rename (planned: `gain`). fw96: `0x3c` |
-| preset | 7 | — | `treble` | continuous | 0–127 | treble knob | observed | 96 | `captures/fw96/20261116-step-treble.jsonl` | Alone; reached 0, top not yet swept (session 18:25). fw96: `0x3c` |
-| preset | 8 | — | `middle` | continuous | 0–127 | middle knob | observed | 96 | `captures/fw96/20261116-step-middle.jsonl` | Alone; range seen 60–80, ends not yet swept. fw96: `0x46` |
-| preset | 9 | — | `bass` | continuous | 0–127 | bass knob | observed | 96 | `captures/fw96/20261116-step-bass.jsonl` | Alone; range seen 50–91, ends not yet swept. fw96: `0x32` |
-| preset | 10 | — | `volume` | continuous | 0–127 | volume knob | observed | 96 | `captures/fw96/20261116-step-volume.jsonl` | Alone; range seen 20–64 in the step; 127 stored on preset 2B. fw96: `0x32` |
-| preset | 11 | — | `mod_fx` | continuous | 0–127 | mod fx knob | observed | 96 | `captures/fw96/20261116-step-mod_fx.jsonl` | Alone, 0 → 127 (session 18:25); smooth values. Whether it picks the effect type or its depth is not known. fw96: `0x00` |
-| preset | 12 | — | `mod_speed` | continuous | 0–127 | mod speed knob | observed | 96 | `captures/fw96/20261116-step-mod_speed.jsonl` | Alone, 0 → 127. fw96: `0x00` |
-| preset | 13 | — | `delay_mix` | continuous | 0–127 | delay mix knob | observed | 96 | `captures/fw96/20261116-step-delay_mix.jsonl` | Alone, 0 → 127. fw96: `0x00` |
-| preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | observed | 96 | `captures/fw96/20261116-step-delay_time.jsonl` | Alone, 0 → 127, swept three times. fw96: `0x00` |
-| preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). fw96: `0x05` |
-| preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | observed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). fw96: `0x04` |
-| preset | 17 | — | `ir_cab` | selector | 0–127 | IR cab selector | observed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Positions not counted yet; range is a 7-bit placeholder. fw96: `0x07` |
+| preset | 0 | — | `amp_on` | switch | on=1 off=0 | amp block switch | confirmed | 96 | `captures/fw96/20261116-step-amp_on.jsonl`, `captures/fw96/20261116-step-amp_on-1917.jsonl` | Amp block on/off; labelled off/on steps (session 18:47). `1` on every compared preset. Session 19:17 (labelled): `amp switch off` 1 → 0, `amp switch on` 0 → 1, nothing else moved. fw96: `0x01` |
+| preset | 1 | — | `mod_on` | switch | on=1 off=0 | mod block switch | confirmed | 96 | `captures/fw96/20261116-step-mod_on.jsonl`, `captures/fw96/20261116-step-mod_on-1917.jsonl` | Mod block on/off; toggled twice (session 18:47). `1` only on 1D, the only compared preset with mod settings above 0. Session 19:17 (labelled): on 0 → 1, off 1 → 0, alone. fw96: `0x00` |
+| preset | 2 | — | `delay_on` | switch | on=1 off=0 | delay block switch | confirmed | 96 | `captures/fw96/20261116-step-delay_on.jsonl`, `captures/fw96/20261116-step-delay_on-1917.jsonl` | Delay block on/off (session 18:47). `1` exactly on the compared presets with delay settings above 0. Session 19:17 (labelled): on 0 → 1, off 1 → 0, alone. fw96: `0x00` |
+| preset | 3 | — | `reverb_on` | switch | on=1 off=0 | reverb block switch | confirmed | 96 | `captures/fw96/20261116-step-reverb_on.jsonl`, `captures/fw96/20261116-step-reverb_on-1917.jsonl` | Reverb block on/off (session 18:47). `1` on every compared preset. Session 19:17 (labelled): off 1 → 0, on 0 → 1, alone. fw96: `0x01` |
+| preset | 4 | — | `noise_gate` | continuous | 0–127 | noise gate knob | confirmed | 96 | `captures/fw96/20261116-step-noise_gate.jsonl`, `captures/fw96/20261116-step-noise_gate-1917.jsonl` | Only byte to move with the noise gate knob (session 18:25); range seen 2–15 in the step, 0–78 across presets. Session 19:17 (labelled `noise gate`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x0f` |
+| preset | 5 | — | `amp_type` | selector | 0–8 | amp type selector | confirmed | 96 | `captures/fw96/20261116-step-amp_type.jsonl`, `captures/fw96/20261116-step-amp_type-1917.jsonl` | Stepped: 4 → 3 → 1 → 0 in the step (session 18:25); 0, 3, 4, 5, 8 across presets. Session 19:17 (labelled): 8 → 7 → … → 0, one click at a time: **9 positions, 0–8**. fw96: `0x04` |
+| preset | 6 | — | `knob_unknown` | continuous | 0–127 | gain knob | confirmed | 96 | `captures/fw96/20261116-step-gain.jsonl`, `captures/fw96/20261116-step-gain-1917.jsonl` | Gain: the knob behind this byte, unidentified until 2026-11-16 (60 → 120 → 96 → 127, alone). JSON name `knob_unknown` kept until the 0.2.0 rename (planned: `gain`). Session 19:17 (labelled `gain`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x3c` |
+| preset | 7 | — | `treble` | continuous | 0–127 | treble knob | confirmed | 96 | `captures/fw96/20261116-step-treble.jsonl`, `captures/fw96/20261116-step-treble-1917.jsonl` | Alone; reached 0, top not yet swept (session 18:25). Session 19:17 (labelled `treble`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x3c` |
+| preset | 8 | — | `middle` | continuous | 0–127 | middle knob | confirmed | 96 | `captures/fw96/20261116-step-middle.jsonl`, `captures/fw96/20261116-step-middle-1917.jsonl` | Alone; range seen 60–80. Session 19:17 (labelled `middle`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x46` |
+| preset | 9 | — | `bass` | continuous | 0–127 | bass knob | confirmed | 96 | `captures/fw96/20261116-step-bass.jsonl`, `captures/fw96/20261116-step-bass-1917.jsonl` | Alone; range seen 50–91. Session 19:17 (labelled `bass`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x32` |
+| preset | 10 | — | `volume` | continuous | 0–127 | volume knob | confirmed | 96 | `captures/fw96/20261116-step-volume.jsonl`, `captures/fw96/20261116-step-volume-1917.jsonl` | Alone; range seen 20–64 in the step; 127 stored on preset 2B. Session 19:17 (labelled `volume`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x32` |
+| preset | 11 | — | `mod_fx` | continuous | 0–127 | mod fx knob | confirmed | 96 | `captures/fw96/20261116-step-mod_fx.jsonl`, `captures/fw96/20261116-step-mod_fx-1917.jsonl` | Alone, 0 → 127 (session 18:25); smooth values. Whether it picks the effect type or its depth is not known. Session 19:17 (labelled `mod fx`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
+| preset | 12 | — | `mod_speed` | continuous | 0–127 | mod speed knob | confirmed | 96 | `captures/fw96/20261116-step-mod_speed.jsonl`, `captures/fw96/20261116-step-mod_speed-1917.jsonl` | Alone, 0 → 127. Session 19:17 (labelled `mod speed`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
+| preset | 13 | — | `delay_mix` | continuous | 0–127 | delay mix knob | confirmed | 96 | `captures/fw96/20261116-step-delay_mix.jsonl`, `captures/fw96/20261116-step-delay_mix-1917.jsonl` | Alone, 0 → 127. Session 19:17 (labelled `delay mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
+| preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | confirmed | 96 | `captures/fw96/20261116-step-delay_time.jsonl`, `captures/fw96/20261116-step-delay_time-1917.jsonl` | Alone, 0 → 127, swept three times. Session 19:17 (labelled `delay time`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
+| preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x05` |
+| preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | confirmed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl`, `captures/fw96/20261116-step-reverb_mix-1917.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). Session 19:17 (labelled `reverb mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x04` |
+| preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. fw96: `0x07` |
 | preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
 | preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x16` |
 | preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
-| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all six watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. fw96: `0x01` |
+| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 
@@ -176,11 +176,13 @@ Pedal edits are **not** pushed: they only become visible to a host that re-reads
 
 ### Watch session findings (2026-11-16, fw 96)
 
-Six `openvave watch` sessions by the owner, 18:25–18:50, phone app disconnected. Raw records stay
+Seven `openvave watch` sessions by the owner, 18:25–19:24, phone app disconnected. Raw records stay
 in `captures/private/`; the committed step excerpts are listed in the Evidence column above and
 indexed in `tests/integration/fixture_pairs.py`. Session 18:25 has no stdin labels (they were
 typed into the wrong window): its steps are identified by the owner's report and their timing.
-Sessions 18:43 and 18:41 are unlabelled too; session 18:47 is fully labelled.
+Sessions 18:43 and 18:41 are unlabelled too; sessions 18:47 and 19:17 are fully labelled.
+Session 19:17 repeated every knob, selector and block switch (second independent session: those
+rows are `confirmed`).
 
 - **Edit buffer vs knob position** (observed). In edit mode, switching a block off and on copies
   the **current physical knob positions** of that block into its bytes. Switching reverb off made
@@ -261,8 +263,8 @@ that control was used.
 | tuner | mode | no | global 3 (`2`) | 2026-11-16 |
 | bank / preset selection | selection | no | global 0, 1, 2 (+ preset bytes) | 2026-11-16 |
 
-Not yet known: whether other controls exist that we have not tried, the number of amp type and
-IR cab positions, and the full ranges of noise gate, middle, bass, volume and treble.
+Not yet known: whether other controls exist that we have not tried. Amp type and IR cab have 9
+positions each (0–8), and every knob reaches 0 and 127 (session 19:17).
 
 ### Background polling
 
@@ -299,8 +301,8 @@ tail 0 B (the app verifies this layout for the `tankG` product).
   are the 14 front-panel knobs, preset 0–3 the block switches (see the byte map). The app's
   14-byte write to `0x10000004` therefore carries every knob of the preset at once.
 - Still unknown (read-only work): preset 18–20 (per preset, no control moves them); the status
-  byte (always `01`); the number of amp type and IR cab positions; full ranges of noise gate,
-  middle, bass, volume and treble; any app-only settings not on the front panel.
+  byte (always `01`); the names of the 9 amp types and 9 IR cabs; any app-only settings not on
+  the front panel.
 - Questions for the write spec: is the edit buffer (`0x10000000`) written directly while the
   knobs keep their physical positions (see "Edit buffer vs knob position")? Do `0xE0000002/3`
   select a slot or save one (the app re-reads the preset after them; global 0–2 hold the bank and

@@ -12,13 +12,13 @@ line that lists the unknown offsets:
 Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
   00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05
   10: 04 07 43 16 43
-      [0]  amp on                        on    on/off     observed
+      [0]  amp on                        on    on/off     confirmed
       …
-      [6]  gain                          60    0–127      observed
+      [6]  gain                          60    0–127      confirmed
       …
       [15] reverb decay                   5    0–127      confirmed
-      [16] reverb mix                     4    0–127      observed
-      [17] IR cab                        #7    selector   observed
+      [16] reverb mix                     4    0–127      confirmed
+      [17] IR cab                        #7    selector   confirmed
       unknown: 18 19 20
 ```
 

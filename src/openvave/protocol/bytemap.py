@@ -12,7 +12,7 @@ what they are.
 
 from __future__ import annotations
 
-from openvave.models import ByteMapEntry, Confidence, Encoding, Region
+from openvave.models import ByteMapEntry, Encoding, Region
 
 MAP_FIRMWARE = 96
 """Firmware version the byte map was built from."""
@@ -35,15 +35,13 @@ def _unknown(region: Region, offset: int, notes: str) -> ByteMapEntry:
     )
 
 
-def _knob(
-    offset: int,
-    name: str,
-    label: str,
-    *evidence: str,
-    confidence: Confidence = "observed",
-    notes: str = "",
-) -> ByteMapEntry:
-    """A 7-bit front-panel knob of the current preset (0–127)."""
+def _twice(field: str) -> tuple[str, str]:
+    """The two independent sessions of a front-panel step: 18:25 (or 18:47) and 19:17."""
+    return (_step(field), _step(f"{field}-1917"))
+
+
+def _knob(offset: int, name: str, label: str, field: str, notes: str, *extra: str) -> ByteMapEntry:
+    """A 7-bit front-panel knob of the current preset (0–127), seen in two sessions."""
     return ByteMapEntry(
         region=Region.CURRENT_PRESET,
         offset=offset,
@@ -53,15 +51,15 @@ def _knob(
         min=0,
         max=127,
         control=f"{label} knob",
-        confidence=confidence,
+        confidence="confirmed",
         firmware=MAP_FIRMWARE,
-        evidence=evidence,
+        evidence=(*extra, *_twice(field)),
         notes=notes,
     )
 
 
-def _selector(offset: int, name: str, label: str, evidence: str, notes: str) -> ByteMapEntry:
-    """A stepped knob of the current preset; positions not counted yet (7-bit placeholder)."""
+def _selector(offset: int, name: str, label: str) -> ByteMapEntry:
+    """A 9-position stepped knob of the current preset (0–8), counted click by click."""
     return ByteMapEntry(
         region=Region.CURRENT_PRESET,
         offset=offset,
@@ -69,12 +67,12 @@ def _selector(offset: int, name: str, label: str, evidence: str, notes: str) -> 
         label=label,
         encoding=Encoding.SELECTOR,
         min=0,
-        max=127,
+        max=8,
         control=f"{label} selector",
-        confidence="observed",
+        confidence="confirmed",
         firmware=MAP_FIRMWARE,
-        evidence=(evidence,),
-        notes=notes,
+        evidence=_twice(name),
+        notes="9 positions, 0-8, one click at a time (2026-11-16 19:17)",
     )
 
 
@@ -89,10 +87,10 @@ def _block(offset: int, block: str) -> ByteMapEntry:
         on_value=1,
         off_value=0,
         control=f"{block} block switch",
-        confidence="observed",
+        confidence="confirmed",
         firmware=MAP_FIRMWARE,
-        evidence=(_step(f"{block}_on"),),
-        notes="1 = block on; toggled alone in a labelled step (2026-11-16)",
+        evidence=_twice(f"{block}_on"),
+        notes="1 = block on; toggled alone in labelled steps of two sessions (2026-11-16)",
     )
 
 
@@ -139,31 +137,23 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
     _block(1, "mod"),
     _block(2, "delay"),
     _block(3, "reverb"),
-    _knob(4, "noise_gate", "noise gate", _step("noise_gate"), notes="ends not yet swept"),
-    _selector(5, "amp_type", "amp type", _step("amp_type"), "positions seen 0-8"),
-    _knob(6, "knob_unknown", "gain", _step("gain"), notes="JSON name kept until 0.2.0"),
-    _knob(7, "treble", "treble", _step("treble"), notes="reached 0; top not yet swept"),
-    _knob(8, "middle", "middle", _step("middle"), notes="ends not yet swept"),
-    _knob(9, "bass", "bass", _step("bass"), notes="ends not yet swept"),
-    _knob(10, "volume", "volume", _step("volume"), notes="ends not yet swept; 127 on a preset"),
-    _knob(11, "mod_fx", "mod fx", _step("mod_fx"), notes="0-127 swept"),
-    _knob(12, "mod_speed", "mod speed", _step("mod_speed"), notes="0-127 swept"),
-    _knob(13, "delay_mix", "delay mix", _step("delay_mix"), notes="0-127 swept"),
-    _knob(14, "delay_time", "delay time", _step("delay_time"), notes="0-127 swept"),
-    _knob(
-        15,
-        "reverb_decay",
-        "reverb decay",
-        _FW96_CONNECT,
-        _step("reverb_decay"),
-        confidence="confirmed",
-        notes="only byte to move with this knob; 0..127 swept in a second session (2026-11-16)",
-    ),
-    _knob(16, "reverb_mix", "reverb mix", _step("reverb_mix"), notes="0-127 swept alone"),
-    _selector(17, "ir_cab", "IR cab", _step("ir_cab"), "positions seen 0-8"),
+    _knob(4, "noise_gate", "noise gate", "noise_gate", "0-127 swept"),
+    _selector(5, "amp_type", "amp type"),
+    _knob(6, "knob_unknown", "gain", "gain", "0-127 swept; JSON name kept until 0.2.0"),
+    _knob(7, "treble", "treble", "treble", "0-127 swept"),
+    _knob(8, "middle", "middle", "middle", "0-127 swept"),
+    _knob(9, "bass", "bass", "bass", "0-127 swept"),
+    _knob(10, "volume", "volume", "volume", "0-127 swept"),
+    _knob(11, "mod_fx", "mod fx", "mod_fx", "0-127 swept"),
+    _knob(12, "mod_speed", "mod speed", "mod_speed", "0-127 swept"),
+    _knob(13, "delay_mix", "delay mix", "delay_mix", "0-127 swept"),
+    _knob(14, "delay_time", "delay time", "delay_time", "0-127 swept"),
+    _knob(15, "reverb_decay", "reverb decay", "reverb_decay", "0-127 swept", _FW96_CONNECT),
+    _knob(16, "reverb_mix", "reverb mix", "reverb_mix", "0-127 swept"),
+    _selector(17, "ir_cab", "IR cab"),
     _unknown(Region.CURRENT_PRESET, 18, _PER_PRESET),
     _unknown(Region.CURRENT_PRESET, 19, _PER_PRESET),
     _unknown(Region.CURRENT_PRESET, 20, _PER_PRESET),
-    _unknown(Region.STATUS, 0, "0x01 in all six sessions, every preset and mode"),
+    _unknown(Region.STATUS, 0, "0x01 in all seven sessions, every preset and mode"),
 )
 """Every byte of ``GLOBAL`` (4), ``CURRENT_PRESET`` (21) and ``STATUS`` (1): 26 offsets."""

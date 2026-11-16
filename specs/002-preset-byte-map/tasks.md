@@ -215,10 +215,10 @@ fixtures are updated with confidence, and `preset dump` decodes everything found
 
 - [X] T045 [US2] Run the full hardware-free suite, ruff, format and mypy; record counts. Check SC-001 (every inventory control has a result), SC-003 (bytes 4–17 attributed) and SC-004 (fixture-pair test count = number of named fields); list them in the PR
   - Evidence (2026-11-16): pytest 682 passed, 4 skipped; ruff, format, mypy clean. SC-001: all 21 inventory controls have a result. SC-003: preset 4–17 all named at observed or better. SC-004: 23 fixture pairs, every observed/confirmed field indexed (test-enforced)
-- [ ] T046 [US3] Owner: `uv run openvave preset dump` in edit mode with three continuous knobs set to min and then max; decoded values show the documented range ends. Record in the PR
-  - Not run: needs the owner to sweep noise gate, middle, bass, volume (and treble to max) fully, then `preset dump` at each end
+- [X] T046 [US3] Owner: `uv run openvave preset dump` in edit mode with three continuous knobs set to min and then max; decoded values show the documented range ends. Record in the PR
+  - Evidence (2026-11-16 19:17, labelled session): every one of the 12 continuous knobs swept alone to `0` and `127`, decoded by the same `decode_region` path `preset dump` uses (values shown in range, none out of range); 12 excerpts `*-1917.jsonl` with exact (0, 127) asserted by the fixture-pair test
 
-**Checkpoint**: Milestone 2 DONE — mapping recorded 2026-11-16; owner range check T046 pending
+**Checkpoint**: Milestone 2 DONE ✅ (2026-11-16)
 
 ---
 
@@ -247,8 +247,8 @@ promoted to `confirmed`.
 
 - [X] T049 [US4] Owner runs `uv run openvave watch`, labels each step, and selects at least 5 different stored presets on the pedal one at a time (no edit mode, no saving). Also enter and leave edit mode once on two of them (global 3, status)
   - Preset walk 9A–9D, 1A–1D, 2A (18:41, unlabelled, order from the owner's report; confirmed by global 0–2) and 2B (18:43); edit mode entered/left on 2A (18:43) and 1B (18:47)
-- [ ] T050 [US2] Owner runs a **second, independent** `watch` session (new connection, a different stored preset than in M2) repeating the single-control steps for the fields that should become `confirmed` (at least: reverb mix, IR cab, the preset 6 knob, and every other `observed` field the owner can repeat)
-  - Partly: the mode byte has two independent labelled sessions (18:43, 18:47); the knobs and switches were each exercised in one session only, so they stay observed until a second session repeats them
+- [X] T050 [US2] Owner runs a **second, independent** `watch` session (new connection, a different stored preset than in M2) repeating the single-control steps for the fields that should become `confirmed` (at least: reverb mix, IR cab, the preset 6 knob, and every other `observed` field the owner can repeat)
+  - Evidence: session 19:17 (new connection, labelled) repeated all 12 knobs, both selectors (counted: 9 positions each, 0–8) and the 4 block switches; each step moved only its byte. The mode byte already had two sessions (18:43, 18:47)
 
 ### Recording findings
 
@@ -256,8 +256,8 @@ promoted to `confirmed`.
   - status documented as unknown with values seen (`01` everywhere); no index excerpt possible
 - [X] T052 [US2] Add a "Preset comparison (fw 96)" table to `specs/protocol/command-layer.md`: one column per compared preset (identified by position only, no personal names), one row per byte that differs; update the Notes of the matching rows, and document global bytes 0–2 (named or unknown with values seen); T048 green
   - "Preset comparison (fw 96)" table: 10 presets × 19 differing bytes; global 0–2 named
-- [ ] T053 [US2] Promote every row reproduced in T050 to `confirmed` in the doc and the map, citing both session excerpts; add the second-session excerpts to `captures/fw96/`; bytemap/doc tests green
-  - Partly: global 3 promoted to confirmed (sessions 18:43 + 18:47, plus the probe). The rest needs T050's second session
+- [X] T053 [US2] Promote every row reproduced in T050 to `confirmed` in the doc and the map, citing both session excerpts; add the second-session excerpts to `captures/fw96/`; bytemap/doc tests green
+  - Evidence: preset 0–17 and global 3 are `confirmed`, each citing excerpts from two sessions (test-enforced); amp type and IR cab ranges set to 0–8. Global 0–2 stay `observed` (one preset walk)
 - [X] T054 [US2] Update "Next steps" in `specs/protocol/command-layer.md`: what remains unknown and the questions for the write spec (e.g. app-only settings, stored-preset reads)
 
 ### Live verification (milestone gate)
@@ -267,7 +267,7 @@ promoted to `confirmed`.
 - [ ] T056 [US4] Owner: `uv run openvave info` on two different presets shows the decoded status value matching the selected preset (if mapped); record in the PR
   - Not applicable as written: the status byte does not follow the selected preset. `info` shows bank and slot instead (global 1–2)
 
-**Checkpoint**: Milestone 3 DONE — partly: preset comparison and status done; second-session confirmations (T050/T053) pending
+**Checkpoint**: Milestone 3 DONE ✅ (2026-11-16; T056 not applicable: the status byte does not follow the preset)
 
 ---
 

@@ -67,6 +67,30 @@ PAIRS: tuple[FixturePair, ...] = (
     _step("global", "not_in_edit_mode", "mode-1847", (0, 2)),
     # session 4 (18:43), modes again on a separate connection
     _step("global", "not_in_edit_mode", "mode-1843", (0, 2)),
+    # session 7 (19:17), labelled second pass: every knob, selector and switch again
+    *(
+        _step("preset", name, f"{field}-1917", (0, 127))
+        for name, field in (
+            ("noise_gate", "noise_gate"),
+            ("knob_unknown", "gain"),
+            ("treble", "treble"),
+            ("middle", "middle"),
+            ("bass", "bass"),
+            ("volume", "volume"),
+            ("mod_fx", "mod_fx"),
+            ("mod_speed", "mod_speed"),
+            ("delay_mix", "delay_mix"),
+            ("delay_time", "delay_time"),
+            ("reverb_decay", "reverb_decay"),
+            ("reverb_mix", "reverb_mix"),
+        )
+    ),
+    _step("preset", "amp_type", "amp_type-1917", (0, 8)),
+    _step("preset", "ir_cab", "ir_cab-1917", (0, 8)),
+    *(
+        _step("preset", f"{b}_on", f"{b}_on-1917", (0, 1))
+        for b in ("amp", "mod", "delay", "reverb")
+    ),
     # session 3 (18:41), preset walk
     FixturePair("global", "browse_bank", "20261116-step-preset_select-bank.jsonl", single=False),
     FixturePair("global", "bank", "20261116-step-preset_select-bank.jsonl", single=False),
