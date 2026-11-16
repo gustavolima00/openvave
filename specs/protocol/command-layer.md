@@ -75,6 +75,13 @@ Worked example (read the current preset): `00 59 23 08 00 00 04 00 00 00 10 15 0
 Reply handling in the app: the command byte (offset 2) is echoed back; a write reply carries a
 status byte at offset 6; read data starts at offset 14. Replies longer than one notification
 are reassembled from consecutive `ae42` notifications using the length field.
+Reassembly across notifications stays **observed** (from the app's code only): in the committed
+capture every reply, the largest being 47 bytes, fit in one notification at ATT MTU 185.
+
+Committed evidence: [`captures/fw96/20261116-probe-connect.jsonl`](../../captures/fw96/20261116-probe-connect.jsonl)
+(sanitized copy of `captures/private/20261116-111832-probe.jsonl`, fw 96, macOS) is the fixture
+for the frame format, the query (`0x11`) and the read (`0x23`) rows above; the test suite
+round-trips every frame in it.
 
 ### First values read from hardware (fw 96, 2026-11-16, confirmed)
 
