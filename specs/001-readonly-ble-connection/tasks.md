@@ -199,8 +199,10 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
 - [X] Hardware: `uv run pytest --hardware tests/hardware` → **1 passed in 5.94 s** (5 s scan +
   connect + handshake, inside the 10 s budget); `info --scan-timeout 3` with the pedal on also
   finds and identifies it (RSSI −66).
-- [ ] Still to run for T036: `--scan-timeout 3` with pedal off
-  (exit code + ~3 s), Bluetooth off → exit 5.
+- [X] Hardware: pedal off, `time uv run openvave info --scan-timeout 3` → `error: no TANK-Gv2_BLE
+  found` + `hint:` line, **exit 3**, 3.13 s total. With the pedal on, the same command
+  succeeds in 3.88 s end-to-end.
+- [ ] Still to run for T036: Mac Bluetooth off → exit 5 with hint.
 
 **Checkpoint**: Milestone 1 DONE — MVP usable — pending hardware gate (T035/T036)
 
