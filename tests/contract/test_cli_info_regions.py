@@ -102,6 +102,7 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
     knob = regions["current_preset"]["fields"]
     assert [(f["offset"], f["value"], f["confidence"]) for f in knob] == [
         (6, recorded(PRESET)[6], "observed"),
+        (15, recorded(PRESET)[15], "observed"),
         (16, recorded(PRESET)[16], "hypothesis"),
         (17, recorded(PRESET)[17], "hypothesis"),
     ]

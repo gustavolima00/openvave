@@ -45,7 +45,7 @@ Closed enumeration — the only memory reads this feature can issue (FR-008, FR-
 |---|---|---|---|---|
 | `DEVICE_INFO` | 5 | `0xD0000000` | 32 | device info block (hypothesis); bytes 0–3 = `0a 30 39 36` on fw 96 |
 | `GLOBAL` | 4 | `0x20000000` | 4 | global settings (hypothesis); byte 3 = 1 normally, 0 in edit mode (observed; "edited" hypothesis refuted 2026-11-16) |
-| `CURRENT_PRESET` | 4 | `0x10000000` | 21 | current/edit preset buffer (hypothesis); byte 6 = a knob 0–127 (observed); 16 = reverb mix?, 17 = IR cab? (hypothesis) |
+| `CURRENT_PRESET` | 4 | `0x10000000` | 21 | current/edit preset buffer (hypothesis); byte 6 = a knob 0–127 (observed); 15 = reverb decay 0–127 (observed); 16 = reverb mix?, 17 = IR cab? (hypothesis) |
 | `STATUS` | 4 | `0xD0000000` | 1 | status byte (hypothesis: current preset index?) |
 
 The read *operations* are confirmed; the *meanings* are not, so renderers show raw bytes and only

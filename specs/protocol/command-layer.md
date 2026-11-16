@@ -102,6 +102,7 @@ Method: poll the regions read-only while moving one control at a time (2026-11-1
 | Region | Offset | Meaning | Range | Confidence |
 |---|---|---|---|---|
 | preset | 6 | one front-panel knob (which one: TBD) | 0–127 (`0x00`–`0x7F`) | observed |
+| preset | 15 | **reverb decay** (continuous knob): `05` → `7f` when only this knob was turned to max in edit mode; no other preset byte changed | 0–127 | observed (one knob at a time, 2026-11-16) |
 | preset | 16 | reverb mix (continuous knob): `04` → `7f` when turned to max in edit mode | 0–127 | hypothesis (moved together with IR cab, see below) |
 | preset | 17 | IR cab (selector knob): `07` → `08` when turned to max in edit mode | small index | hypothesis (moved together with reverb mix, see below) |
 | global | 3 | **edit mode flag**: `1` normally, `0` while the pedal is in edit mode — flips on entering edit mode before any knob moves, stays `0` while knobs move, returns to `1` on leaving edit mode without saving | 0/1 | observed |
@@ -127,6 +128,11 @@ byte-identical frames (confirmed), and 10 `openvave info` runs agreed (2026-11-1
 device-info bytes 20–21 vary. Over 11 hardware reads on 2026-11-16 they were `43 f3` nine times,
 `00 00` once and `43 77` once; byte 19 (`b7`) never changed (observed). They are not a stable
 identifier (consistent with the R7 "no MAC match" result); meaning unknown.
+Hypothesis (2026-11-16): device-info bytes 20–21 are stale bytes from the **previous reply**, not
+device data. Each time, they equalled the last data byte and the checksum of the preset reply
+read just before: `43 f3` after the capture's preset reply (`… 43 f3`), `43 79` after the
+reverb-decay reply (`… 43 79`), and `00 00` on a first connection. Two paired readings fit and none
+contradicts it; the one `43 77` reading had no logged preset reply to compare with.
 Pedal edits are **not** pushed: they only become visible to a host that re-reads (confirmed).
 
 ### Background polling
@@ -169,5 +175,8 @@ tail 0 B (the app verifies this layout for the `tankG` product).
 - macOS: a process launched from a host app that has no `NSBluetoothAlwaysUsageDescription` is
   killed by TCC (SIGABRT, exit 134) on its first Bluetooth access, before Python can report an
   error; from Terminal with Bluetooth permission it works (observed, 2026-11-16, macOS 26.5.2).
+- With the M-effects phone app connected to the pedal, `openvave info` finds nothing and exits 3
+  after the full scan: the pedal stops advertising while a central is connected (observed,
+  2026-11-16, fw 96). Exit 6 (connection refused) did not occur.
 - With the Mac's Bluetooth turned off, bleak reports it as unavailable and `openvave` exits 5
   (observed, 2026-11-16).

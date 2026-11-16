@@ -82,6 +82,7 @@ Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
   00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05
   10: 04 07 43 16 43
       [6] knob (which one: unknown) = 60   (observed)
+      [15] reverb decay = 5   (observed)
       [16] reverb mix? = 4   (hypothesis)
       [17] IR cab? = 7   (hypothesis)
 ```

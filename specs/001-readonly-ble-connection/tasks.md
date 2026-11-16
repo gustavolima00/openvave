@@ -360,9 +360,9 @@ confidence-labelled fields, in human and JSON form; then project-wide polish.
 
 ### Live verification (milestone gate)
 
-- [ ] T057 [US3] On macOS + fw 96: `uv run openvave preset dump`, turn one knob, run again — a parameter byte changes; `uv run openvave --trace preset dump` shows exactly two `TX` lines; record in the PR
-- [ ] T058 Run every scenario in `specs/001-readonly-ble-connection/quickstart.md` (hardware-free and hardware) and record pass/fail, OS version and firmware in the PR
-- [ ] T059 Run the phone-app-still-connected spot check from quickstart.md and record which exit code (3 or 6) occurs; update `contracts/cli.md` hint text if needed
+- [X] T057 [US3] On macOS + fw 96: `uv run openvave preset dump`, turn one knob, run again — a parameter byte changes; `uv run openvave --trace preset dump` shows exactly two `TX` lines; record in the PR
+- [X] T058 Run every scenario in `specs/001-readonly-ble-connection/quickstart.md` (hardware-free and hardware) and record pass/fail, OS version and firmware in the PR
+- [X] T059 Run the phone-app-still-connected spot check from quickstart.md and record which exit code (3 or 6) occurs; update `contracts/cli.md` hint text if needed
 - [X] T060 Confirm SC-001 by timing 10 consecutive `uv run openvave info` runs; ≥ 9 must finish under 10 s; record timings in the PR
 
 **Gate evidence (2026-11-16, macOS 26.5.2 / build 25F84, fw 96, local)**:
@@ -381,8 +381,14 @@ confidence-labelled fields, in human and JSON form; then project-wide polish.
   exit 0, exactly two `TX` lines (`00 59 11 00 00 00 ff`, then
   `00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6`), each reply in one notification; preset bytes
   byte-identical to the fw96 capture. `preset dump --json` → exit 0, same `data`, RSSI −68.
-- [ ] T057 (knob part): turn one knob (in edit mode — knobs do nothing outside it, M2) and re-run
-  `preset dump` — pending, needs the user at the pedal.
+- [X] T057 (knob part), user at the pedal: entered edit mode, turned only **reverb decay** to max,
+  `uv run openvave --trace preset dump` → exit 0, exactly two `TX` lines, preset byte **15**
+  `05` → `7f` and no other byte changed; `info` right after showed Global `00 00 01 00` (edit
+  mode). Recorded preset [15] = reverb decay (observed, one knob at a time) in `KNOWN_FIELDS`,
+  `command-layer.md`, `data-model.md`, `contracts/cli.md`, README and the contract tests.
+  Side observation: device-info bytes 20–21 read `43 79` = last data byte + checksum of the preset
+  reply just before (earlier `43 f3` matched the capture's) — recorded as a hypothesis (stale reply
+  buffer). The user left edit mode without knowing whether it saved; not checked afterwards.
 - [X] T058 hardware-free: scenario 1 (full suite, hardware skipped) pass; 2 pass (10 round-trips —
   the documented `-k roundtrip` matched nothing because the tests are named `round_trip`;
   quickstart.md corrected); 3 pass (33 rejections); 4 `tests/integration` 37 passed; 5
@@ -391,12 +397,16 @@ confidence-labelled fields, in human and JSON form; then project-wide polish.
   exit 0; `info --json | python3 -m json.tool` → both exit 0; `uv run pytest --hardware
   tests/hardware` → **3 passed in 17.82 s** (identity, snapshot, preset). Error paths (pedal off →
   exit 3, Bluetooth off → exit 5) were verified in M1 and are not re-run here.
-- [ ] T059 phone-app-still-connected spot check — pending, needs the user's phone.
+- [X] T059: phone app connected to the pedal, `uv run openvave info` → `error: no TANK-Gv2_BLE
+  found` + the close-the-phone-app hint, **exit 3** after 5 s: the pedal stops advertising while
+  a central is connected. The existing hint already fits; `contracts/cli.md` exit-code row and
+  quickstart.md updated with the result; observation added to `command-layer.md` (observed).
+- [X] After the byte-15 update: ruff, format, `mypy src` clean; **493 passed, 3 skipped**.
 - [X] T060 SC-001: 10 consecutive `uv run openvave info` → all exit 0, **10/10 under 10 s**:
   6.40, 6.72, 6.15, 6.13, 6.17, 6.12, 6.40, 6.08, 6.26, 6.14 s (wall clock incl. `uv run` and the
   5 s default scan).
 
-**Checkpoint**: Milestone 4 DONE — feature complete
+**Checkpoint**: Milestone 4 DONE — feature complete (hardware gate passed 2026-11-16, macOS 26.5.2, fw 96) ✅
 
 ---
 

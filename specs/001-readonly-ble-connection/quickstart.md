@@ -68,4 +68,4 @@ development workflow).
 |---|---|---|
 | Pedal off | `uv run openvave info --scan-timeout 3` | `error: no Tank-G found…` on stderr, exit 3, ~3 s |
 | Bluetooth off | `uv run openvave info` | `error: Bluetooth unavailable…` + hint, exit 5 |
-| Phone app still connected | `uv run openvave info` | a clear error (exit 3 if the pedal stops advertising, 6 if the connection is refused — which one happens is unverified; record the result) with a hint to disconnect the app |
+| Phone app still connected | `uv run openvave info` | `error: no TANK-Gv2_BLE found` + hint to close the phone app, exit 3 after the full scan — the pedal stops advertising while the app is connected (observed 2026-11-16, fw 96) |
