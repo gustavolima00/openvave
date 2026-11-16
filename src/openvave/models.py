@@ -86,7 +86,11 @@ class FieldSpec:
 
 KNOWN_FIELDS: Mapping[Region, tuple[FieldSpec, ...]] = {
     Region.DEVICE_INFO: (),
-    Region.GLOBAL: (FieldSpec(3, "edited_flag", "edited flag?", "hypothesis"),),
-    Region.CURRENT_PRESET: (FieldSpec(6, "knob_unknown", "knob (which one: unknown)", "observed"),),
+    Region.GLOBAL: (FieldSpec(3, "not_in_edit_mode", "not in edit mode", "observed"),),
+    Region.CURRENT_PRESET: (
+        FieldSpec(6, "knob_unknown", "knob (which one: unknown)", "observed"),
+        FieldSpec(16, "reverb_mix", "reverb mix?", "hypothesis"),
+        FieldSpec(17, "ir_cab", "IR cab?", "hypothesis"),
+    ),
     Region.STATUS: (),
 }

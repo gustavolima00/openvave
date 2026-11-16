@@ -88,7 +88,7 @@ round-trips every frame in it.
 | Request | Data returned |
 |---|---|
 | query | `TANK-Gv2_096` + 15 × `00` (27 bytes) |
-| type 5 @ `0xD0000000` ×32 | `0a 30 39 36` (`.096`) · zeros · `b7 43 f3` at offsets 19–21 · zeros |
+| type 5 @ `0xD0000000` ×32 | `0a 30 39 36` (`.096`) · zeros · `b7 43 f3` at offsets 19–21 · zeros (bytes 20–21 vary between reads, see below) |
 | type 4 @ `0x20000000` ×4 (global) | `00 00 01 01` |
 | type 4 @ `0x10000000` ×21 (current preset) | `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43` |
 | type 4 @ `0xD0000000` ×1 (status) | `01` |
@@ -102,9 +102,31 @@ Method: poll the regions read-only while moving one control at a time (2026-11-1
 | Region | Offset | Meaning | Range | Confidence |
 |---|---|---|---|---|
 | preset | 6 | one front-panel knob (which one: TBD) | 0–127 (`0x00`–`0x7F`) | observed |
-| global | 3 | 1 → 0 when a knob is moved; back to 1 when the stored value returns (preset reload?) — likely an "edited / unsaved" flag (1 = clean) | 0/1 | hypothesis |
+| preset | 16 | reverb mix (continuous knob): `04` → `7f` when turned to max in edit mode | 0–127 | hypothesis (moved together with IR cab, see below) |
+| preset | 17 | IR cab (selector knob): `07` → `08` when turned to max in edit mode | small index | hypothesis (moved together with reverb mix, see below) |
+| global | 3 | **edit mode flag**: `1` normally, `0` while the pedal is in edit mode — flips on entering edit mode before any knob moves, stays `0` while knobs move, returns to `1` on leaving edit mode without saving | 0/1 | observed |
 
-Reads are deterministic: two probes minutes apart returned byte-identical frames (confirmed).
+Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
+
+| Step | Global | Preset bytes 16–17 |
+|---|---|---|
+| normal (after power-on) | `00 00 01 01` | `04 07` |
+| entered edit mode, no knob touched | `00 00 01 00` | `04 07` |
+| turned IR cab and reverb mix to max (still in edit mode) | `00 00 01 00` | `7f 08` |
+| left edit mode without saving | `00 00 01 01` | `04 07` |
+
+This refutes the earlier "edited / unsaved" hypothesis for global byte 3: it tracks edit mode,
+not whether a parameter differs from the stored value. Knobs do nothing outside edit mode (user
+report). The byte 16 / 17 assignment rests on the ranges (127 = continuous maximum; +1 = one
+selector step, and the user confirms IR cab is a selector); both knobs were moved in the same
+step, so a one-knob-at-a-time run is needed to promote them to observed. Leaving edit mode
+without saving restores the preset buffer (observed).
+
+Reads are deterministic for global, current preset and status: two probes minutes apart returned
+byte-identical frames (confirmed), and 10 `openvave info` runs agreed (2026-11-16). **Exception**:
+device-info bytes 20–21 vary. Over 11 hardware reads on 2026-11-16 they were `43 f3` nine times,
+`00 00` once and `43 77` once; byte 19 (`b7`) never changed (observed). They are not a stable
+identifier (consistent with the R7 "no MAC match" result); meaning unknown.
 Pedal edits are **not** pushed: they only become visible to a host that re-reads (confirmed).
 
 ### Background polling
@@ -132,10 +154,11 @@ tail 0 B (the app verifies this layout for the `tankG` product).
 
 ## Next steps
 
-- Validate the frame format on hardware with `poc/probe_readonly.py` (query + the app's 4 reads).
+- ~~Validate the frame format on hardware~~ done: `openvave info` reads all four regions (fw 96).
 - Note: a macOS relay (`poc/ble_mitm.py`) is not discovered by the app, likely because it matches
   advertising data macOS cannot emit; a Linux/ESP32 relay would be needed for live app captures.
-- Correlate `0x10000004` byte positions with specific knobs (move one knob at a time).
+- Correlate `0x10000004` byte positions with specific knobs: enter edit mode, then move one knob
+  at a time (bytes 16/17 started above).
 - Determine what `0xE0000002/3` do (preset up/down? select index?).
 - Only after the above: replay **read-only** commands (`CMD_Q_NAME_AND_VER`, reads) from the
   library. Writes stay disabled until confirmed (Constitution IV).

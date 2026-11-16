@@ -94,14 +94,16 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
         {
             "offset": 3,
             "size": 1,
-            "name": "edited_flag",
+            "name": "not_in_edit_mode",
             "value": recorded(GLOBAL)[3],
-            "confidence": "hypothesis",
+            "confidence": "observed",
         }
     ]
     knob = regions["current_preset"]["fields"]
     assert [(f["offset"], f["value"], f["confidence"]) for f in knob] == [
-        (6, recorded(PRESET)[6], "observed")
+        (6, recorded(PRESET)[6], "observed"),
+        (16, recorded(PRESET)[16], "hypothesis"),
+        (17, recorded(PRESET)[17], "hypothesis"),
     ]
     assert regions["device_info"]["fields"] == []
     assert regions["status"]["fields"] == []
@@ -136,7 +138,7 @@ def test_human_region_blocks(capsys: pytest.CaptureFixture[str]) -> None:
         assert lines[start : start + len(expected)] == expected
     assert "  00: 00 00 01 01" in lines
     assert "  10: " + recorded(DEVICE_INFO)[16:].hex(" ") in lines
-    assert "      [3] edited flag? = 1   (hypothesis)" in lines
+    assert "      [3] not in edit mode = 1   (observed)" in lines
 
 
 def test_human_omits_current_preset(capsys: pytest.CaptureFixture[str]) -> None:

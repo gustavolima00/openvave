@@ -223,6 +223,7 @@ preset (JSON only) and status, raw with offsets and confidence-labelled fields.
 - `openvave info --json` validates against `contracts/info.schema.json`; two runs differ only in
   `read_at` (SC-006).
 - Human output shows `00 00 01 01` for Global with `edited flag?` labelled `(hypothesis)`.
+  *(After T043 the label is `not in edit mode` `(observed)`: the gate refuted the hypothesis.)*
 
 ### Tests for User Story 2 (write first, must fail)
 
@@ -237,8 +238,8 @@ preset (JSON only) and status, raw with offsets and confidence-labelled fields.
 
 ### Live verification (milestone gate)
 
-- [ ] T042 [US2] On macOS + fw 96 run `uv run openvave info` and `uv run openvave info --json | python -m json.tool`; confirm Global `00 00 01 01` (after a fresh preset load) and Status `01`; move a knob and re-run to see Global byte 3 change (records evidence for the hypothesis); record results in the PR
-- [ ] T043 [US2] If the knob experiment confirms or refutes the global byte 3 hypothesis, update its confidence in `specs/protocol/command-layer.md` and `KNOWN_FIELDS` in `src/openvave/models.py` in the same PR (Constitution I)
+- [X] T042 [US2] On macOS + fw 96 run `uv run openvave info` and `uv run openvave info --json | python -m json.tool`; confirm Global `00 00 01 01` (after a fresh preset load) and Status `01`; move a knob and re-run to see Global byte 3 change (records evidence for the hypothesis); record results in the PR
+- [X] T043 [US2] If the knob experiment confirms or refutes the global byte 3 hypothesis, update its confidence in `specs/protocol/command-layer.md` and `KNOWN_FIELDS` in `src/openvave/models.py` in the same PR (Constitution I)
 
 **Gate evidence (2026-11-16, macOS 26 / Darwin 25.5, local)**:
 
@@ -252,11 +253,26 @@ preset (JSON only) and status, raw with offsets and confidence-labelled fields.
   `test_two_runs_identical_except_read_at`); human output shows `00: 00 00 01 01` and
   `[3] edited flag? = 1   (hypothesis)` (`test_human_region_blocks`). A dropped read → exit 6,
   not retried (`test_read_timeout_exit_6`).
-- [ ] T042/T043 on hardware: pending. The agent's Terminal-panel tab reaches Bluetooth (no TCC
-  crash this time): `uv run openvave info` → `error: no TANK-Gv2_BLE found`, exit 3, because the
-  pedal was not advertising.
+- [X] Hardware T042 (macOS 26.5.2, fw 96, run from the agent's Terminal-panel tab, which has
+  Bluetooth access): `uv run openvave info` and `info --json` → exit 0; Global `00 00 01 01`,
+  Status `01`, current preset byte-identical to the fw96 capture. 5 × `info --json`: all validate
+  `info.schema.json`, regions identical (only `read_at` and RSSI differ). `--trace info` → exactly
+  the 5 captured TX frames in order, each reply in one notification, byte-identical to the capture.
+  `uv run pytest --hardware tests/hardware` → **2 passed in 12.37 s**.
+- [X] Observation: device-info bytes 20–21 are **not stable** — over 11 hardware reads `43 f3` ×9,
+  `00 00` ×1 (first run), `43 77` ×1; byte 19 `b7` constant. So SC-006 ("two runs differ only in
+  `read_at`") holds over captures but not strictly on hardware for those two bytes. Recorded in
+  `specs/protocol/command-layer.md` (observed).
+- [X] Knob experiment (user at the pedal, nothing saved): normal → Global `…01`; entered edit
+  mode, no knob touched → `…00`; turned IR cab + reverb mix to max → still `…00`, preset bytes
+  16–17 `04 07` → `7f 08`; left edit mode without saving → `…01`, preset back to `04 07`.
+- [X] T043: global byte 3 is an **edit-mode flag** (1 = normal, 0 = editing), not an "edited"
+  flag — hypothesis refuted, new meaning `observed`. Updated `command-layer.md`, `KNOWN_FIELDS`
+  (`not_in_edit_mode`, observed; plus preset [16] `reverb_mix?` and [17] `ir_cab?`, hypothesis —
+  both knobs moved in one step), `data-model.md`, `contracts/cli.md` and the contract test.
+  Suite: 464 passed, 2 skipped; ruff, format, mypy clean.
 
-**Checkpoint**: Milestone 2 DONE
+**Checkpoint**: Milestone 2 DONE — hardware gate passed 2026-11-16 (macOS 26.5.2, fw 96) ✅
 
 ---
 
