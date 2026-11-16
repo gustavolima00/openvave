@@ -56,7 +56,7 @@ PAIRS: tuple[FixturePair, ...] = (
     _step("preset", "bass", "bass", (50, 91)),
     _step("preset", "middle", "middle", (60, 80)),
     _step("preset", "treble", "treble", (0, 13)),
-    _step("preset", "knob_unknown", "gain", (60, 127)),
+    _step("preset", "gain", "gain", (60, 127)),
     _step("preset", "amp_type", "amp_type", (0, 4)),
     _step("preset", "noise_gate", "noise_gate", (2, 15)),
     # session 6 (18:47), labelled block switches and modes
@@ -64,15 +64,15 @@ PAIRS: tuple[FixturePair, ...] = (
     _step("preset", "mod_on", "mod_on", (0, 1)),
     _step("preset", "delay_on", "delay_on", (0, 1)),
     _step("preset", "reverb_on", "reverb_on", (0, 1)),
-    _step("global", "not_in_edit_mode", "mode-1847", (0, 2)),
+    _step("global", "mode", "mode-1847", (0, 2)),
     # session 4 (18:43), modes again on a separate connection
-    _step("global", "not_in_edit_mode", "mode-1843", (0, 2)),
+    _step("global", "mode", "mode-1843", (0, 2)),
     # session 7 (19:17), labelled second pass: every knob, selector and switch again
     *(
         _step("preset", name, f"{field}-1917", (0, 127))
         for name, field in (
             ("noise_gate", "noise_gate"),
-            ("knob_unknown", "gain"),
+            ("gain", "gain"),
             ("treble", "treble"),
             ("middle", "middle"),
             ("bass", "bass"),

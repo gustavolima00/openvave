@@ -88,7 +88,7 @@ def test_json_output(capsys: pytest.CaptureFixture[str], argv: list[str]) -> Non
     assert code == 0
     assert err == ""
     doc = json.loads(out)
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     assert doc["command"] == "info"
     read_at = datetime.fromisoformat(doc["read_at"])
     assert read_at.utcoffset() is not None and read_at.utcoffset().total_seconds() == 0

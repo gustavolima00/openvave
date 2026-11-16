@@ -170,7 +170,7 @@ def test_json_lines_validate(
     events = run.events
     for event in events:
         VALIDATOR.validate(event)
-        assert event["schema_version"] == 1
+        assert event["schema_version"] == 2
     assert events[0]["event"] == "start"
     assert events[-1]["event"] == "stop"
     assert events[-1]["reason"] == "quit"
@@ -197,7 +197,7 @@ def test_json_lines_validate(
     changes = [e for e in events if e["event"] == "change"]
     assert changes[0]["label"] == "edit mode on"
     assert changes[0]["changes"] == [
-        {"region": "global", "offset": 3, "old": 1, "new": 0, "field": "not_in_edit_mode"}
+        {"region": "global", "offset": 3, "old": 1, "new": 0, "field": "mode"}
     ]
     assert [c["cycle"] for c in changes] == [3, 4, 5, 6]
     assert changes[3]["label"] == "reverb mix only"

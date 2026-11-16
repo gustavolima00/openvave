@@ -135,14 +135,14 @@ def test_deprecated_known_fields_alias() -> None:
     preset = KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
     assert [s.offset for s in preset] == list(range(18))
     by_offset = {s.offset: (s.name, s.label, s.confidence) for s in preset}
-    assert by_offset[6] == ("knob_unknown", "gain", "confirmed")  # 0.1.0 name kept until 0.2.0
+    assert by_offset[6] == ("gain", "gain", "confirmed")  # renamed from knob_unknown in 0.2.0
     assert by_offset[15] == ("reverb_decay", "reverb decay", "confirmed")
     assert by_offset[17] == ("ir_cab", "IR cab", "confirmed")
     assert [s.name for s in KNOWN_FIELDS[openvave.Region.GLOBAL]] == [
         "browse_bank",
         "bank",
         "slot",
-        "not_in_edit_mode",
+        "mode",
     ]
     assert all(isinstance(s, FieldSpec) for s in preset)
     assert KNOWN_FIELDS[openvave.Region.DEVICE_INFO] == ()

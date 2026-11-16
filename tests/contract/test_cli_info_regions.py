@@ -101,7 +101,7 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
         {
             "offset": 3,
             "size": 1,
-            "name": "not_in_edit_mode",
+            "name": "mode",
             "value": recorded(GLOBAL)[3],
             "confidence": "confirmed",
             "raw": recorded(GLOBAL)[3],
@@ -121,7 +121,7 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
         "browse_bank",
         "bank",
         "slot",
-        "not_in_edit_mode",
+        "mode",
     ]
     assert regions["device_info"]["fields"] == []
     assert regions["status"]["fields"] == []
@@ -137,7 +137,7 @@ def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture
     schema = json.loads(DECODED_FIELD_SCHEMA_PATH.read_text(encoding="utf-8"))
     jsonschema.Draft202012Validator.check_schema(schema)
     doc = info_json(capsys)
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     items = [f for region in doc["regions"].values() for f in region["fields"]]
     assert len(items) == 4 + 18  # global 0-3, preset 0-17
     for item in items:

@@ -38,7 +38,7 @@ def test_preset_fields() -> None:
         (3, "reverb_on", 1, "on", "confirmed"),
         (4, "noise_gate", 15, "15", "confirmed"),
         (5, "amp_type", 4, "#4", "confirmed"),
-        (6, "knob_unknown", 60, "60", "confirmed"),
+        (6, "gain", 60, "60", "confirmed"),
         (7, "treble", 60, "60", "confirmed"),
         (8, "middle", 70, "70", "confirmed"),
         (9, "bass", 50, "50", "confirmed"),
@@ -63,7 +63,7 @@ def test_global_fields() -> None:
         (0, "browse_bank", 0, "0", "observed"),
         (1, "bank", 0, "0", "observed"),
         (2, "slot", 1, "1", "observed"),
-        (3, "not_in_edit_mode", 1, "normal", "confirmed"),
+        (3, "mode", 1, "normal", "confirmed"),
     ]
     decoded = decode_region(GLOBAL_READ, 96)
     assert decoded.unknown_offsets == ()

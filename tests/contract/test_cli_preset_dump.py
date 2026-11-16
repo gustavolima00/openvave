@@ -93,7 +93,7 @@ def test_json_validates_against_schema(capsys: pytest.CaptureFixture[str]) -> No
 
 def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
     doc = preset_json(capsys)
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     assert doc["command"] == "preset dump"
     assert doc["device"] == {"identifier": "3F1A-UUID", "name": "TANK-Gv2_BLE", "rssi": -58}
     assert doc["identity"]["name"] == "TANK-Gv2"
@@ -110,7 +110,7 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
         (3, "reverb_on", 1, "confirmed"),
         (4, "noise_gate", 15, "confirmed"),
         (5, "amp_type", 4, "confirmed"),
-        (6, "knob_unknown", 60, "confirmed"),
+        (6, "gain", 60, "confirmed"),
         (7, "treble", 60, "confirmed"),
         (8, "middle", 70, "confirmed"),
         (9, "bass", 50, "confirmed"),
@@ -200,7 +200,7 @@ def test_json_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err, _ = run(capsys, ["preset", "dump", "--json"], fw97_fake())
     assert code == 0, err
     doc = json.loads(out)
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     assert doc["identity"]["firmware_untested"] is True
     assert doc["preset"]["map_firmware"] == 96
     assert [f["name"] for f in doc["preset"]["fields"]] == [
@@ -212,7 +212,7 @@ def test_json_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
             (3, "reverb_on", 1, "confirmed"),
             (4, "noise_gate", 15, "confirmed"),
             (5, "amp_type", 4, "confirmed"),
-            (6, "knob_unknown", 60, "confirmed"),
+            (6, "gain", 60, "confirmed"),
             (7, "treble", 60, "confirmed"),
             (8, "middle", 70, "confirmed"),
             (9, "bass", 50, "confirmed"),
