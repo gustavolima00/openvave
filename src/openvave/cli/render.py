@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from openvave.models import (
+    ByteChange,
     DecodedField,
     DecodedRegion,
     DeviceIdentity,
@@ -15,8 +16,10 @@ from openvave.models import (
     Encoding,
     Region,
     RegionRead,
+    WatchChange,
+    WatchStart,
 )
-from openvave.protocol.decode import decode_region
+from openvave.protocol.decode import decode_field, decode_region
 
 SCHEMA_VERSION = 1
 LABEL_WIDTH = 11
@@ -232,3 +235,135 @@ def preset_json(
 
 def dumps(document: dict[str, Any]) -> str:
     return json.dumps(document, indent=2)
+
+
+# -- watch (contracts/cli.md "openvave watch") ---------------------------------------------------
+
+WATCH_REGION_KEYS = {
+    Region.GLOBAL: "global",
+    Region.CURRENT_PRESET: "preset",
+    Region.STATUS: "status",
+}
+"""Short region names of watch output and session records."""
+WATCH_TIME_WIDTH = 7
+WATCH_LOCATION_WIDTH = 12
+WATCH_NAME_WIDTH = 18
+WATCH_VALUE_WIDTH = 4
+
+
+def watch_header(start: WatchStart, interval: float, record: str | None) -> list[str]:
+    """Start block: what is watched, where it is recorded, and each region's baseline bytes.
+
+    Decoded fields are appended for global and status (``preset dump`` shows the preset's).
+    """
+    identity = start.identity
+    lines = [
+        f"Watching {identity.name} (firmware {identity.firmware}), every {interval:g} s. "
+        "Type a label and Enter before each step; q to quit."
+    ]
+    if record is not None:
+        lines.append(f"Recording to {record}")
+    for region, decoded in start.regions.items():
+        line = f"  {WATCH_REGION_KEYS[region]:<6}  {hex_bytes(decoded.read.data)}"
+        if region is not Region.CURRENT_PRESET and decoded.fields:
+            line += "   " + ", ".join(f"{f.entry.label} = {f.display}" for f in decoded.fields)
+        lines.append(line)
+    return lines
+
+
+def watch_label_line(text: str) -> str:
+    return f"── label: {text} ──"
+
+
+def _change_cells(change: ByteChange) -> tuple[str, str, str]:
+    """(label, old, new) in the field's display form, or raw hex for unknown/flag bytes."""
+    if change.field is not None:
+        old = decode_field(change.field, change.old).display
+        new = decode_field(change.field, change.new).display
+        return change.field.label, old, new
+    name = " / ".join(e.label for e in change.fields) if change.fields else "unknown"
+    return name, f"0x{change.old:02x}", f"0x{change.new:02x}"
+
+
+def watch_change_lines(event: WatchChange, t: float) -> list[str]:
+    """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked."""
+    lines = []
+    count = len(event.changes)
+    for i, change in enumerate(event.changes):
+        time_cell = f"+{t:.2f}s" if i == 0 else ""
+        location = f"{WATCH_REGION_KEYS[change.region]}[{change.offset}]"
+        name, old, new = _change_cells(change)
+        line = (
+            f"{time_cell:>{WATCH_TIME_WIDTH}}  {location:<{WATCH_LOCATION_WIDTH}}"
+            f"{name:<{WATCH_NAME_WIDTH}}{old:>{WATCH_VALUE_WIDTH}} → {new}"
+        )
+        if i == 0 and count > 1:
+            line += f"     (co-moving: {count})"
+        lines.append(line)
+    return lines
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def watch_summary(t: float, changes: int, cycles: int, record: str | None) -> str:
+    line = f"Stopped after {t:.1f} s: {_plural(changes, 'change')} in {_plural(cycles, 'cycle')}."
+    if record is not None:
+        line += f" Record: {record}"
+    return line
+
+
+def _watch_event(event: str, t: float, **fields: Any) -> dict[str, Any]:
+    return {"schema_version": SCHEMA_VERSION, "event": event, "t": round(t, 4), **fields}
+
+
+def watch_start_json(
+    start: WatchStart, t: float, interval: float, record: str | None
+) -> dict[str, Any]:
+    firmware = start.identity.firmware
+    return _watch_event(
+        "start",
+        t,
+        identity=identity_json(start.identity),
+        interval=interval,
+        record=record,
+        regions={
+            region.name.lower(): region_json(decoded.read, firmware)
+            for region, decoded in start.regions.items()
+        },
+    )
+
+
+def watch_label_json(text: str, t: float) -> dict[str, Any]:
+    return _watch_event("label", t, text=text)
+
+
+def watch_change_json(event: WatchChange, t: float, label: str | None) -> dict[str, Any]:
+    return _watch_event(
+        "change",
+        t,
+        cycle=event.cycle,
+        label=label,
+        changes=[
+            {
+                "region": c.region.name.lower(),
+                "offset": c.offset,
+                "old": c.old,
+                "new": c.new,
+                "field": c.field.name if c.field is not None else None,
+            }
+            for c in event.changes
+        ],
+    )
+
+
+def watch_stop_json(
+    t: float, reason: str, error: str | None, changes: int, cycles: int
+) -> dict[str, Any]:
+    return _watch_event("stop", t, reason=reason, error=error, changes=changes, cycles=cycles)
+
+
+def json_line(document: dict[str, Any]) -> str:
+    """One JSON Lines record (``watch --json``)."""
+    return json.dumps(document, ensure_ascii=False)

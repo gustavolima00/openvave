@@ -39,7 +39,11 @@ class Capture:
     pairs: dict[str, tuple[bytes, bytes]]
     """label → (request frame, reply frame), in capture order."""
     rx_chunks: dict[str, list[bytes]] = field(default_factory=dict)
-    """label → notification chunks that made up the reply."""
+    """label → notification chunks that made up the (first) reply."""
+    all_rx: dict[str, list[bytes]] = field(default_factory=dict)
+    """label → every reply frame with that label, in capture order (watch records repeat)."""
+    records: list[dict[str, Any]] = field(default_factory=list)
+    """Every line of the file, parsed, in order (including ``label``/``change``/``stop``)."""
 
     @property
     def ordered_tx(self) -> list[bytes]:
@@ -49,11 +53,23 @@ class Capture:
         return self.pairs[label][0]
 
     def rx(self, label: str) -> bytes:
+        """The first reply with this label."""
         return self.pairs[label][1]
+
+    def rx_all(self, label: str) -> list[bytes]:
+        """Every reply with this label, in order."""
+        return list(self.all_rx[label])
+
+
+WATCH_EVENTS = frozenset({"label", "change", "stop"})
+"""Session-record events (specs/002-preset-byte-map/contracts/session-record.md)."""
 
 
 def load_capture(path: Path | str) -> Capture:
+    """Parse a capture; ``pairs``/``tx()``/``rx()`` keep the first occurrence of each label."""
     meta: dict[str, Any] = {}
+    records: list[dict[str, Any]] = []
+    all_rx: dict[str, list[bytes]] = {}
     tx_by_label: dict[str, bytes] = {}
     pairs: dict[str, tuple[bytes, bytes]] = {}
     chunks: dict[str, list[bytes]] = {}
@@ -64,12 +80,13 @@ def load_capture(path: Path | str) -> Capture:
             if not line.strip():
                 continue
             record = json.loads(line)
+            records.append(record)
             event = record["event"]
             if event == "meta":
                 meta = record
             elif event == "tx":
                 current = normalise_label(record["label"])
-                tx_by_label[current] = parse_hex(record["hex"])
+                tx_by_label.setdefault(current, parse_hex(record["hex"]))
                 pending = []
             elif event == "rx-chunk":
                 pending.append(parse_hex(record["hex"]))
@@ -77,11 +94,16 @@ def load_capture(path: Path | str) -> Capture:
                 label = normalise_label(record["label"])
                 if label != current:
                     raise ValueError(f"{path}: rx {label!r} does not follow its tx")
-                pairs[label] = (tx_by_label[label], parse_hex(record["hex"]))
-                chunks[label] = pending
+                frame = parse_hex(record["hex"])
+                all_rx.setdefault(label, []).append(frame)
+                if label not in pairs:
+                    pairs[label] = (tx_by_label[label], frame)
+                    chunks[label] = pending
                 pending = []
+            elif event in WATCH_EVENTS:
+                continue
             else:
                 raise ValueError(f"{path}: unknown event {event!r}")
     if not meta:
         raise ValueError(f"{path}: missing meta record")
-    return Capture(meta=meta, pairs=pairs, rx_chunks=chunks)
+    return Capture(meta=meta, pairs=pairs, rx_chunks=chunks, all_rx=all_rx, records=records)

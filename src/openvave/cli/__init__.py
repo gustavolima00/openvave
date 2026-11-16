@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from openvave import __version__
-from openvave.cli import render
+from openvave.cli import render, watch
 from openvave.errors import BluetoothUnavailableError, MultipleDevicesError, OpenvaveError
 from openvave.models import DeviceInfo, Region
 from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, TankG
@@ -93,6 +93,31 @@ def _parser() -> argparse.ArgumentParser:
     preset = sub.add_parser("preset", parents=[common], help="read the current preset")
     preset_sub = preset.add_subparsers(dest="action", metavar="ACTION", required=True)
     preset_sub.add_parser("dump", parents=[common], help="print the 21-byte current preset buffer")
+    watch_parser = sub.add_parser(
+        "watch",
+        parents=[common],
+        help="poll the pedal and print/record every byte that changes (read-only)",
+        description="Poll global, current preset and status; type a label and Enter before "
+        "each step, q to quit. With --json: JSON Lines, one event per line.",
+    )
+    watch_parser.add_argument(
+        "--interval",
+        metavar="SECONDS",
+        type=float,
+        default=0.5,
+        help="time between poll cycles (default 0.5, minimum 0.2)",
+    )
+    watch_parser.add_argument(
+        "--duration", metavar="SECONDS", type=float, default=None, help="stop after this long"
+    )
+    record = watch_parser.add_mutually_exclusive_group()
+    record.add_argument(
+        "--record",
+        metavar="PATH",
+        default=None,
+        help="session record file (default captures/private/<YYYYMMDD-HHMMSS>-watch.jsonl)",
+    )
+    record.add_argument("--no-record", action="store_true", help="do not write a session record")
     return parser
 
 
@@ -187,9 +212,17 @@ def _report(err: OpenvaveError) -> None:
 
 
 def main(
-    argv: Sequence[str] | None = None, *, transport_factory: TransportFactory | None = None
+    argv: Sequence[str] | None = None,
+    *,
+    transport_factory: TransportFactory | None = None,
+    stdin: watch.LineSource | None = None,
+    clock: watch.Clock | None = None,
 ) -> int:
-    """Run the CLI and return its exit code (contracts/cli.md)."""
+    """Run the CLI and return its exit code (contracts/cli.md).
+
+    ``transport_factory``, ``stdin`` (watch labels) and ``clock`` (watch timing) are injectable
+    for tests.
+    """
     parser = _parser()
     try:
         args = parser.parse_args(argv)
@@ -198,10 +231,20 @@ def main(
     if args.command is None:
         parser.print_help(sys.stderr)
         return EXIT_USAGE
+    if args.command == "watch":
+        try:
+            watch.validate(args)
+        except watch.UsageError as err:
+            print(f"openvave watch: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
         try:
+            if args.command == "watch":
+                return asyncio.run(
+                    watch.run(args, factory, stdin or sys.stdin, clock or watch.SystemClock())
+                )
             output = asyncio.run(COMMANDS[args.command](args, factory))
         except OpenvaveError as err:
             if debug:

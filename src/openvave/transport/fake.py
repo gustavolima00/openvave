@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from openvave.errors import ConnectionLostError
@@ -18,16 +18,34 @@ def _label(text: str) -> str:
     return " ".join(text.split())
 
 
+Replies = bytes | Sequence[bytes]
+"""One reply frame, or several served in order (the last one then repeats)."""
+
+
+def _reply_list(label: str, replies: Replies) -> list[bytes]:
+    frames = (
+        [bytes(replies)] if isinstance(replies, bytes | bytearray) else [bytes(r) for r in replies]
+    )
+    if not frames:
+        raise ValueError(f"no reply for label {label!r}")
+    return frames
+
+
 class FakeTransport:
     """Answers each known request frame with its scripted reply.
 
-    ``script`` maps a label to ``(request frame, reply frame)``. Options (keyed by label):
+    ``script`` maps a label to ``(request frame, reply)``. The reply is one frame, or a sequence
+    of frames served in order to successive matching requests; once the sequence is exhausted
+    its last frame repeats (ordered replay, used to simulate a pedal whose state changes while
+    ``TankG.watch()`` polls it). Options (keyed by label):
 
     - ``split``: deliver every reply as this many notification chunks.
-    - ``drop``: ``{label: k}`` — send no reply to the first ``k`` matching requests.
+    - ``drop``: ``{label: k}`` — send no reply to the first ``k`` matching requests (a dropped
+      request does not consume a reply).
     - ``disconnect_after``: after this many writes the link is lost; later writes raise
       :class:`ConnectionLostError`.
-    - ``replies``: ``{label: frame}`` — reply with this frame instead of the scripted one.
+    - ``replies``: ``{label: reply}`` — reply with this frame (or sequence of frames) instead of
+      the scripted one.
 
     Every frame written is recorded in :attr:`sent`. A request that is not in the script raises
     ``AssertionError`` (the test is wrong, not the pedal).
@@ -35,20 +53,22 @@ class FakeTransport:
 
     def __init__(
         self,
-        script: Mapping[str, tuple[bytes, bytes]],
+        script: Mapping[str, tuple[bytes, Replies]],
         *,
         split: int | None = None,
         drop: Mapping[str, int] | None = None,
         disconnect_after: int | None = None,
-        replies: Mapping[str, bytes] | None = None,
+        replies: Mapping[str, Replies] | None = None,
     ) -> None:
-        self._replies = {label: rx for label, (_, rx) in script.items()}
-        self._labels = {tx: label for label, (tx, _) in script.items()}
+        self._replies = {label: _reply_list(label, rx) for label, (_, rx) in script.items()}
+        self._labels = {bytes(tx): label for label, (tx, _) in script.items()}
         for option in (drop or {}, replies or {}):
             for label in option:
                 if label not in self._replies:
                     raise KeyError(f"unknown label {label!r}")
-        self._replies.update(replies or {})
+        for label, override in (replies or {}).items():
+            self._replies[label] = _reply_list(label, override)
+        self._served: dict[str, int] = {}
         self._drop = dict(drop or {})
         self._split = split
         self._disconnect_after = disconnect_after
@@ -66,11 +86,15 @@ class FakeTransport:
         split: int | None = None,
         drop: Mapping[str, int] | None = None,
         disconnect_after: int | None = None,
-        replies: Mapping[str, bytes] | None = None,
+        replies: Mapping[str, Replies] | None = None,
     ) -> FakeTransport:
-        """Build a fake from a capture file (labels are whitespace-normalised)."""
-        script: dict[str, tuple[bytes, bytes]] = {}
+        """Build a fake from a capture file (labels are whitespace-normalised).
+
+        Several ``rx`` lines with the same label (e.g. a ``watch`` session record) become an
+        ordered reply sequence. Events other than ``tx``/``rx`` are ignored.
+        """
         tx: dict[str, bytes] = {}
+        rx: dict[str, list[bytes]] = {}
         with open(path, encoding="utf-8") as fh:
             for line in fh:
                 if not line.strip():
@@ -78,10 +102,16 @@ class FakeTransport:
                 record = json.loads(line)
                 event = record["event"]
                 if event == "tx":
-                    tx[_label(record["label"])] = bytes.fromhex(record["hex"])
+                    label = _label(record["label"])
+                    frame = bytes.fromhex(record["hex"])
+                    if tx.setdefault(label, frame) != frame:
+                        raise ValueError(f"{path}: label {label!r} names two different requests")
                 elif event == "rx":
                     label = _label(record["label"])
-                    script[label] = (tx[label], bytes.fromhex(record["hex"]))
+                    if label not in tx:
+                        raise ValueError(f"{path}: rx {label!r} before its tx")
+                    rx.setdefault(label, []).append(bytes.fromhex(record["hex"]))
+        script: dict[str, tuple[bytes, Replies]] = {label: (tx[label], rx[label]) for label in rx}
         return cls(
             script, split=split, drop=drop, disconnect_after=disconnect_after, replies=replies
         )
@@ -112,7 +142,10 @@ class FakeTransport:
         if self._drop.get(label, 0) > 0:
             self._drop[label] -= 1
             return
-        self._deliver(self._replies[label])
+        frames = self._replies[label]
+        served = self._served.get(label, 0)
+        self._served[label] = served + 1
+        self._deliver(frames[min(served, len(frames) - 1)])
 
     def _deliver(self, reply: bytes) -> None:
         callback = self._callback

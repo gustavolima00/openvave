@@ -31,3 +31,19 @@ def test_silent_without_handler(capsys: pytest.CaptureFixture[str]) -> None:
     trace.trace_rx(CAP.rx(GLOBAL))
     out = capsys.readouterr()
     assert out.out == "" and out.err == ""
+
+
+def test_trace_hook_sees_every_frame_and_is_removed() -> None:
+    seen: list[tuple[str, bytes]] = []
+    with trace.trace_hook(lambda kind, data: seen.append((kind, data))):
+        trace.trace_tx(CAP.tx(GLOBAL))
+        trace.trace_rx_chunk(CAP.rx(GLOBAL)[:5])
+        trace.trace_rx(CAP.rx(GLOBAL))
+        trace.trace_rx_stray(b"\x01")
+    trace.trace_tx(CAP.tx(GLOBAL))
+    assert seen == [
+        ("tx", CAP.tx(GLOBAL)),
+        ("rx-chunk", CAP.rx(GLOBAL)[:5]),
+        ("rx", CAP.rx(GLOBAL)),
+        ("rx-stray", b"\x01"),
+    ]

@@ -37,6 +37,8 @@ CONTRACT_EXPORTS = {
     "DecodedField",
     "DecodedRegion",
     "ByteChange",
+    "WatchStart",
+    "WatchChange",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -58,6 +60,8 @@ DATACLASSES = (
     "DecodedField",
     "DecodedRegion",
     "ByteChange",
+    "WatchStart",
+    "WatchChange",
 )
 FORBIDDEN = ("write", "erase", "address")
 
@@ -176,3 +180,9 @@ def test_public_dataclasses_frozen(name: str) -> None:
 def test_fake_transport_satisfies_protocol() -> None:
     fake = openvave.FakeTransport.from_capture(FW96_CONNECT)
     assert isinstance(fake, openvave.Transport)
+
+
+def test_watch_event_union() -> None:
+    from openvave.models import WatchEvent
+
+    assert set(WatchEvent.__args__) == {openvave.WatchStart, openvave.WatchChange}
