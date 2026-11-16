@@ -184,7 +184,8 @@ class WatchRun:
         self.interval = interval
         self.duration = duration
         self.record = record
-        self.record_name = str(record.path) if record is not None else None
+        # Shown with "/" on every OS so human and JSON output match across platforms.
+        self.record_name = record.path.as_posix() if record is not None else None
         self.json_mode = json_mode
         self.clock = clock
         self.started_at = clock.monotonic()
