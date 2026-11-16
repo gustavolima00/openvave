@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Iterator
 
 import pytest
@@ -37,6 +38,7 @@ def _sc004_audit() -> Iterator[list[bytes]]:
 
     original = FakeTransport.write
 
+    @functools.wraps(original)
     async def audited_write(self: FakeTransport, frame: bytes) -> None:
         SENT_FRAMES.append(bytes(frame))
         await original(self, frame)

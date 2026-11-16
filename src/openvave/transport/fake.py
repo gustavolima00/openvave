@@ -87,13 +87,16 @@ class FakeTransport:
         )
 
     async def open(self) -> None:
+        """Mark the fake as connected (nothing else to do)."""
         self.opened = True
         self.closed = False
 
     def on_notify(self, callback: Callable[[bytes], None]) -> None:
+        """Register the callback that receives reply chunks."""
         self._callback = callback
 
     async def write(self, frame: bytes) -> None:
+        """Record ``frame`` in :attr:`sent` and schedule its scripted reply (unless dropped)."""
         frame = bytes(frame)
         if not self.opened:
             raise AssertionError("FakeTransport.write() before open()")
@@ -125,4 +128,5 @@ class FakeTransport:
             pos += step
 
     async def close(self) -> None:
+        """Mark the fake as closed. Idempotent."""
         self.closed = True

@@ -59,6 +59,11 @@ def test_every_public_name_documented() -> None:
         if isinstance(obj, frozenset):
             continue
         assert inspect.getdoc(obj), f"openvave.{name} has no docstring"
+        if inspect.isclass(obj) and not issubclass(obj, BaseException):
+            for attr, value in vars(obj).items():
+                if attr.startswith("_") or not callable(getattr(obj, attr)):
+                    continue
+                assert inspect.getdoc(value), f"openvave.{name}.{attr} has no docstring"
 
 
 def test_errors_derive_from_base() -> None:
