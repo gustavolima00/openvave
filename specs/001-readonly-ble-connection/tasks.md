@@ -298,7 +298,7 @@ for their own tests.
 
 ### Live verification (milestone gate)
 
-- [ ] T048 [US4] On macOS + fw 96, run the `TankG.connect()` part of the library-api.md snippet in `uv run python`; confirm identity and snapshot match `openvave info --json`; record in the PR
+- [X] T048 [US4] On macOS + fw 96, run the `TankG.connect()` part of the library-api.md snippet in `uv run python`; confirm identity and snapshot match `openvave info --json`; record in the PR
 
 **Gate evidence (2026-11-16, macOS 26 / Darwin 25.5, local)**:
 
@@ -316,10 +316,17 @@ for their own tests.
   `Any`; no annotation fixes were needed. Docstrings added to every public method and dataclass
   field; the SC-004 audit wrapper now uses `functools.wraps` so `FakeTransport.write` keeps its
   docstring under test.
-- [ ] T048 on hardware — first attempt (Terminal-panel tab): `discover()` returned `[]` and
-  `TankG.connect()` raised `NoDeviceFoundError` (pedal not advertising). Re-run pending.
+- [X] T048 on hardware (macOS 26.5.2, fw 96, Terminal-panel tab). A first attempt found nothing
+  (`discover()` → `[]`, `TankG.connect()` → `NoDeviceFoundError`, pedal not advertising); with the
+  pedal on, the re-run ran the `TankG.connect()` part of the snippet: `discover()` → one
+  `TANK-Gv2_BLE` (RSSI −76); identity `TANK-Gv2` / 96 / `firmware_untested` false; snapshot Global
+  `00 00 01 01`, Status `01`, current preset byte-identical to the fw96 capture, and `read(CURRENT_PRESET)`
+  equal to the snapshot's. 11.25 s end-to-end (two 5 s scans: `discover()`, then `connect()`).
+  `openvave info --json` run right after → exit 0; identity (incl. `raw`) and all four regions equal
+  the library's, except device-info bytes 20–21 (`00 00` via the library on the first connection,
+  `43 f3` via the CLI) — the known unstable bytes, consistent with the M2 observation. **PASS**.
 
-**Checkpoint**: Milestone 3 DONE
+**Checkpoint**: Milestone 3 DONE — hardware gate passed 2026-11-16 (macOS 26.5.2, fw 96) ✅
 
 ---
 
