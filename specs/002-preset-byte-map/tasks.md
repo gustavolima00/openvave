@@ -1,0 +1,324 @@
+---
+
+description: "Task list for 002 preset and global byte map (read-only decoding)"
+---
+
+# Tasks: Preset and global byte map (read-only decoding)
+
+**Input**: Design documents from `specs/002-preset-byte-map/`
+
+**Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
+[data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md)
+
+**Tests**: MANDATORY. Constitution III requires capture-based tests for every decoder/parser,
+written first and failing before the implementation. Spec FR-020/FR-021 require one real
+before/after fixture pair per mapped field and a hardware-free default suite. Every test task
+precedes the code it covers.
+
+**Organization**: one milestone per PR, as in the plan's Delivery Plan. M0 (decoder) is the
+foundation. M1 delivers US1 (`watch`). M2/M3 are **evidence milestones**: the pedal owner runs
+`watch` on hardware, and the PR carries docs + map rows + fixtures + tests together (US2, with
+US3 output growing additively, and US4). M4 is the release.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: US1–US4 from spec.md
+- Paths are relative to the repository root (single Python package, `src/` layout)
+
+## Global rules for every task
+
+- Only command bytes `0x11` and `0x23` and only the four 001 `Region`s may be used (FR-002,
+  FR-019). No task adds a write, erase, raw-send or address-based read. The session-wide
+  SC-004 audit in `tests/conftest.py` must keep passing.
+- Fixtures come only from `captures/` via `tests/support/captures.py`. Changed-data sequences
+  before the first real `watch` record exists are built with documented mutations in
+  `tests/support/mutations.py` (checksum recomputed), never typed by hand.
+- **Docs first**: a byte map row lands in `specs/protocol/command-layer.md` and
+  `src/openvave/protocol/bytemap.py` in the same commit. `tests/unit/test_bytemap_doc.py`
+  enforces equality (research R1).
+- Docs record findings, not procedure (FR-008). Raw records stay in `captures/private/`
+  (git-ignored). Committed excerpts follow [contracts/session-record.md](contracts/session-record.md).
+- Hardware steps are done by the **pedal owner** in their own terminal (Bluetooth permission,
+  phone app disconnected). Agent sessions launched from the desktop app are killed by macOS TCC
+  on Bluetooth access.
+- JSON stays `schema_version` 1 and additive until M4 (research R8).
+
+---
+
+## Delivery Plan
+
+| PR | Milestone | Stories | Tasks | Gate |
+|---|---|---|---|---|
+| 1 | Milestone 0: Byte map model & decoder | US3 (base) | T001–T016 | Suite green; decoder reproduces today's 5 fields from the fw96 capture; doc table parses and equals `BYTE_MAP` |
+| 2 | Milestone 1: `openvave watch` (US1) 🎯 MVP | US1 | T017–T034 | Fake-transport watch tests green; owner's reverb-decay-only session shows only `preset[15]` → byte 15 `confirmed` |
+| 3 | Milestone 2: Front-panel mapping campaign (US2, US3) | US2, US3 | T035–T046 | SC-001, SC-003, SC-004; every `observed` row cites a single-step fixture |
+| 4 | Milestone 3: Preset comparison, status byte, confirmations (US4, US2) | US4, US2 | T047–T056 | SC-002, SC-008; status byte documented or explicitly unknown |
+| 5 | Milestone 4: Release 0.2.0 (US3) + Polish | US3 | T057–T066 | SC-005, SC-007 on hardware/review; quickstart passes; `schema_version` 2 |
+
+Projected PR count: **5** (≤ 8). If M2 is too large to review, it splits by control group
+(amp/drive · modulation/delay · reverb/cab · switches), and the total stays ≤ 8. Milestone N+1
+starts only after Milestone N's gate passes.
+
+---
+
+## Milestone 0: Byte map model & decoder (Foundational, US3 base)
+
+**Goal**: a single, doc-checked byte map covering all 26 bytes and a pure decoder. `preset dump`
+and `info` render decoded fields from it, with additive JSON.
+
+**Independent test criteria**:
+- `decode_region` on the fw96 capture's preset reply yields exactly `knob_unknown=60 (observed)`,
+  `reverb_decay=5 (observed)`, `reverb_mix=4 (hypothesis)`, `ir_cab=#7 (hypothesis)`, and
+  `unknown_offsets` = the other 17 offsets. On the global reply it yields
+  `not_in_edit_mode=on (observed)` and unknown 0–2. On status it yields unknown 0.
+- `BYTE_MAP` covers all 26 offsets with no overlap, and equals the parsed `command-layer.md`
+  table.
+- Every existing 001 contract test passes unchanged. The new JSON keys validate against
+  `decoded-field.schema.json`.
+
+### Tests for the foundation (write first, must fail)
+
+- [ ] T001 [P] Write `tests/unit/test_bytemap.py`: for `GLOBAL`, `CURRENT_PRESET`, `STATUS`, every offset `0…length−1` is covered (26 in total); whole-byte entries never share an offset; `flag` entries on one offset have disjoint non-zero masks; `(region, name)` unique among named entries; `name is None` iff `encoding == UNKNOWN`; `continuous`/`selector`/`index` have `min ≤ max`; `switch` has `on_value != off_value`; `observed` entries have ≥ 1 evidence path that exists under `captures/`; `confirmed` entries cite paths from ≥ 2 distinct files; `DEVICE_INFO` has no entries; `MAP_FIRMWARE == 96`
+- [ ] T002 [P] Write `tests/unit/test_decode.py` with the fw96 capture reads (via `tests/support/captures.py`): the criteria above; `display` per encoding (`"60"`, `"on"`/`"off"`, `"#7"`, raw hex `"0x0f"` never emitted for named fields); `flag` value = `raw & mask`; an out-of-range byte (preset 15 set to `0x80` via a mutation helper) → `out_of_range` True, `display` shows the raw value, no clamping; `decode_region(read, firmware=97)` → same fields, `firmware_untested` True, `map_firmware` 96; `DEVICE_INFO` read → no fields, 32 unknown offsets; `diff(before, after)` returns one `ByteChange` per differing offset in offset order, with `field` set for named bytes and `None` for unknown ones, and an empty tuple for identical reads
+- [ ] T003 [P] Write `tests/support/bytemap_doc.py` (parser) and `tests/unit/test_bytemap_doc.py`: locate the table under the heading `### Preset / global byte map` in `specs/protocol/command-layer.md`; parse rows with columns `Region | Offset | Mask | Name | Encoding | Range | Control | Confidence | Firmware | Evidence | Notes`; assert the set of `(region, offset, mask, name, encoding, min, max, confidence, firmware, evidence)` equals the one derived from `BYTE_MAP`; a deliberately altered copy of the table (in-test string edit) makes the comparison fail with a message naming the differing row
+- [ ] T004 [P] Extend `tests/contract/test_cli_preset_dump.py` and `tests/contract/test_cli_info_regions.py`: human `preset dump` prints one line per named field in the format of [contracts/cli.md](contracts/cli.md) (`[15] reverb decay … 5 … 0–127 … observed`), hypothesis rows end with ` ?`, then `unknown: 0 1 2 3 4 5 7 8 9 10 11 12 13 14 18 19 20`; `info` shows decoded lines under Global and Status only; every `fields[]` item validates against `specs/002-preset-byte-map/contracts/decoded-field.schema.json`; each region has `map_firmware` 96 and `unknown_offsets`; `schema_version` still 1; with a fw-97 identity the region headers end with `(decoded with the fw 96 map)`
+- [ ] T005 [P] Write `tests/unit/test_mutations.py` cases for a new helper `with_region_data(frame, offset, value)` in `tests/support/mutations.py`: it rewrites one data byte of a read reply and recomputes the checksum, the result decodes with `decode_frame`, and an offset beyond the data raises `ValueError`
+
+### Implementation
+
+- [ ] T006 Rewrite the table in `specs/protocol/command-layer.md` "Preset / global byte map (in progress)" to the R1 columns: one row per offset for preset 0–20, global 0–3 and status 0 (26 rows). Keep today's knowledge (preset 6/15/16/17, global 3) with its confidence and evidence (`captures/fw96/20261116-probe-connect.jsonl` plus the dated notes). Every other row has Encoding `unknown`, Name `—`, and its fw96 value in Notes. Keep the edit-mode experiment and refutation note below the table
+- [ ] T007 Add `Encoding`, `ByteMapEntry`, `DecodedField`, `DecodedRegion`, `ByteChange` to `src/openvave/models.py` per [data-model.md](data-model.md). Replace `FieldSpec`/`KNOWN_FIELDS` with deprecated aliases derived from `BYTE_MAP` (same names and labels as 001 so existing callers keep working)
+- [ ] T008 Create `src/openvave/protocol/bytemap.py`: `MAP_FIRMWARE = 96` and `BYTE_MAP: tuple[ByteMapEntry, ...]` mirroring T006 row for row, until T001 and T003 pass
+- [ ] T009 Create `src/openvave/protocol/decode.py`: pure `decode_region(read, firmware) -> DecodedRegion` and `diff(before, after) -> tuple[ByteChange, ...]`, no I/O and no logging. Export both plus `BYTE_MAP`, `MAP_FIRMWARE` from `src/openvave/protocol/__init__.py`, until T002 passes
+- [ ] T010 Add `with_region_data` to `tests/support/mutations.py` until T005 passes
+- [ ] T011 Update `src/openvave/cli/render.py`: `field_lines`/`region_json` use `decode_region` (human columns, ` ?` for hypothesis, `OUT OF RANGE`, `unknown:` line, fw-96-map note; JSON keys `raw`, `mask`, `encoding`, `range`, `display`, `interpreted`, `out_of_range`, region `map_firmware`, `unknown_offsets`), until T004 passes
+- [ ] T012 [P] In `tests/contract/test_cli_info_regions.py` and `tests/contract/test_cli_preset_dump.py` (which load the 001 schemas from `specs/001-readonly-ble-connection/contracts/`), also validate every `fields[]` item against `specs/002-preset-byte-map/contracts/decoded-field.schema.json`; leave the 001 schema files unchanged (additive keys are already allowed by `additionalProperties: true`)
+- [ ] T013 [P] Export the new public types from `src/openvave/__init__.py` and extend `tests/contract/test_public_api.py` with `Encoding`, `ByteMapEntry`, `DecodedField`, `DecodedRegion`, `ByteChange`
+
+### Live verification (milestone gate)
+
+- [ ] T014 Run `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check`, `uv run mypy src`; record counts in the PR
+- [ ] T015 Run quickstart §2 (offline decode) and paste the output in the PR
+- [ ] T016 Owner, hardware (optional for this gate): `uv run openvave preset dump` shows the decoded lines with the same values as the hex; record in the PR
+
+**Checkpoint**: Milestone 0 DONE
+
+---
+
+## Milestone 1: `openvave watch`, map one control per step (US1, P1) 🎯 MVP
+
+**Goal**: an explicit, read-only `openvave watch` that polls global/preset/status, prints and
+records per-byte changes with stdin labels, and stops cleanly. The library exposes
+`TankG.watch()`.
+
+**Independent test criteria**:
+- Over a `FakeTransport` replaying a sequence where only preset byte 15 changes (5 → 64 → 127),
+  `TankG.watch(sleep=no_sleep, cycles=4)` yields one `WatchStart`, then two `WatchChange`s,
+  each with exactly one `ByteChange` at `(CURRENT_PRESET, 15)`. Only `0x11`/`0x23` frames are
+  sent, and the frames of each cycle are global → preset → status.
+- A cycle where preset 16 and 17 change together → one `WatchChange` with two changes. The CLI
+  prints `(co-moving: 2)`.
+- CLI with stdin `"reverb decay min→max\n"` then `"q\n"`: the record file has `meta`, the
+  handshake, `tx`/`rx` per cycle, one `label`, `change` events tagged with that label, and a
+  `stop` with reason `quit`. Exit 0.
+- A connection lost mid-watch → exit 6. The record ends with `stop` reason `connection_lost`
+  and holds every event seen before.
+
+### Tests for User Story 1 (write first, must fail)
+
+- [ ] T017 [P] [US1] Write `tests/unit/test_fake_sequence.py`: a `FakeTransport` built from a capture with several `rx` lines for the same label serves them in order and then repeats the last; `from_capture` on the 001 capture behaves exactly as before (one reply per label); `split`/`drop`/`disconnect_after` still apply per request
+- [ ] T018 [P] [US1] Extend `tests/unit/test_captures.py` for `load_capture` on a file with repeated labels: `rx_all(label)` returns all replies in order, and `tx(label)`/`rx(label)` keep returning the first for compatibility
+- [ ] T019 [P] [US1] Write `tests/integration/test_watch_session.py` over `FakeTransport` built with `with_region_data` sequences from the fw96 capture: the criteria above; `interval < 0.2` → `ValueError`; `regions` containing `DEVICE_INFO` → `ValueError`; the default regions are global, preset, status, and device info is never read during watch; with an injected `sleep` that records its arguments, an overrunning cycle triggers no sleep and no overlap (one request in flight); `ConnectionLostError` propagates out of the iterator and the transport is closed on leaving `async with`
+- [ ] T020 [P] [US1] Write `tests/contract/test_cli_watch.py` calling `openvave.cli.main(["watch", ...], transport_factory=..., stdin=io.StringIO(...), clock=...)`: human output lines per [contracts/cli.md](contracts/cli.md) (start block, `── label: … ──`, `+N.NNs  preset[15]  reverb decay  5 → 64`, co-moving marker, final summary); `--json` emits JSON Lines, each validating `specs/002-preset-byte-map/contracts/watch-event.schema.json`, first `start`, last `stop`; `--duration 1` with empty stdin → `stop` reason `duration`, exit 0; `q` and `quit` stop; EOF on stdin does not stop; `--interval 0.1` → exit 2; `--record captures/fw96/x.jsonl` → exit 2 (outside `captures/private/`); `--no-record` writes no file; injected `ConnectionLostError` → exit 6 with `stop` reason `connection_lost`; the "not in edit mode" hint is printed once to stderr when a label was typed, global[3] = 1, and 30 s (fake clock) pass without a preset change
+- [ ] T021 [P] [US1] Write `tests/contract/test_watch_record.py`: the record written in T020 scenarios is valid JSONL in the `captures/README.md` format plus `label`/`change`/`stop` per [contracts/session-record.md](contracts/session-record.md); `meta.tool` starts with `openvave watch`; each line is flushed (the file is readable while the session is still running: read it from inside the fake transport callback after the first change); a contiguous excerpt (meta + handshake + two cycles) loads with `FakeTransport.from_capture` and replays to the same `WatchChange`
+
+### Implementation for User Story 1
+
+- [ ] T022 [US1] Add ordered replay to `src/openvave/transport/fake.py` (`replies` per label become a list; `from_capture` collects repeated `rx`; the last reply repeats) until T017 passes; update the class docstring
+- [ ] T023 [US1] Add `rx_all(label)` and repeated-label support to `tests/support/captures.py` until T018 passes
+- [ ] T024 [US1] Add `WatchStart`, `WatchChange` (and `WatchEvent` union) to `src/openvave/models.py`; implement `TankG.watch(interval=0.5, *, regions=(GLOBAL, CURRENT_PRESET, STATUS), cycles=None, sleep=asyncio.sleep)` in `src/openvave/session.py` using `read()`, `decode_region` and `diff`, with monotonic `t` and the cycle start scheduling of research R4, until T019 passes. Update the module docstring: `watch()` is the only polling API
+- [ ] T025 [US1] Create `src/openvave/cli/watch.py`: stdin label reader (thread via `asyncio.to_thread(readline)`, `q`/`quit` → stop, EOF → stop reading only), record writer (capture-format JSONL, flush per event, default path `captures/private/<YYYYMMDD-HHMMSS>-watch.jsonl`, parents created, rejects paths under a `captures/` folder outside `captures/private/`), SIGINT → stop reason `interrupt`, `--duration`, edit-mode hint. The writer gets `tx`/`rx`/`rx-chunk` events through a hook on the session's trace calls (no change to what is sent)
+- [ ] T026 [US1] Wire the `watch` subcommand into `src/openvave/cli/__init__.py` (`--interval`, `--duration`, `--record`, `--no-record`, plus global options; `main()` gains injectable `stdin` and `clock` for tests) and add watch renderers to `src/openvave/cli/render.py` (human lines + JSON Lines events), until T020 and T021 pass
+- [ ] T027 [P] [US1] Export `WatchStart`, `WatchChange` from `src/openvave/__init__.py` and extend `tests/contract/test_public_api.py`
+- [ ] T028 [P] [US1] Document the `label`, `change` and `stop` events and the excerpt rules in `captures/README.md`, per [contracts/session-record.md](contracts/session-record.md)
+- [ ] T029 [P] [US1] Write `tests/hardware/test_hw_watch.py` (`@pytest.mark.hardware`): `TankG.connect()` then `watch(cycles=3)` yields a `WatchStart` with all three regions decoded and sends only `0x23` reads after the handshake
+
+### Live verification (milestone gate)
+
+Pedal owner, macOS, fw 96, phone app disconnected:
+
+- [ ] T030 [US1] Run `uv run pytest`, ruff, format and mypy; record counts in the PR
+- [ ] T031 [US1] Owner runs quickstart §4: `uv run openvave watch`, labels `edit mode on` → enter edit mode; `reverb decay min→max` → turn **only** reverb decay fully down then fully up; `leave edit mode` → leave without saving; `q`. Expected: `global[3]` on → off → on, and only `preset[15]` lines reaching `0` and `127`. Record the terminal output in the PR
+- [ ] T032 [US1] Cut the reverb-decay step from that record into `captures/fw96/<date>-step-reverb_decay.jsonl` (excerpt rules; label text reviewed), and add a replay test to `tests/integration/test_watch_session.py` that reproduces the same `WatchChange`s from the excerpt
+- [ ] T033 [US1] Promote preset 15 to `confirmed` in `specs/protocol/command-layer.md` and `src/openvave/protocol/bytemap.py`, citing both sessions (2026-11-16 note + the new excerpt) per FR-010; doc↔code test green
+- [ ] T034 [US1] Owner runs `uv run openvave watch --json --duration 10 < /dev/null` and `uv run pytest --hardware tests/hardware/test_hw_watch.py`; record the results in the PR
+
+**Checkpoint**: Milestone 1 DONE (MVP: the mapping tool works on hardware)
+
+---
+
+## Milestone 2: Front-panel mapping campaign (US2 P1, US3 P2)
+
+**Goal**: every front-panel control exercised one at a time. The byte map, protocol docs and
+fixtures are updated with confidence, and `preset dump` decodes everything found.
+
+**Independent test criteria**:
+- `command-layer.md` has a "Control inventory" table listing every control, each with a result
+  (mapped offsets or "no change" + date).
+- Preset bytes 4–17 are each named at `observed` or better, or documented as unchanged by
+  every control tried (SC-003).
+- For every named field, `tests/integration/test_fixture_pairs.py` shows that decoding the
+  excerpt's "after" read vs its "before" read changes exactly that field (SC-004).
+
+### Tests (write first per field, must fail until its map row exists)
+
+- [ ] T035 [P] [US2] Create `tests/integration/test_fixture_pairs.py` and its index `tests/integration/fixture_pairs.py` (field name → excerpt path, before/after cycle selection, expected extremes for min→max sweeps). Parametrise over the index and assert: `diff` names only that field, and for continuous sweeps the values reach the documented `min` and `max`. Seed it with the M1 reverb-decay excerpt
+- [ ] T036 [P] [US2] Extend `tests/unit/test_bytemap.py` with a check that every `observed`/`confirmed` named entry appears in the fixture-pair index (no row without its pair, FR-009/FR-020)
+
+### Evidence gathering (pedal owner, hardware)
+
+- [ ] T037 [US2] Owner lists every physical control (knobs as printed, selector knobs, footswitches, buttons, modes) and whether it needs edit mode. Record it as the "Control inventory" table in `specs/protocol/command-layer.md`, using our own descriptive words (research R13)
+- [ ] T038 [US2] Owner runs `uv run openvave watch` and works through the inventory: for each control, type a label, enter edit mode where needed, move **only that control** (continuous: full down then full up; selector: step through every position; switch: toggle on/off/on), then leave edit mode without saving. Isolate reverb mix and IR cab in separate steps (preset 16/17), and identify the knob behind preset 6. Records stay in `captures/private/`
+- [ ] T039 [US2] Researcher reviews the records step by step: for each step, list the changed offsets, old → new values, extremes, and co-moving bytes. Steps with co-moving bytes or no change are noted, and repeated if the cause is unclear (owner re-runs T038 for those controls)
+
+### Recording findings (one commit per control or control group)
+
+- [ ] T040 [US2] For each isolated finding, cut an excerpt `captures/fw96/<date>-step-<field>.jsonl` (excerpt rules, label text reviewed) and add it to the fixture-pair index. Run `tests/integration/test_fixture_pairs.py`: it fails for the new field
+- [ ] T041 [US2] Add or update the row in `specs/protocol/command-layer.md` (R1 columns, `observed`, evidence path, range seen, linked control) and the matching `ByteMapEntry` in `src/openvave/protocol/bytemap.py` in the same commit. Fixture-pair, bytemap and doc tests green. Use neutral names for anything still `hypothesis` (research R8)
+- [ ] T042 [US2] Update the existing hypotheses in docs and map: preset 16 and 17 resolved (renamed or confirmed at `observed`), preset 6 given its real name (keep `knob_unknown` as the JSON name until M4 and list the rename for the CHANGELOG), and global 3 kept or refined. Refuted claims are noted under the table, not deleted (US2 scenario 4)
+- [ ] T043 [US2] For every control with "no change", fill its inventory row with the session date. For every byte still unknown in 4–17, write the controls tried in its Notes (FR-007, SC-003)
+- [ ] T044 [P] [US3] Extend `tests/contract/test_cli_preset_dump.py` expectations for the newly named fields on the fw96 capture (decoded names, values and confidence match the doc table)
+
+### Live verification (milestone gate)
+
+- [ ] T045 [US2] Run the full hardware-free suite, ruff, format and mypy; record counts. Check SC-001 (every inventory control has a result), SC-003 (bytes 4–17 attributed) and SC-004 (fixture-pair test count = number of named fields); list them in the PR
+- [ ] T046 [US3] Owner: `uv run openvave preset dump` in edit mode with three continuous knobs set to min and then max; decoded values show the documented range ends. Record in the PR
+
+**Checkpoint**: Milestone 2 DONE
+
+---
+
+## Milestone 3: Preset comparison, status byte, confirmations (US4 P3, US2)
+
+**Goal**: bytes that differ per preset are recorded (≥ 5 stored presets), the status byte and
+global 0–2 are explained or explicitly unknown, and rows reproduced in a second session are
+promoted to `confirmed`.
+
+**Independent test criteria**:
+- The status byte's relation to the selected preset (base, range seen) is documented, or it is
+  explicitly unknown with the values seen per preset.
+- `command-layer.md` lists, for each byte that differs between the ≥ 5 compared presets but
+  never moved with a control, its value per preset (FR-011a, SC-008).
+- Every `confirmed` row cites excerpts from two distinct sessions (FR-010), and
+  `tests/unit/test_bytemap.py` passes.
+
+### Tests (write first, must fail)
+
+- [ ] T047 [P] [US4] Add the preset-switch excerpt(s) to the fixture-pair index with the expected status change (from T049), and a test in `tests/integration/test_fixture_pairs.py` that the decoded status `index` field equals the expected preset number for each switch step
+- [ ] T048 [P] [US2] Add a test in `tests/unit/test_bytemap.py` that every byte listed as "differs per preset" in the doc's preset comparison table is either a named entry or an `unknown` entry whose Notes contain its per-preset values (parsed via `tests/support/bytemap_doc.py`)
+
+### Evidence gathering (pedal owner, hardware)
+
+- [ ] T049 [US4] Owner runs `uv run openvave watch`, labels each step, and selects at least 5 different stored presets on the pedal one at a time (no edit mode, no saving). Also enter and leave edit mode once on two of them (global 3, status)
+- [ ] T050 [US2] Owner runs a **second, independent** `watch` session (new connection, a different stored preset than in M2) repeating the single-control steps for the fields that should become `confirmed` (at least: reverb mix, IR cab, the preset 6 knob, and every other `observed` field the owner can repeat)
+
+### Recording findings
+
+- [ ] T051 [US4] Document the status byte in `specs/protocol/command-layer.md` and `src/openvave/protocol/bytemap.py` (`index` encoding with base and range seen, or `unknown` with per-preset values); excerpt `captures/fw96/<date>-step-preset_switch.jsonl`; T047 green
+- [ ] T052 [US2] Add a "Preset comparison (fw 96)" table to `specs/protocol/command-layer.md`: one column per compared preset (identified by position only, no personal names), one row per byte that differs; update the Notes of the matching rows, and document global bytes 0–2 (named or unknown with values seen); T048 green
+- [ ] T053 [US2] Promote every row reproduced in T050 to `confirmed` in the doc and the map, citing both session excerpts; add the second-session excerpts to `captures/fw96/`; bytemap/doc tests green
+- [ ] T054 [US2] Update "Next steps" in `specs/protocol/command-layer.md`: what remains unknown and the questions for the write spec (e.g. app-only settings, stored-preset reads)
+
+### Live verification (milestone gate)
+
+- [ ] T055 [US2] Run the full suite, ruff, format and mypy. Check SC-002 (26 rows, none missing) and SC-008 (≥ 5 presets compared, differing bytes covered); list them in the PR
+- [ ] T056 [US4] Owner: `uv run openvave info` on two different presets shows the decoded status value matching the selected preset (if mapped); record in the PR
+
+**Checkpoint**: Milestone 3 DONE
+
+---
+
+## Milestone 4: Release 0.2.0 (US3) + Polish
+
+**Goal**: final field names, `schema_version` 2, docs and changelog, and the end-to-end checks.
+
+**Independent test criteria**:
+- `preset dump --json` has `schema_version` 2 and the final names. The CHANGELOG lists every
+  rename/refutation old → new.
+- A reviewer decodes the fw96 preset bytes from `command-layer.md` alone and gets the same values
+  as `preset dump` (SC-007).
+
+### Tests (write first, must fail)
+
+- [ ] T057 [P] [US3] Update `tests/contract/test_cli_preset_dump.py`, `tests/contract/test_cli_info_regions.py` and `tests/contract/test_cli_watch.py` to expect `schema_version` 2 and the final field names (no `knob_unknown`, no `not_in_edit_mode` if renamed)
+- [ ] T058 [P] [US3] Add `tests/contract/test_changelog_renames.py`: every name present in 0.1.0's `KNOWN_FIELDS` that is absent from `BYTE_MAP` appears in the CHANGELOG 0.2.0 rename table
+
+### Implementation
+
+- [ ] T059 [US3] Apply the final names in `src/openvave/protocol/bytemap.py` and `specs/protocol/command-layer.md`; bump `SCHEMA_VERSION` to 2 in `src/openvave/cli/render.py`; update the `$id`/`const` of `specs/002-preset-byte-map/contracts/watch-event.schema.json`, `decoded-field.schema.json` and the 001 schemas' `schema_version` to 2; until T057 passes
+- [ ] T060 [US3] Write `CHANGELOG.md` 0.2.0: decoder, `watch`, new JSON keys, rename/refutation table, deprecated `KNOWN_FIELDS`/`FieldSpec` aliases; bump `version` in `pyproject.toml` to 0.2.0; until T058 passes
+- [ ] T061 [P] Update `README.md`: `openvave watch` usage (labels, `q`, record location and privacy), decoded `preset dump` example, confidence levels explained
+- [ ] T062 [P] Update `specs/001-readonly-ble-connection/contracts/cli.md` with a pointer to the 002 additions, and record in `specs/002-preset-byte-map/contracts/cli.md` that `watch --json` is the JSON Lines exception
+- [ ] T063 Code cleanup: remove dead code paths from the 001 field rendering; ruff/mypy clean
+
+### Live verification (milestone gate)
+
+- [ ] T064 Run the full quickstart ([quickstart.md](quickstart.md) §1–§6); record the results in the PR
+- [ ] T065 [US3] Owner: SC-005. Set every `observed`/`confirmed` continuous knob to min, then max, in edit mode; `uv run openvave preset dump` shows the range ends. Record in the PR
+- [ ] T066 [US3] SC-007 review: someone who did not write the decoder decodes `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43` using only `specs/protocol/command-layer.md`, and the result matches `preset dump` on the fw96 capture; record in the PR
+
+**Checkpoint**: Milestone 4 DONE (feature complete)
+
+---
+
+## Dependencies & Execution Order
+
+### Milestone dependencies
+
+- **M0** (decoder): blocks everything. M1's watch output and every later map row use it.
+- **M1** (`watch`): needs M0. Blocks M2/M3, which gather evidence with `watch`.
+- **M2** (front panel): needs M1's gate (tool verified on hardware, byte 15 confirmed).
+- **M3** (presets, status, confirmations): needs M2. Second sessions confirm M2's rows.
+- **M4** (release): needs M3. Renames are collected from M2/M3.
+
+### Within each milestone
+
+- Tests first and failing (T001–T005, T017–T021, T035–T036, T047–T048, T057–T058).
+- Docs row + map entry + fixture + passing test in the same commit (M2/M3).
+- Live verification closes the milestone; the PR description records the gate evidence.
+
+### Parallel opportunities
+
+- M0: T001–T005 in parallel (different files); T012, T013 in parallel after T009.
+- M1: T017–T021 in parallel; T027–T029 in parallel after T024.
+- M2/M3: while the owner gathers evidence (T038, T049/T050), the researcher can prepare the
+  fixture-pair index (T035/T036, T047/T048). Recording findings per control group can go in
+  parallel commits if they touch different rows, though they share `command-layer.md` and
+  `bytemap.py`, so merge carefully.
+- M4: T057/T058 and T061/T062 in parallel.
+
+## Parallel Example: Milestone 1 (US1)
+
+```bash
+# Tests first, together:
+Task: "FakeTransport ordered replay tests in tests/unit/test_fake_sequence.py"
+Task: "Repeated-label capture loader tests in tests/unit/test_captures.py"
+Task: "TankG.watch integration tests in tests/integration/test_watch_session.py"
+Task: "CLI watch contract tests in tests/contract/test_cli_watch.py"
+Task: "Session record contract tests in tests/contract/test_watch_record.py"
+```
+
+## Implementation Strategy
+
+### MVP first
+
+1. M0 → decoder and doc-checked map (no hardware needed).
+2. M1 → `openvave watch`. **Stop and validate** on hardware with the reverb decay sweep: the
+   owner now has a supported mapping tool, and byte 15 is the first `confirmed` field.
+
+### Incremental delivery
+
+- M2 and M3 deliver value per control: each merged commit adds one decoded field to
+  `preset dump` (additive JSON, no schema bump).
+- M4 consolidates names once, so scripts face a single breaking change (`schema_version` 2).
