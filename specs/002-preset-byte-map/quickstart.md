@@ -35,8 +35,9 @@ Expected: all green with no Bluetooth adapter. This includes:
 uv run python -c "from openvave.protocol import decode_region; from openvave import Region, RegionRead; r = RegionRead(Region.CURRENT_PRESET, bytes.fromhex('01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43')); print([(f.entry.name, f.display, f.entry.confidence) for f in decode_region(r, 96).fields])"
 ```
 
-Expected (before M2 adds rows): `knob_unknown 60 observed`, `reverb_decay 5 observed`,
-`reverb_mix 4 hypothesis`, `ir_cab #7 hypothesis`.
+Expected (0.2.0): 18 fields, all `confirmed`, from `amp_on on` to `ir_cab #7`, including
+`gain 60`, `reverb_decay 5` and `reverb_mix 4`. (At M0 it was `knob_unknown 60 observed`,
+`reverb_decay 5 observed`, `reverb_mix 4 hypothesis`, `ir_cab #7 hypothesis`.)
 
 ## 3. Decoded `preset dump` (hardware, opt-in)
 
@@ -60,10 +61,10 @@ uv run openvave watch
 
 Then, typing each label before acting on the pedal:
 
-1. `edit mode on`, then enter edit mode → `global[3] not in edit mode on → off`.
+1. `edit mode on`, then enter edit mode → `global[3] mode normal → edit`.
 2. `reverb decay min→max`, then turn only the reverb decay knob fully down, then fully up →
    only `preset[15]` lines, reaching `0` and `127`.
-3. `leave edit mode`, then leave edit mode without saving → preset bytes revert, `global[3] off → on`.
+3. `leave edit mode`, then leave edit mode without saving → preset bytes revert, `global[3] mode edit → normal`.
 4. `q`.
 
 Expected: exit 0; the record path printed at the end is under `captures/private/` and holds

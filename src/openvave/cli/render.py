@@ -21,7 +21,8 @@ from openvave.models import (
 )
 from openvave.protocol.decode import decode_field, decode_region
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+"""JSON contract version; 2 since 0.2.0 (field renames, CHANGELOG)."""
 LABEL_WIDTH = 11
 REGION_LABEL_WIDTH = 14
 REGION_SPEC_WIDTH = 32
@@ -170,7 +171,7 @@ def identity_json(identity: DeviceIdentity) -> dict[str, Any]:
 def envelope(
     command: str, read_at: datetime, device: DeviceInfo | None, identity: DeviceIdentity
 ) -> dict[str, Any]:
-    """Fields shared by every JSON document (``schema_version`` 1)."""
+    """Fields shared by every JSON document (``schema_version``, ``command``, …)."""
     return {
         "schema_version": SCHEMA_VERSION,
         "command": command,

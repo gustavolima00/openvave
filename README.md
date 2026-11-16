@@ -13,8 +13,9 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 ## Status
 
-Version 0.1.0 is **read-only**: it identifies a connected pedal and reads its state over BLE.
-It can only send the handshake query (`0x11`) and region reads (`0x23`); nothing that writes to
+Version 0.2.0 is **read-only**: it identifies a connected pedal, reads its state over BLE and
+decodes every byte of the current preset and global settings that is understood (all but 4 of
+26). It can only send the handshake query (`0x11`) and region reads (`0x23`); nothing that writes to
 the pedal exists in the code. Protocol notes live in [`specs/protocol/`](specs/protocol/); feature
 specs are driven by [Spec Kit](https://github.com/github/spec-kit).
 
@@ -66,10 +67,16 @@ Device info   type 5 @ 0xD0000000, 32 bytes   [meaning: unknown]
   10: 00 00 00 b7 43 f3 00 00 00 00 00 00 00 00 00 00
 Global        type 4 @ 0x20000000, 4 bytes    [meaning: unknown]
   00: 00 00 01 01
-      [3] not in edit mode = 1   (observed)
+      [0]  browsed bank                   0    0–8        observed
+      [1]  bank                           0    0–8        observed
+      [2]  slot                           1    0–3        observed
+      [3]  mode                      normal    selector   confirmed
 Status        type 4 @ 0xD0000000, 1 byte     [meaning: unknown]
   00: 01
+      unknown: 0
 ```
+
+Bank and slot are 0-based: bank 0, slot 1 is preset 1B on the pedal.
 
 ### `openvave preset dump`
 
@@ -81,29 +88,85 @@ $ openvave preset dump
 Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
   00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05
   10: 04 07 43 16 43
-      [6] knob (which one: unknown) = 60   (observed)
-      [15] reverb decay = 5   (observed)
-      [16] reverb mix? = 4   (hypothesis)
-      [17] IR cab? = 7   (hypothesis)
+      [0]  amp on                        on    on/off     confirmed
+      [1]  mod on                       off    on/off     confirmed
+      [2]  delay on                     off    on/off     confirmed
+      [3]  reverb on                     on    on/off     confirmed
+      [4]  noise gate                    15    0–127      confirmed
+      [5]  amp type                      #4    selector   confirmed
+      [6]  gain                          60    0–127      confirmed
+      …
+      [15] reverb decay                   5    0–127      confirmed
+      [16] reverb mix                     4    0–127      confirmed
+      [17] IR cab                        #7    selector   confirmed
+      unknown: 18 19 20
 ```
 
-Field labels carry a confidence level (`confirmed`, `observed`, `hypothesis`). Bytes without a
-label are not understood yet.
+Each decoded line shows `[offset]`, the field, its value, the documented range and how sure we
+are about it:
+
+- `confirmed`: seen the same way in two independent sessions on the pedal.
+- `observed`: seen once, with a committed capture as evidence.
+- `hypothesis`: a guess not yet tested; the line ends with ` ?`.
+
+A value outside the documented range is shown raw with `OUT OF RANGE` (it is never clamped).
+`unknown:` lists the bytes whose meaning is not known yet. On firmware other than 96 the header
+says `(decoded with the fw 96 map)`. The byte map and its evidence are in
+[`command-layer.md`](specs/protocol/command-layer.md).
+
+### `openvave watch`
+
+Watches the pedal while you use it and prints every byte that changes. It is how the byte map
+was built: move one control, see which byte moves.
+
+```text
+$ openvave watch
+Watching TANK-Gv2 (firmware 96), every 0.5 s. Type a label and Enter before each step; q to quit.
+Recording to captures/private/20261117-101500-watch.jsonl
+  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal
+  preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43
+  status  01
+edit mode on
+── label: edit mode on ──
+ +3.02s  global[3]   mode              normal → edit
+reverb decay min→max
+── label: reverb decay min→max ──
+ +9.51s  preset[15]  reverb decay         5 → 64
++10.02s  preset[15]  reverb decay        64 → 127
+q
+Stopped after 34.0 s: 3 changes in 3 cycles. Record: captures/private/20261117-101500-watch.jsonl
+```
+
+- **Labels**: type a short description and Enter before each step. It is attached to every
+  change until the next label. `q` or `quit` stops (so do Ctrl-C and `--duration SECONDS`).
+- Bytes that change in the same poll are marked `(co-moving: N)`.
+- Only reads are sent, every `--interval` seconds (default 0.5, minimum 0.2). Changing knobs in
+  edit mode and leaving without saving keeps the stored preset as it was.
+- **Records**: each session is written, line by line, to
+  `captures/private/<date>-watch.jsonl` (or `--record PATH`; `--no-record` for none).
+  `captures/private/` is git-ignored: records stay on your machine. Labels are stored as typed,
+  so keep personal names out of them if you plan to share an excerpt.
+- `--json` prints JSON Lines, one event per line
+  ([schema](specs/002-preset-byte-map/contracts/watch-event.schema.json)).
 
 ### Options
 
 `--json`, `--device ID`, `--scan-timeout SECONDS` (default 5), `--timeout SECONDS` (default 2)
 and `--trace` (hex of every frame on stderr) work on every command, before or after it. The full
-list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md).
+list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md) and
+[its 0.2.0 additions](specs/002-preset-byte-map/contracts/cli.md).
 
 ### JSON output
 
-With `--json`, stdout carries exactly one JSON document on success and nothing on failure.
+With `--json`, stdout carries exactly one JSON document on success and nothing on failure
+(`watch --json` is the exception: one JSON line per event).
 Schemas: [`info`](specs/001-readonly-ble-connection/contracts/info.schema.json),
-[`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json). Bytes are
-lowercase, space-separated hex.
+[`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), and each
+decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json). Bytes
+are lowercase, space-separated hex.
 
-Every document has `"schema_version": 1`. New fields (for example newly understood bytes in
+Every document has `"schema_version": 2` (0.2.0 renamed two fields; see the
+[CHANGELOG](CHANGELOG.md)). New fields (for example newly understood bytes in
 `fields`) may be added without changing it; removing or renaming a field, or changing its type,
 bumps `schema_version`.
 
@@ -119,20 +182,24 @@ out · `7` protocol error. Details in the
 ```python
 import asyncio
 from openvave import Region, TankG
+from openvave.protocol import decode_region
 
 
 async def main() -> None:
     async with TankG.connect() as pedal:
         print(pedal.identity.name, pedal.identity.firmware)
         preset = await pedal.read(Region.CURRENT_PRESET)
-        print(preset.data.hex(" "))
+        for field in decode_region(preset, pedal.identity.firmware).fields:
+            print(field.entry.name, field.display, field.entry.confidence)
 
 
 asyncio.run(main())
 ```
 
-See [the library contract](specs/001-readonly-ble-connection/contracts/library-api.md), including
-how to test against `FakeTransport` without a pedal.
+`TankG.watch()` yields the same events as `openvave watch`. See the library contracts
+([0.1.0](specs/001-readonly-ble-connection/contracts/library-api.md),
+[0.2.0 additions](specs/002-preset-byte-map/contracts/library-api.md)), including how to test
+against `FakeTransport` without a pedal.
 
 ## Development
 

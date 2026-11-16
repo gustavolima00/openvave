@@ -283,24 +283,34 @@ promoted to `confirmed`.
 
 ### Tests (write first, must fail)
 
-- [ ] T057 [P] [US3] Update `tests/contract/test_cli_preset_dump.py`, `tests/contract/test_cli_info_regions.py` and `tests/contract/test_cli_watch.py` to expect `schema_version` 2 and the final field names (no `knob_unknown`, no `not_in_edit_mode` if renamed)
-- [ ] T058 [P] [US3] Add `tests/contract/test_changelog_renames.py`: every name present in 0.1.0's `KNOWN_FIELDS` that is absent from `BYTE_MAP` appears in the CHANGELOG 0.2.0 rename table
+- [X] T057 [P] [US3] Update `tests/contract/test_cli_preset_dump.py`, `tests/contract/test_cli_info_regions.py` and `tests/contract/test_cli_watch.py` to expect `schema_version` 2 and the final field names (no `knob_unknown`, no `not_in_edit_mode` if renamed)
+  - Written first with T058; 18 failures before T059–T060 (commit 138f52a)
+- [X] T058 [P] [US3] Add `tests/contract/test_changelog_renames.py`: every name present in 0.1.0's `KNOWN_FIELDS` that is absent from `BYTE_MAP` appears in the CHANGELOG 0.2.0 rename table
+  - `KNOWN_FIELDS_0_1_0` frozen from the 0.1.0 source (`not_in_edit_mode`, `knob_unknown`, `reverb_decay`, `reverb_mix`, `ir_cab`); also checks every renamed name exists in `BYTE_MAP` and `__version__` is 0.2.0
 
 ### Implementation
 
-- [ ] T059 [US3] Apply the final names in `src/openvave/protocol/bytemap.py` and `specs/protocol/command-layer.md`; bump `SCHEMA_VERSION` to 2 in `src/openvave/cli/render.py`; update the `$id`/`const` of `specs/002-preset-byte-map/contracts/watch-event.schema.json`, `decoded-field.schema.json` and the 001 schemas' `schema_version` to 2; until T057 passes
-- [ ] T060 [US3] Write `CHANGELOG.md` 0.2.0: decoder, `watch`, new JSON keys, rename/refutation table, deprecated `KNOWN_FIELDS`/`FieldSpec` aliases; bump `version` in `pyproject.toml` to 0.2.0; until T058 passes
-- [ ] T061 [P] Update `README.md`: `openvave watch` usage (labels, `q`, record location and privacy), decoded `preset dump` example, confidence levels explained
-- [ ] T062 [P] Update `specs/001-readonly-ble-connection/contracts/cli.md` with a pointer to the 002 additions, and record in `specs/002-preset-byte-map/contracts/cli.md` that `watch --json` is the JSON Lines exception
-- [ ] T063 Code cleanup: remove dead code paths from the 001 field rendering; ruff/mypy clean
+- [X] T059 [US3] Apply the final names in `src/openvave/protocol/bytemap.py` and `specs/protocol/command-layer.md`; bump `SCHEMA_VERSION` to 2 in `src/openvave/cli/render.py`; update the `$id`/`const` of `specs/002-preset-byte-map/contracts/watch-event.schema.json`, `decoded-field.schema.json` and the 001 schemas' `schema_version` to 2; until T057 passes
+  - `knob_unknown` → `gain`, `not_in_edit_mode` → `mode` in the doc table and `BYTE_MAP` (same commit); `SCHEMA_VERSION = 2`; the four schemas have `const: 2` and `$id` `…:v2`; the watch hint follows `mode`
+- [X] T060 [US3] Write `CHANGELOG.md` 0.2.0: decoder, `watch`, new JSON keys, rename/refutation table, deprecated `KNOWN_FIELDS`/`FieldSpec` aliases; bump `version` in `pyproject.toml` to 0.2.0; until T058 passes
+  - CHANGELOG 0.2.0 (Breaking / Added / Changed / Deprecated / Tested, rename table with why); `pyproject.toml`, `__version__` and `uv.lock` at 0.2.0
+- [X] T061 [P] Update `README.md`: `openvave watch` usage (labels, `q`, record location and privacy), decoded `preset dump` example, confidence levels explained
+  - README: decoded `info`/`preset dump` output (generated from the fw96 capture), confidence levels, `openvave watch` (labels, `q`, records in git-ignored `captures/private/`), `schema_version` 2, library snippet with `decode_region`
+- [X] T062 [P] Update `specs/001-readonly-ble-connection/contracts/cli.md` with a pointer to the 002 additions, and record in `specs/002-preset-byte-map/contracts/cli.md` that `watch --json` is the JSON Lines exception
+  - 001 `cli.md` gets a 0.2.0 pointer note; 002 `cli.md` records the JSON Lines exception and the past-tense schema bump
+- [X] T063 Code cleanup: remove dead code paths from the 001 field rendering; ruff/mypy clean
+  - No dead code found (every render/decode function and constant is referenced); `KNOWN_FIELDS`/`FieldSpec` stay as the documented deprecated aliases; the watch hint attribute renamed `outside_edit_mode`. ruff/mypy clean
 
 ### Live verification (milestone gate)
 
-- [ ] T064 Run the full quickstart ([quickstart.md](quickstart.md) §1–§6); record the results in the PR
+- [X] T064 Run the full quickstart ([quickstart.md](quickstart.md) §1–§6); record the results in the PR
+  - Evidence (2026-11-16): §1 pytest 741 passed, 4 skipped (hardware); ruff check clean; 79 files formatted; mypy strict: no issues in 19 source files. §2: 18 fields, all `confirmed`, `gain 60`, `reverb_decay 5`, `reverb_mix 4`, `ir_cab #7` (quickstart expectation updated). §3/§4 over the fw96 capture through the real CLI (fake transport): `preset dump --json` and `info --json` have `schema_version` 2 and `gain`/`mode` (`mode` displays `normal`); `watch --json --duration 1 --no-record < /dev/null` → `start`, `stop` reason `duration`, exit 0; `openvave --version` → 0.2.0; README library snippet runs. §5/§6 are enforced by the fixture-pair, bytemap and doc tests (SC-001–SC-004, SC-008). §3/§4 on hardware: not run in this session (owner)
 - [ ] T065 [US3] Owner: SC-005. Set every `observed`/`confirmed` continuous knob to min, then max, in edit mode; `uv run openvave preset dump` shows the range ends. Record in the PR
-- [ ] T066 [US3] SC-007 review: someone who did not write the decoder decodes `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43` using only `specs/protocol/command-layer.md`, and the result matches `preset dump` on the fw96 capture; record in the PR
+  - Not run in this session: needs the owner at the pedal. Prior evidence: session 19:17 (T046) swept all 12 continuous knobs alone to `0` and `127`, decoded by the same `decode_region` path `preset dump` uses, and the fixture-pair test asserts those exact extremes
+- [X] T066 [US3] SC-007 review: someone who did not write the decoder decodes `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43` using only `specs/protocol/command-layer.md`, and the result matches `preset dump` on the fw96 capture; record in the PR
+  - Evidence (2026-11-16): a separate agent that never opened `src/` or `tests/` decoded the preset buffer from `command-layer.md` alone. All 21 preset bytes matched `preset dump` on the fw96 capture: 18 named values (`amp_on` on … `ir_cab` 7) and 18–20 unknown. Global: bank, browsed bank and mode matched. It misread slot as `0`; the doc says `fw96: 0x01`, as `info` shows. Gap it found: the doc gave no display rules, so selectors appeared as `4`/`7` instead of `#4`/`#7`. Fixed by adding a "Decoding a byte" list (display per encoding, out of range, unknown) under the column legend
 
-**Checkpoint**: Milestone 4 DONE (feature complete)
+**Checkpoint**: Milestone 4 DONE ✅ (2026-11-16; owner hardware check T065 left open, prior evidence in T046)
 
 ---
 

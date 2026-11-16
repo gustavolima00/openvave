@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:openvave:cli:decoded-field:v1",
+  "$id": "urn:openvave:cli:decoded-field:v2",
   "title": "One item of a region's `fields` array (info / preset dump / watch)",
-  "description": "Superset of the 001 field item: offset, size, name, value and confidence keep their 001 meaning; the other keys are additive (schema_version 1).",
+  "description": "Superset of the 001 field item: offset, size, name, value and confidence keep their 001 meaning; the other keys are additive (schema_version 2 since 0.2.0).",
   "type": "object",
   "required": ["offset", "size", "name", "value", "confidence", "raw", "mask", "encoding", "range", "display", "out_of_range"],
   "additionalProperties": true,

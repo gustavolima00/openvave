@@ -33,8 +33,12 @@ Rules:
 
 JSON: each region's `fields[]` items gain additive keys (see
 [`decoded-field.schema.json`](decoded-field.schema.json)), and each region gains
-`"map_firmware": 96` and `"unknown_offsets": [...]`. `schema_version` stays `1` until the M4
-release, which bumps it to `2` for the field renames listed in the CHANGELOG (research R8).
+`"map_firmware": 96` and `"unknown_offsets": [...]`. `schema_version` stayed `1` through M0–M3;
+the 0.2.0 release bumped it to `2` for the field renames listed in the CHANGELOG
+(`knob_unknown` → `gain`, `not_in_edit_mode` → `mode`; research R8).
+
+`info --json` and `preset dump --json` still print exactly one JSON document. `watch --json` is
+the one exception to the 001 rule: it prints **JSON Lines**, one event per line (see below).
 
 ## `openvave watch`
 

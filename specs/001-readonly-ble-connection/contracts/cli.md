@@ -1,5 +1,10 @@
 # CLI contract: `openvave`
 
+> **0.2.0**: feature 002 extends this contract with decoded field lines under `info` and
+> `preset dump`, additive JSON keys, `schema_version` 2 (two field renames) and the `watch`
+> command. See [002 `cli.md`](../../002-preset-byte-map/contracts/cli.md). The examples below
+> show the 0.1.0 output.
+
 Constitution V: args in, results on stdout, diagnostics on stderr, non-zero exit on failure,
 human + JSON output.
 

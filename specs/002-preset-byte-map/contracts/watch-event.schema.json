@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:openvave:cli:watch-event:v1",
+  "$id": "urn:openvave:cli:watch-event:v2",
   "title": "One line of `openvave watch --json` (JSON Lines)",
   "type": "object",
   "required": ["schema_version", "event", "t"],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "event": { "enum": ["start", "label", "change", "stop"] },
     "t": { "type": "number", "minimum": 0, "description": "seconds since the watch started (monotonic)" }
   },

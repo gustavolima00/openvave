@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:openvave:cli:info:v1",
+  "$id": "urn:openvave:cli:info:v2",
   "title": "openvave info --json",
   "type": "object",
   "required": ["schema_version", "command", "read_at", "device", "identity", "regions"],
   "additionalProperties": true,
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "command": { "const": "info" },
     "read_at": { "type": "string", "format": "date-time", "description": "UTC, the only time-varying field" },
     "device": { "$ref": "#/$defs/device" },

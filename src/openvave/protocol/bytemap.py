@@ -5,9 +5,9 @@ Mirrored row for row from the table under "Preset / global byte map" in
 fails on any difference, so change both in the same commit. Notes here are short; the doc holds
 the findings in full.
 
-JSON names stay stable until the 0.2.0 release (research R8): ``knob_unknown`` (gain) and
-``not_in_edit_mode`` (the mode byte) keep their 0.1.0 names until then; their labels already say
-what they are.
+Renaming a named entry is a breaking JSON change (research R8): it bumps ``schema_version`` and
+goes in the CHANGELOG rename table. 0.2.0 renamed ``knob_unknown`` → ``gain`` and
+``not_in_edit_mode`` → ``mode``.
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
     ByteMapEntry(
         region=Region.GLOBAL,
         offset=3,
-        name="not_in_edit_mode",
+        name="mode",
         label="mode",
         encoding=Encoding.SELECTOR,
         min=0,
@@ -131,7 +131,7 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
         confidence="confirmed",
         firmware=MAP_FIRMWARE,
         evidence=(_FW96_CONNECT, _step("mode-1843"), _step("mode-1847")),
-        notes="0 edit, 1 normal, 2 tuner; JSON name kept until the 0.2.0 rename",
+        notes="0 edit, 1 normal, 2 tuner; named not_in_edit_mode until 0.1.x",
     ),
     _block(0, "amp"),
     _block(1, "mod"),
@@ -139,7 +139,7 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
     _block(3, "reverb"),
     _knob(4, "noise_gate", "noise gate", "noise_gate", "0-127 swept"),
     _selector(5, "amp_type", "amp type"),
-    _knob(6, "knob_unknown", "gain", "gain", "0-127 swept; JSON name kept until 0.2.0"),
+    _knob(6, "gain", "gain", "gain", "0-127 swept; named knob_unknown until 0.1.x"),
     _knob(7, "treble", "treble", "treble", "0-127 swept"),
     _knob(8, "middle", "middle", "middle", "0-127 swept"),
     _knob(9, "bass", "bass", "bass", "0-127 swept"),

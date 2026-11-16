@@ -20,7 +20,10 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 KNOWN_FIELDS_0_1_0 = ("not_in_edit_mode", "knob_unknown", "reverb_decay", "reverb_mix", "ir_cab")
 """Every name of ``KNOWN_FIELDS`` as released in 0.1.0 (frozen: 0.1.0 will not change)."""
 
-ROW = re.compile(r"^\|\s*`(?P<old>[a-z0-9_]+)`\s*\|\s*`(?P<new>[a-z0-9_]+)`\s*\|", re.MULTILINE)
+ROW = re.compile(
+    r"^[ \t]*\|\s*`(?P<old>[a-z0-9_]+)`\s*\|\s*`(?P<new>[a-z0-9_]+)`\s*\|", re.MULTILINE
+)
+"""A rename table row, ``| `old` | `new` | why |`` (indented under a bullet or not)."""
 
 
 def _release_section(version: str) -> str:
