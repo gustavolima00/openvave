@@ -196,7 +196,10 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
 - [X] Hardware: `uv run openvave --trace info` → exactly one `TX 00 59 11 00 00 00 ff`; reply in
   one notification (`RX chunk` == `RX`), byte-identical to the fw96 capture; human block
   `Device     TANK-Gv2  (firmware 96)` + `Address … (TANK-Gv2_BLE, -68 dBm)`.
-- [ ] Still to run for T035/T036: `pytest --hardware tests/hardware`, timing < 10 s, `--scan-timeout 3` with pedal off
+- [X] Hardware: `uv run pytest --hardware tests/hardware` → **1 passed in 5.94 s** (5 s scan +
+  connect + handshake, inside the 10 s budget); `info --scan-timeout 3` with the pedal on also
+  finds and identifies it (RSSI −66).
+- [ ] Still to run for T036: `--scan-timeout 3` with pedal off
   (exit code + ~3 s), Bluetooth off → exit 5.
 
 **Checkpoint**: Milestone 1 DONE — MVP usable — pending hardware gate (T035/T036)
