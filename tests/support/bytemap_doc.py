@@ -155,3 +155,42 @@ def parse_table(text: str) -> list[DocRow]:
 
 def load_doc_rows(path: Path = COMMAND_LAYER) -> list[DocRow]:
     return parse_table(path.read_text(encoding="utf-8"))
+
+
+COMPARISON_HEADING = "### Preset comparison (fw 96)"
+CELL_RE = re.compile(r"^`?([0-9a-f]{2})`?$")
+BYTE_RE = re.compile(r"^(global|preset|status)\[(\d+)\]$")
+
+
+def load_comparison(
+    path: Path = COMMAND_LAYER,
+) -> tuple[list[str], list[tuple[str, int, list[int]]]]:
+    """The preset comparison table: preset columns, then (region, offset, hex values) rows."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(COMPARISON_HEADING))
+    table: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("#"):
+            break
+        if line.startswith("|"):
+            table.append(line)
+        elif table:
+            break
+    header = _split_row(table[0])
+    if header[0] != "Byte" or header[-1] != "Field":
+        raise ValueError(f"unexpected comparison header {header}")
+    header = header[:-1]  # value columns are the presets between Byte and Field
+    rows: list[tuple[str, int, list[int]]] = []
+    for line in table[2:]:
+        cells = _split_row(line)
+        match = BYTE_RE.match(cells[0].strip("`"))
+        if not match:
+            raise ValueError(f"bad byte cell {cells[0]!r}")
+        values = []
+        for cell in cells[1 : len(header)]:
+            hex_match = CELL_RE.match(cell)
+            if not hex_match:
+                raise ValueError(f"bad value cell {cell!r}")
+            values.append(int(hex_match.group(1), 16))
+        rows.append((match.group(1), int(match.group(2)), values))
+    return header[1:], rows

@@ -44,8 +44,9 @@ from openvave.transport import Transport
 QUIT_WORDS = frozenset({"q", "quit"})
 HINT_AFTER = 30.0
 HINT = "hint: no preset byte changed in 30 s and the pedal is not in edit mode"
-EDIT_FLAG = "not_in_edit_mode"
-"""Global field that reads "on" outside edit mode (byte map, global[3])."""
+MODE_FIELD = "not_in_edit_mode"
+"""Global mode byte (byte map, global[3]): 0 edit, 1 normal, 2 tuner."""
+EDIT_MODE = 0
 TICK = 0.05
 """Seconds between checks of ``--duration`` and the edit-mode hint."""
 PLATFORMS = {"darwin": "macOS", "linux": "Linux", "win32": "Windows"}
@@ -306,8 +307,8 @@ class WatchRun:
         if decoded is None:
             return
         for field in decoded.fields:
-            if field.entry.name == EDIT_FLAG and not field.out_of_range:
-                self.not_in_edit_mode = bool(field.interpreted)
+            if field.entry.name == MODE_FIELD and not field.out_of_range:
+                self.not_in_edit_mode = field.value != EDIT_MODE
 
     def on_start(self, event: WatchStart) -> None:
         self._track(event.regions)

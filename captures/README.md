@@ -15,7 +15,8 @@ captures/
 
 | File | Firmware | Platform | What |
 |---|---|---|---|
-| `fw96/20261116-probe-connect.jsonl` | 96 | macOS, ATT MTU 185 | The app's 5 connect requests (query + 4 reads) and their replies |
+| `fw96/20261116-probe-connect.jsonl` | 96 | macOS, ATT MTU 185 | The app's 5 connect requests (query + 4 reads) and their replies. The preset read is stored preset 1B |
+| `fw96/20261116-step-<field>.jsonl` | 96 | macOS, ATT MTU 185 | One mapping step each, cut from the owner's `openvave watch` sessions of 2026-11-16 (excerpt rules below; index: `tests/integration/fixture_pairs.py`). Knobs and selectors come from session 18:25 (no stdin labels; steps named by the owner afterwards), block switches and `mode-1847` from session 18:47 (labelled), `mode-1843` from session 18:43, `preset_select-*` from the preset walk at 18:41. Files ending in `-1917` are the labelled second pass (session 19:17) that confirms each knob, selector and switch |
 
 ## JSONL format
 
