@@ -159,8 +159,7 @@ def test_bluetooth_unavailable_hint(capsys: pytest.CaptureFixture[str]) -> None:
 
 @pytest.mark.parametrize("json_flag", [False, True])
 def test_timeout_exit_6(capsys: pytest.CaptureFixture[str], json_flag: bool) -> None:
-    # Reads are not retried; a reply that never comes for a non-handshake request → exit 6.
-    # In this milestone `info` only handshakes, so simulate a lost link instead.
+    # A lost link → exit 6 (read timeouts are covered in test_cli_info_regions.py).
     fake = FakeTransport.from_capture(FW96_CONNECT, disconnect_after=0)
     argv = ["info", "--json"] if json_flag else ["info"]
     code, out, err = run(capsys, argv, factory_for(fake))

@@ -149,3 +149,17 @@ def test_human_block_order(capsys: pytest.CaptureFixture[str]) -> None:
     _, out, _, _ = run(capsys, ["info"])
     assert out.index("Device info") < out.index("Global") < out.index("Status")
     assert "\n\nDevice info" in out
+
+
+@pytest.mark.parametrize("json_flag", [False, True])
+def test_read_timeout_exit_6(capsys: pytest.CaptureFixture[str], json_flag: bool) -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT, drop={GLOBAL: 1})
+    argv = ["--timeout", "0.05", "info"] + (["--json"] if json_flag else [])
+    code = main(argv, transport_factory=factory_for(fake))
+    out, err = capsys.readouterr()
+    assert code == 6
+    assert "error:" in err
+    assert "Traceback" not in err
+    assert out == ""
+    assert fake.sent.count(CAP.tx(GLOBAL)) == 1
+    assert fake.closed

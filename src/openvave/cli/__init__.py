@@ -14,7 +14,6 @@ import sys
 import traceback
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import contextmanager
-from datetime import UTC, datetime
 
 from openvave import __version__
 from openvave.cli import render
@@ -89,7 +88,7 @@ def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     _global_options(common, suppress=True)
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
-    sub.add_parser("info", parents=[common], help="identify the connected pedal")
+    sub.add_parser("info", parents=[common], help="identify the pedal and read its state regions")
     return parser
 
 
@@ -134,11 +133,10 @@ async def _info(args: argparse.Namespace, factory: TransportFactory) -> str:
         return await factory(args.device, args.scan_timeout)
 
     async with TankG(source, timeout=args.timeout) as pedal:
-        identity, device = pedal.identity, pedal.device
-    read_at = datetime.now(UTC)
+        snapshot = await pedal.snapshot()
     if args.json:
-        return render.dumps(render.envelope("info", read_at, device, identity))
-    return render.human_identity(identity, device)
+        return render.dumps(render.info_json(snapshot))
+    return render.human_info(snapshot)
 
 
 def _report(err: OpenvaveError) -> None:

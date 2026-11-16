@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from types import TracebackType
 
 from openvave.errors import (
@@ -18,8 +19,15 @@ from openvave.errors import (
     ProtocolError,
     RequestTimeoutError,
 )
-from openvave.models import DeviceIdentity, DeviceInfo
-from openvave.protocol import FrameAssembler, build_query, decode_frame, parse_identity
+from openvave.models import DeviceIdentity, DeviceInfo, DeviceSnapshot, Region, RegionRead
+from openvave.protocol import (
+    FrameAssembler,
+    build_query,
+    build_read,
+    decode_frame,
+    parse_identity,
+    parse_read_reply,
+)
 from openvave.protocol.frame import QUERY
 from openvave.protocol.identity import TESTED_FIRMWARE
 from openvave.trace import trace_rx, trace_rx_chunk, trace_rx_stray, trace_tx
@@ -32,6 +40,9 @@ SETTLE_DELAY = 0.2
 HANDSHAKE_ATTEMPTS = 3
 DEFAULT_TIMEOUT = 2.0
 DEFAULT_SCAN_TIMEOUT = 5.0
+
+SNAPSHOT_ORDER = (Region.DEVICE_INFO, Region.GLOBAL, Region.CURRENT_PRESET, Region.STATUS)
+"""Read order of :meth:`TankG.snapshot` (the order the app and the fw96 capture use)."""
 
 TransportSource = Callable[[], Awaitable[tuple[Transport, DeviceInfo | None]]]
 """Coroutine factory producing the transport to use and, if known, the device it reaches."""
@@ -101,6 +112,29 @@ class TankG:
     def device(self) -> DeviceInfo | None:
         """The discovered device, or ``None`` when the transport was supplied directly."""
         return self._device
+
+    # -- reads ------------------------------------------------------------------------------
+
+    async def read(self, region: Region) -> RegionRead:
+        """Read one of the four known regions (command ``0x23``). Not retried on failure.
+
+        Raises :class:`TypeError` for anything that is not a :class:`Region` member: there is no
+        address-based read.
+        """
+        if not isinstance(region, Region):
+            raise TypeError(f"region must be a Region member, not {type(region).__name__}")
+        frame = await self._request(build_read(region))
+        return parse_read_reply(region, frame)
+
+    async def snapshot(self) -> DeviceSnapshot:
+        """Read all four regions in connect order; ``read_at`` is taken after the last read."""
+        regions = {region: await self.read(region) for region in SNAPSHOT_ORDER}
+        return DeviceSnapshot(
+            device=self._device,
+            identity=self.identity,
+            regions=regions,
+            read_at=datetime.now(UTC),
+        )
 
     # -- context manager ----------------------------------------------------------------------
 
