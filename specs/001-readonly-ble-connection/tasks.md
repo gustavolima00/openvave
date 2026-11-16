@@ -288,17 +288,36 @@ for their own tests.
 
 ### Tests for User Story 4 (write first, must fail)
 
-- [ ] T044 [P] [US4] Write `tests/contract/test_public_api.py`: `set(openvave.__all__)` equals the contract export list; `openvave.protocol` exposes `encode_frame`, `decode_frame`, `FrameAssembler`, `build_query`, `build_read`, `parse_read_reply`, `parse_identity`; `TankG` has no attribute containing `write`, `erase` or `address`; `pedal.read(0x10000000)` raises `TypeError`; all public dataclasses are frozen
-- [ ] T045 [P] [US4] Write `tests/integration/test_library_usage.py`: run the `FakeTransport` part of the contracts/library-api.md snippet verbatim; `fake.sent[0]` is `00 59 11 00 00 00 ff` and the preset read frame is `00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6`; with a `logging` handler on `openvave.trace` every TX/RX appears, without one nothing is printed; after the `async with` block no asyncio tasks created by the session remain
+- [X] T044 [P] [US4] Write `tests/contract/test_public_api.py`: `set(openvave.__all__)` equals the contract export list; `openvave.protocol` exposes `encode_frame`, `decode_frame`, `FrameAssembler`, `build_query`, `build_read`, `parse_read_reply`, `parse_identity`; `TankG` has no attribute containing `write`, `erase` or `address`; `pedal.read(0x10000000)` raises `TypeError`; all public dataclasses are frozen
+- [X] T045 [P] [US4] Write `tests/integration/test_library_usage.py`: run the `FakeTransport` part of the contracts/library-api.md snippet verbatim; `fake.sent[0]` is `00 59 11 00 00 00 ff` and the preset read frame is `00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6`; with a `logging` handler on `openvave.trace` every TX/RX appears, without one nothing is printed; after the `async with` block no asyncio tasks created by the session remain
 
 ### Implementation for User Story 4
 
-- [ ] T046 [US4] Define `__all__` and re-exports in `src/openvave/__init__.py` (`discover`, `TankG`, `Region`, `DeviceInfo`, `DeviceIdentity`, `RegionRead`, `DeviceSnapshot`, `Transport`, `FakeTransport`, `TESTED_FIRMWARE`, `OpenvaveError` and subclasses); add docstrings to every public name until T044–T045 pass
-- [ ] T047 [US4] Run `uv run mypy --strict` on a scratch copy of the library-api.md snippet to confirm public types are complete; fix any missing annotations in `src/openvave/`
+- [X] T046 [US4] Define `__all__` and re-exports in `src/openvave/__init__.py` (`discover`, `TankG`, `Region`, `DeviceInfo`, `DeviceIdentity`, `RegionRead`, `DeviceSnapshot`, `Transport`, `FakeTransport`, `TESTED_FIRMWARE`, `OpenvaveError` and subclasses); add docstrings to every public name until T044–T045 pass
+- [X] T047 [US4] Run `uv run mypy --strict` on a scratch copy of the library-api.md snippet to confirm public types are complete; fix any missing annotations in `src/openvave/`
 
 ### Live verification (milestone gate)
 
 - [ ] T048 [US4] On macOS + fw 96, run the `TankG.connect()` part of the library-api.md snippet in `uv run python`; confirm identity and snapshot match `openvave info --json`; record in the PR
+
+**Gate evidence (2026-11-16, macOS 26 / Darwin 25.5, local)**:
+
+- [X] `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src` (strict): clean.
+- [X] `uv run pytest -q`: **483 passed, 2 skipped** (the hardware tests); `import openvave` still
+  does not load `bleak` (checked via `sys.modules`).
+- [X] Independent criteria: `set(openvave.__all__)` equals the contract export list
+  (`test_all_matches_contract`); the `FakeTransport` part of the library-api.md snippet is
+  extracted from the markdown at test time and run unchanged — `fake.sent == [00 59 11 00 00 00 ff]`,
+  and with a preset read in the body the second frame is
+  `00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6` (`test_snippet_verbatim`,
+  `test_snippet_reads_preset`). Trace on/off and no surviving asyncio tasks are covered too.
+- [X] T047: a scratch copy of the snippet (BLE + fake parts, error attributes) passes
+  `mypy --strict --disallow-any-expr` against the installed package — no public type degrades to
+  `Any`; no annotation fixes were needed. Docstrings added to every public method and dataclass
+  field; the SC-004 audit wrapper now uses `functools.wraps` so `FakeTransport.write` keeps its
+  docstring under test.
+- [ ] T048 on hardware — first attempt (Terminal-panel tab): `discover()` returned `[]` and
+  `TankG.connect()` raised `NoDeviceFoundError` (pedal not advertising). Re-run pending.
 
 **Checkpoint**: Milestone 3 DONE
 
