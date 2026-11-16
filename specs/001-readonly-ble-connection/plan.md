@@ -75,15 +75,16 @@ fixture under `captures/`. No new dependency or abstraction was introduced durin
 
 ## Delivery Plan
 
-Projected PR count: **4** (≤ 8, no re-scoping needed). Each milestone is independently
-reviewable and leaves `main` green.
+Projected PR count: **5** (≤ 8, no re-scoping needed). Each milestone is independently
+reviewable and leaves `main` green. Task-level breakdown: [tasks.md](tasks.md).
 
 | # | Milestone | Scope | Stories | Verification gate |
 |---|---|---|---|---|
-| M0 | Evidence & scaffold | Sanitized `captures/fw96/20261116-probe-connect.jsonl` + `captures/README.md` (R6, R7); capture citations in `command-layer.md`; `pyproject.toml` (metadata incl. unofficial disclaimer, `openvave` entry point), `ruff`/`mypy`/`pytest` config, CI (Linux/macOS/Windows, no hardware), fixture loader + mutation helpers with their own tests | — | CI green on 3 OSes; loader parses all 15 capture events; reviewer confirms R7 sanitization decision |
-| M1 | Protocol layer | `frame` (encode/decode/checksum/allowlist), `assembler` (chunk reassembly), `commands` (query, `Region` reads), `identity` (handshake parse, firmware gate); round-trip + negative tests from captures, written first | US4 (protocol part) | All 5 captured requests encode byte-identical; all 5 replies decode → model → encode identical; every FR-005 rejection covered; allowlist test |
-| M2 | Session & transports | `Transport` protocol, `FakeTransport`, `BleakTransport`, discovery/selection, `TankG` session (connect sequence, 200 ms settle, timeouts, handshake retries), `DeviceSnapshot`, hex trace, SC-004 audit fixture | US4, US1/US2/US3 library side | Integration tests replay the full capture through `FakeTransport`; timeout/retry/disconnect tests; SC-004 audit passes over whole suite |
-| M3 | CLI & hardware check | `openvave info`, `openvave preset dump`, human + JSON renderers, JSON schemas enforced in contract tests, exit codes, `--trace`, `--device`, `--timeout`, `--scan-timeout`; opt-in hardware tests; README usage section | US1, US2, US3 | Contract tests validate output against `contracts/*.schema.json`; quickstart scenarios 1–6 pass hardware-free; quickstart hardware scenario passes on macOS + fw 96 (recorded in PR) |
+| M0 | Evidence, scaffold & protocol core | Sanitized `captures/fw96/20261116-probe-connect.jsonl` + `captures/README.md` (R6, R7); capture citations in `command-layer.md`; `pyproject.toml` (unofficial disclaimer, `openvave` entry point), CI on Linux/macOS/Windows; fixture loader + mutations; `frame`, `assembler`, `commands`, models, errors, `Transport`, `FakeTransport`, trace, SC-004 audit — tests first | — (blocks all) | CI green on 3 OSes; all captured frames round-trip; only `0x11`/`0x23` encodable |
+| M1 | Identify a connected pedal | `identity`, `TankG` session (handshake, retries, timeouts), `BleakTransport` + discovery, CLI `info` (identity), renderers, exit codes | US1 (MVP) | `openvave info` shows `TANK-Gv2` / fw 96 on macOS hardware; error paths exit 3/5 |
+| M2 | Read device state | `TankG.read`/`snapshot`, region rendering, `info.schema.json` enforced | US2 | `info --json` validates; Global/Status match capture on hardware |
+| M3 | Library usage | Public `__all__`, docstrings, API contract tests, documented snippet runs | US4 | Contract tests + snippet against fake and hardware |
+| M4 | Dump the current preset + polish | CLI `preset dump`, `preset-dump.schema.json`, README, CHANGELOG, protocol-doc updates, full quickstart run | US3 | `preset dump` on hardware reflects a knob change; quickstart passes; SC-001 timing |
 
 ## Project Structure
 
