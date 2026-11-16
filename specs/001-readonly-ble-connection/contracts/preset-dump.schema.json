@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:cli:preset-dump:v1",
+  "title": "openvave preset dump --json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "read_at",
+    "device",
+    "identity",
+    "preset"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "preset dump"
+    },
+    "read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, the only time-varying field"
+    },
+    "device": {
+      "$ref": "#/$defs/device"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "preset": {
+      "$ref": "#/$defs/region",
+      "properties": {
+        "type": {
+          "const": 4
+        },
+        "address": {
+          "const": "0x10000000"
+        },
+        "length": {
+          "const": 21
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hex": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{2}( [0-9a-f]{2})*)?$",
+      "description": "lowercase, space-separated bytes (same format as captures/)"
+    },
+    "device": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "identifier",
+        "name",
+        "rssi"
+      ],
+      "properties": {
+        "identifier": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rssi": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "name",
+        "firmware",
+        "firmware_untested",
+        "raw"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "firmware": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "firmware_untested": {
+          "type": "boolean"
+        },
+        "raw": {
+          "$ref": "#/$defs/hex"
+        }
+      }
+    },
+    "region": {
+      "type": "object",
+      "required": [
+        "type",
+        "address",
+        "length",
+        "data",
+        "fields"
+      ],
+      "properties": {
+        "type": {
+          "type": "integer"
+        },
+        "address": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{8}$"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "data": {
+          "$ref": "#/$defs/hex"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Interpreted bytes; additive over time. Bytes not listed are unknown.",
+          "items": {
+            "type": "object",
+            "required": [
+              "offset",
+              "size",
+              "name",
+              "value",
+              "confidence"
+            ],
+            "properties": {
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "integer"
+              },
+              "confidence": {
+                "enum": [
+                  "confirmed",
+                  "observed",
+                  "hypothesis"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
