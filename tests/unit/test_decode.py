@@ -30,24 +30,58 @@ def summary(read: RegionRead) -> list[tuple[int, str | None, int, str, str | Non
 
 
 def test_preset_fields() -> None:
+    # the fw96 capture is stored preset 1B (watch sessions, 2026-11-16)
     assert summary(PRESET_READ) == [
+        (0, "amp_on", 1, "on", "observed"),
+        (1, "mod_on", 0, "off", "observed"),
+        (2, "delay_on", 0, "off", "observed"),
+        (3, "reverb_on", 1, "on", "observed"),
+        (4, "noise_gate", 15, "15", "observed"),
+        (5, "amp_type", 4, "#4", "observed"),
         (6, "knob_unknown", 60, "60", "observed"),
+        (7, "treble", 60, "60", "observed"),
+        (8, "middle", 70, "70", "observed"),
+        (9, "bass", 50, "50", "observed"),
+        (10, "volume", 50, "50", "observed"),
+        (11, "mod_fx", 0, "0", "observed"),
+        (12, "mod_speed", 0, "0", "observed"),
+        (13, "delay_mix", 0, "0", "observed"),
+        (14, "delay_time", 0, "0", "observed"),
         (15, "reverb_decay", 5, "5", "confirmed"),
-        (16, "reverb_mix", 4, "4", "hypothesis"),
-        (17, "ir_cab", 7, "#7", "hypothesis"),
+        (16, "reverb_mix", 4, "4", "observed"),
+        (17, "ir_cab", 7, "#7", "observed"),
     ]
     decoded = decode_region(PRESET_READ, 96)
-    assert decoded.unknown_offsets == (0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20)
+    assert decoded.unknown_offsets == (18, 19, 20)
     assert decoded.read is PRESET_READ
     assert decoded.map_firmware == 96
     assert not decoded.firmware_untested
 
 
 def test_global_fields() -> None:
-    assert summary(GLOBAL_READ) == [(3, "not_in_edit_mode", 1, "on", "observed")]
+    assert summary(GLOBAL_READ) == [
+        (0, "browse_bank", 0, "0", "observed"),
+        (1, "bank", 0, "0", "observed"),
+        (2, "slot", 1, "1", "observed"),
+        (3, "not_in_edit_mode", 1, "normal", "confirmed"),
+    ]
     decoded = decode_region(GLOBAL_READ, 96)
-    assert decoded.unknown_offsets == (0, 1, 2)
-    assert decoded.fields[0].interpreted is True
+    assert decoded.unknown_offsets == ()
+    assert decoded.fields[3].interpreted == 1
+
+
+def test_mode_values() -> None:
+    for raw, display in ((0, "edit"), (1, "normal"), (2, "tuner")):
+        frame = with_region_data(CAP.rx(GLOBAL), 3, raw)
+        field = decode_region(read_of(Region.GLOBAL, GLOBAL, frame), 96).fields[3]
+        assert (field.display, field.interpreted, field.out_of_range) == (display, raw, False)
+
+
+def test_slot_loading_state_is_out_of_range() -> None:
+    frame = with_region_data(CAP.rx(GLOBAL), 2, 0xFF)
+    field = decode_region(read_of(Region.GLOBAL, GLOBAL, frame), 96).fields[2]
+    assert field.out_of_range
+    assert field.display == "255"
 
 
 def test_status_all_unknown() -> None:
@@ -78,14 +112,15 @@ def test_interpreted_types() -> None:
 
 
 def test_switch_off() -> None:
-    frame = with_region_data(CAP.rx(GLOBAL), 3, 0)
-    field = decode_region(read_of(Region.GLOBAL, GLOBAL, frame), 96).fields[0]
+    frame = with_region_data(CAP.rx(PRESET), 0, 0)
+    field = decode_region(read_of(Region.CURRENT_PRESET, PRESET, frame), 96).fields[0]
+    assert field.entry.encoding is Encoding.SWITCH
     assert (field.display, field.interpreted, field.out_of_range) == ("off", False, False)
 
 
 def test_switch_out_of_range() -> None:
-    frame = with_region_data(CAP.rx(GLOBAL), 3, 7)
-    field = decode_region(read_of(Region.GLOBAL, GLOBAL, frame), 96).fields[0]
+    frame = with_region_data(CAP.rx(PRESET), 0, 7)
+    field = decode_region(read_of(Region.CURRENT_PRESET, PRESET, frame), 96).fields[0]
     assert field.out_of_range
     assert field.display == "7"
 
@@ -137,15 +172,15 @@ def test_diff_identical_is_empty() -> None:
 
 
 def test_diff_lists_changes_in_offset_order() -> None:
-    frame = with_region_data(with_region_data(CAP.rx(PRESET), 15, 0x7F), 2, 0x09)
+    frame = with_region_data(with_region_data(CAP.rx(PRESET), 15, 0x7F), 19, 0x09)
     after = read_of(Region.CURRENT_PRESET, PRESET, frame)
     changes = diff(PRESET_READ, after)
     assert [(c.region, c.offset, c.old, c.new) for c in changes] == [
-        (Region.CURRENT_PRESET, 2, 0x00, 0x09),
         (Region.CURRENT_PRESET, 15, 0x05, 0x7F),
+        (Region.CURRENT_PRESET, 19, 0x16, 0x09),
     ]
-    assert changes[0].field is None
-    assert changes[1].field is not None and changes[1].field.name == "reverb_decay"
+    assert changes[0].field is not None and changes[0].field.name == "reverb_decay"
+    assert changes[1].field is None
 
 
 def test_diff_rejects_different_regions() -> None:

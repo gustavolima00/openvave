@@ -132,18 +132,19 @@ def test_encoding_closed_enum() -> None:
 def test_deprecated_known_fields_alias() -> None:
     from openvave.models import KNOWN_FIELDS, FieldSpec
 
-    assert [
-        (s.offset, s.name, s.label, s.confidence)
-        for s in KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
-    ] == [
-        (6, "knob_unknown", "knob (which one: unknown)", "observed"),
-        (15, "reverb_decay", "reverb decay", "confirmed"),
-        (16, "reverb_mix", "reverb mix?", "hypothesis"),
-        (17, "ir_cab", "IR cab?", "hypothesis"),
+    preset = KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
+    assert [s.offset for s in preset] == list(range(18))
+    by_offset = {s.offset: (s.name, s.label, s.confidence) for s in preset}
+    assert by_offset[6] == ("knob_unknown", "gain", "observed")  # 0.1.0 name kept until 0.2.0
+    assert by_offset[15] == ("reverb_decay", "reverb decay", "confirmed")
+    assert by_offset[17] == ("ir_cab", "IR cab", "observed")
+    assert [s.name for s in KNOWN_FIELDS[openvave.Region.GLOBAL]] == [
+        "browse_bank",
+        "bank",
+        "slot",
+        "not_in_edit_mode",
     ]
-    assert KNOWN_FIELDS[openvave.Region.GLOBAL] == (
-        FieldSpec(3, "not_in_edit_mode", "not in edit mode", "observed"),
-    )
+    assert all(isinstance(s, FieldSpec) for s in preset)
     assert KNOWN_FIELDS[openvave.Region.DEVICE_INFO] == ()
     assert KNOWN_FIELDS[openvave.Region.STATUS] == ()
 

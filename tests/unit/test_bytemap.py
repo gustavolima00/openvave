@@ -108,3 +108,40 @@ def test_observed_entries_cite_existing_captures() -> None:
             assert len(e.evidence) >= 1, e
         if e.confidence == "confirmed":
             assert len(set(e.evidence)) >= 2, f"{e.name}: confirmed needs two sessions"
+
+
+def test_every_observed_field_has_a_fixture_pair() -> None:
+    """No observed/confirmed row without its real before/after excerpt (FR-009, FR-020)."""
+    from tests.integration.fixture_pairs import PAIRS
+
+    keys = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET}
+    indexed = {(keys[p.region], p.name) for p in PAIRS}
+    for e in BYTE_MAP:
+        if e.confidence in ("observed", "confirmed"):
+            assert (e.region, e.name) in indexed, f"{e.name}: no fixture pair"
+
+
+def test_confirmed_fields_have_pairs_from_two_sessions() -> None:
+    from tests.integration.fixture_pairs import PAIRS
+
+    for e in BYTE_MAP:
+        if e.confidence != "confirmed":
+            continue
+        sessions = {path for path in e.evidence}
+        assert len(sessions) >= 2, e.name
+        assert any(p.name == e.name for p in PAIRS)
+
+
+def test_per_preset_bytes_are_named_or_documented() -> None:
+    """Each byte that differs between compared presets is named, or its notes say so (T048)."""
+    from tests.support.bytemap_doc import load_comparison
+
+    columns, rows = load_comparison()
+    assert len(columns) >= 5, "SC-008: at least five presets compared"
+    regions = {"preset": Region.CURRENT_PRESET, "global": Region.GLOBAL, "status": Region.STATUS}
+    for region_name, offset, values in rows:
+        assert len(values) == len(columns)
+        assert len(set(values)) > 1, f"{region_name}[{offset}] does not differ"
+        (e,) = [x for x in BYTE_MAP if x.region is regions[region_name] and x.offset == offset]
+        if e.name is None:
+            assert "differs per preset" in e.notes, f"{region_name}[{offset}]: {e.notes!r}"

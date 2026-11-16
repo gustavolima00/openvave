@@ -29,7 +29,7 @@ BYTES_PER_LINE = 16
 FIELD_INDENT = "      "
 FIELD_OFFSET_WIDTH = 5
 FIELD_LABEL_WIDTH = 25
-FIELD_DISPLAY_WIDTH = 4
+FIELD_DISPLAY_WIDTH = 6
 FIELD_RANGE_WIDTH = 11
 
 REGION_TITLES = {
@@ -98,7 +98,7 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     entry = field.entry
     line = (
         f"{indent}{_offset_cell(field)}{entry.label:<{FIELD_LABEL_WIDTH}} "
-        f"{field.display:>{FIELD_DISPLAY_WIDTH}}      "
+        f"{field.display:>{FIELD_DISPLAY_WIDTH}}    "
         f"{_range_cell(field):<{FIELD_RANGE_WIDTH}}{entry.confidence}"
     )
     if entry.confidence == "hypothesis":

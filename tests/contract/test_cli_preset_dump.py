@@ -29,11 +29,25 @@ DECODED_FIELD_SCHEMA_PATH = (
 ECHO_LEN = 8
 FW97_IDENTITY = b"TANK-Gv2_097".ljust(27, b"\x00")
 DECODED_LINES = [
-    "      [6]  knob (which one: unknown)   60      0–127      observed",
-    "      [15] reverb decay                 5      0–127      confirmed",
-    "      [16] reverb mix                   4      0–127      hypothesis ?",
-    "      [17] IR cab                      #7      selector   hypothesis ?",
-    "      unknown: 0 1 2 3 4 5 7 8 9 10 11 12 13 14 18 19 20",
+    "      [0]  amp on                        on    on/off     observed",
+    "      [1]  mod on                       off    on/off     observed",
+    "      [2]  delay on                     off    on/off     observed",
+    "      [3]  reverb on                     on    on/off     observed",
+    "      [4]  noise gate                    15    0–127      observed",
+    "      [5]  amp type                      #4    selector   observed",
+    "      [6]  gain                          60    0–127      observed",
+    "      [7]  treble                        60    0–127      observed",
+    "      [8]  middle                        70    0–127      observed",
+    "      [9]  bass                          50    0–127      observed",
+    "      [10] volume                        50    0–127      observed",
+    "      [11] mod fx                         0    0–127      observed",
+    "      [12] mod speed                      0    0–127      observed",
+    "      [13] delay mix                      0    0–127      observed",
+    "      [14] delay time                     0    0–127      observed",
+    "      [15] reverb decay                   5    0–127      confirmed",
+    "      [16] reverb mix                     4    0–127      observed",
+    "      [17] IR cab                        #7    selector   observed",
+    "      unknown: 18 19 20",
 ]
 QUERY = bytes.fromhex("00 59 11 00 00 00 ff")
 PRESET_READ = bytes.fromhex("00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6")
@@ -88,11 +102,26 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
     preset = doc["preset"]
     assert preset["data"] == EXPECTED_DATA == recorded_preset().hex(" ")
     assert (preset["type"], preset["address"], preset["length"]) == (4, "0x10000000", 21)
+    # the fw96 capture is stored preset 1B
     assert [(f["offset"], f["name"], f["value"], f["confidence"]) for f in preset["fields"]] == [
+        (0, "amp_on", 1, "observed"),
+        (1, "mod_on", 0, "observed"),
+        (2, "delay_on", 0, "observed"),
+        (3, "reverb_on", 1, "observed"),
+        (4, "noise_gate", 15, "observed"),
+        (5, "amp_type", 4, "observed"),
         (6, "knob_unknown", 60, "observed"),
+        (7, "treble", 60, "observed"),
+        (8, "middle", 70, "observed"),
+        (9, "bass", 50, "observed"),
+        (10, "volume", 50, "observed"),
+        (11, "mod_fx", 0, "observed"),
+        (12, "mod_speed", 0, "observed"),
+        (13, "delay_mix", 0, "observed"),
+        (14, "delay_time", 0, "observed"),
         (15, "reverb_decay", 5, "confirmed"),
-        (16, "reverb_mix", 4, "hypothesis"),
-        (17, "ir_cab", 7, "hypothesis"),
+        (16, "reverb_mix", 4, "observed"),
+        (17, "ir_cab", 7, "observed"),
     ]
 
 
@@ -138,7 +167,7 @@ def test_human_block_untested_firmware(capsys: pytest.CaptureFixture[str]) -> No
 def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:
     preset = preset_json(capsys)["preset"]
     assert preset["map_firmware"] == 96
-    assert preset["unknown_offsets"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 18, 19, 20]
+    assert preset["unknown_offsets"] == [18, 19, 20]
     decay = next(f for f in preset["fields"] if f["name"] == "reverb_decay")
     assert decay == {
         "offset": 15,
@@ -175,10 +204,27 @@ def test_json_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
     assert doc["identity"]["firmware_untested"] is True
     assert doc["preset"]["map_firmware"] == 96
     assert [f["name"] for f in doc["preset"]["fields"]] == [
-        "knob_unknown",
-        "reverb_decay",
-        "reverb_mix",
-        "ir_cab",
+        name
+        for _, name, _, _ in [
+            (0, "amp_on", 1, "observed"),
+            (1, "mod_on", 0, "observed"),
+            (2, "delay_on", 0, "observed"),
+            (3, "reverb_on", 1, "observed"),
+            (4, "noise_gate", 15, "observed"),
+            (5, "amp_type", 4, "observed"),
+            (6, "knob_unknown", 60, "observed"),
+            (7, "treble", 60, "observed"),
+            (8, "middle", 70, "observed"),
+            (9, "bass", 50, "observed"),
+            (10, "volume", 50, "observed"),
+            (11, "mod_fx", 0, "observed"),
+            (12, "mod_speed", 0, "observed"),
+            (13, "delay_mix", 0, "observed"),
+            (14, "delay_time", 0, "observed"),
+            (15, "reverb_decay", 5, "confirmed"),
+            (16, "reverb_mix", 4, "observed"),
+            (17, "ir_cab", 7, "observed"),
+        ]
     ]
 
 

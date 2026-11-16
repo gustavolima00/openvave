@@ -12,11 +12,14 @@ line that lists the unknown offsets:
 Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
   00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05
   10: 04 07 43 16 43
-      [6]  knob (which one: unknown)   60      0–127      observed
-      [15] reverb decay                 5      0–127      observed
-      [16] reverb mix                   4      0–127      hypothesis ?
-      [17] IR cab                      #7      selector   hypothesis ?
-      unknown: 0 1 2 3 4 5 7 8 9 10 11 12 13 14 18 19 20
+      [0]  amp on                        on    on/off     observed
+      …
+      [6]  gain                          60    0–127      observed
+      …
+      [15] reverb decay                   5    0–127      confirmed
+      [16] reverb mix                     4    0–127      observed
+      [17] IR cab                        #7    selector   observed
+      unknown: 18 19 20
 ```
 
 Rules:
@@ -60,11 +63,11 @@ Global options `--device`, `--scan-timeout`, `--timeout`, `--trace` apply.
 ```text
 Watching TANK-Gv2 (firmware 96), every 0.5 s. Type a label and Enter before each step; q to quit.
 Recording to captures/private/20261117-101500-watch.jsonl
-  global  00 00 01 01   not in edit mode = on
+  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal
   preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43
   status  01
 ── label: edit mode on ──
- +3.02s  global[3]   not in edit mode   on → off
+ +3.02s  global[3]   mode              normal → edit
 ── label: reverb decay min→max ──
  +9.51s  preset[15]  reverb decay         5 → 64
 +10.02s  preset[15]  reverb decay        64 → 127
@@ -80,7 +83,7 @@ Stopped after 34.0 s: 4 changes in 3 cycles. Record: captures/private/20261117-1
   `(co-moving: N)` (FR-005).
 - No heartbeat lines when nothing changes.
 - stderr hint (once): `hint: no preset byte changed in 30 s and the pedal is not in edit mode`
-  when a label was typed, global[3] reads "not in edit mode", and no preset byte changed since.
+  when a label was typed, global[3] (mode) is not `0` (edit), and no preset byte changed since.
 
 ### Exit codes
 

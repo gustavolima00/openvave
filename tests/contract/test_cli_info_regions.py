@@ -103,31 +103,34 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
             "size": 1,
             "name": "not_in_edit_mode",
             "value": recorded(GLOBAL)[3],
-            "confidence": "observed",
+            "confidence": "confirmed",
             "raw": recorded(GLOBAL)[3],
             "mask": None,
-            "encoding": "switch",
-            "range": None,
-            "display": "on",
-            "interpreted": True,
+            "encoding": "selector",
+            "range": {"min": 0, "max": 2},
+            "display": "normal",
+            "interpreted": 1,
             "out_of_range": False,
         }
     ]
     knob = regions["current_preset"]["fields"]
-    assert [(f["offset"], f["value"], f["confidence"]) for f in knob] == [
-        (6, recorded(PRESET)[6], "observed"),
-        (15, recorded(PRESET)[15], "confirmed"),
-        (16, recorded(PRESET)[16], "hypothesis"),
-        (17, recorded(PRESET)[17], "hypothesis"),
+    assert [(f["offset"], f["value"]) for f in knob] == [
+        (offset, recorded(PRESET)[offset]) for offset in range(18)
+    ]
+    assert [f["name"] for f in regions["global"]["fields"]] == [
+        "browse_bank",
+        "bank",
+        "slot",
+        "not_in_edit_mode",
     ]
     assert regions["device_info"]["fields"] == []
     assert regions["status"]["fields"] == []
     for region in regions.values():
         assert region["map_firmware"] == 96
-    assert regions["global"]["unknown_offsets"] == [0, 1, 2]
+    assert regions["global"]["unknown_offsets"] == []
     assert regions["status"]["unknown_offsets"] == [0]
     assert regions["device_info"]["unknown_offsets"] == list(range(32))
-    assert len(regions["current_preset"]["unknown_offsets"]) == 17
+    assert regions["current_preset"]["unknown_offsets"] == [18, 19, 20]
 
 
 def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture[str]) -> None:
@@ -136,7 +139,7 @@ def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture
     doc = info_json(capsys)
     assert doc["schema_version"] == 1
     items = [f for region in doc["regions"].values() for f in region["fields"]]
-    assert len(items) == 5
+    assert len(items) == 4 + 18  # global 0-3, preset 0-17
     for item in items:
         jsonschema.validate(item, schema, cls=jsonschema.Draft202012Validator)
 
@@ -170,8 +173,10 @@ def test_human_region_blocks(capsys: pytest.CaptureFixture[str]) -> None:
         assert lines[start : start + len(expected)] == expected
     assert "  00: 00 00 01 01" in lines
     assert "  10: " + recorded(DEVICE_INFO)[16:].hex(" ") in lines
-    assert "      [3]  not in edit mode            on      on/off     observed" in lines
-    assert "      unknown: 0 1 2" in lines
+    assert "      [0]  browsed bank                   0    0–8        observed" in lines
+    assert "      [2]  slot                           1    0–3        observed" in lines
+    assert "      [3]  mode                      normal    selector   confirmed" in lines
+    assert "      unknown: 0" in lines  # status only: global is fully named
     assert "      unknown: 0" in lines
     device_block = lines[lines.index(dump_lines(recorded(DEVICE_INFO))[0]) :]
     assert not device_block[2].startswith("      ")  # device info stays undecoded

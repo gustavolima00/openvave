@@ -117,13 +117,13 @@ def test_human_walkthrough(
     assert lines[:4] == [
         "Watching TANK-Gv2 (firmware 96), every 0.5 s. "
         "Type a label and Enter before each step; q to quit.",
-        "  global  00 00 01 01   not in edit mode = on",
+        "  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal",
         "  preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43",
         "  status  01",
     ]
     body = lines[4:-1]
     assert body[0] == "── label: edit mode on ──"
-    assert strip_time(body[1]) == "  global[3]   not in edit mode    on → off"
+    assert strip_time(body[1]) == "  global[3]   mode              normal → edit"
     assert re.match(r"^ *\+\d+\.\d\ds  ", body[1])
     assert body[2] == "── label: reverb decay min→max ──"
     assert strip_time(body[3]) == "  preset[15]  reverb decay         5 → 64"
@@ -145,11 +145,11 @@ def test_unknown_byte_shows_raw_hex(
         monkeypatch,
         tmp_path,
         ["--no-record", "--duration", "1"],
-        cycles=[{}, {"preset": {4: 0x10}}],
+        cycles=[{}, {"preset": {19: 0x10}}],
     )
     assert run.code == 0, run.err
-    change = [line for line in run.out.splitlines() if "preset[4]" in line]
-    assert [strip_time(c) for c in change] == ["  preset[4]   unknown           0x0f → 0x10"]
+    change = [line for line in run.out.splitlines() if "preset[19]" in line]
+    assert [strip_time(c) for c in change] == ["  preset[19]  unknown           0x16 → 0x10"]
 
 
 def test_json_lines_validate(

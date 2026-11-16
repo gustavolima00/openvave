@@ -183,29 +183,41 @@ fixtures are updated with confidence, and `preset dump` decodes everything found
 
 ### Tests (write first per field, must fail until its map row exists)
 
-- [ ] T035 [P] [US2] Create `tests/integration/test_fixture_pairs.py` and its index `tests/integration/fixture_pairs.py` (field name → excerpt path, before/after cycle selection, expected extremes for min→max sweeps). Parametrise over the index and assert: `diff` names only that field, and for continuous sweeps the values reach the documented `min` and `max`. Seed it with the M1 reverb-decay excerpt
-- [ ] T036 [P] [US2] Extend `tests/unit/test_bytemap.py` with a check that every `observed`/`confirmed` named entry appears in the fixture-pair index (no row without its pair, FR-009/FR-020)
+- [X] T035 [P] [US2] Create `tests/integration/test_fixture_pairs.py` and its index `tests/integration/fixture_pairs.py` (field name → excerpt path, before/after cycle selection, expected extremes for min→max sweeps). Parametrise over the index and assert: `diff` names only that field, and for continuous sweeps the values reach the documented `min` and `max`. Seed it with the M1 reverb-decay excerpt
+  - `tests/integration/fixture_pairs.py` indexes 23 pairs over 21 committed excerpts; single steps assert every cycle-to-cycle change is on the field's byte, nothing else moves, the exact (min, max) reached, and no value out of range; preset-selection excerpts assert the (browsed bank, bank, slot) sequence
+- [X] T036 [P] [US2] Extend `tests/unit/test_bytemap.py` with a check that every `observed`/`confirmed` named entry appears in the fixture-pair index (no row without its pair, FR-009/FR-020)
+  - plus: confirmed rows need two sessions and a pair; written first, failed (19 failures) until the rows existed
 
 ### Evidence gathering (pedal owner, hardware)
 
-- [ ] T037 [US2] Owner lists every physical control (knobs as printed, selector knobs, footswitches, buttons, modes) and whether it needs edit mode. Record it as the "Control inventory" table in `specs/protocol/command-layer.md`, using our own descriptive words (research R13)
-- [ ] T038 [US2] Owner runs `uv run openvave watch` and works through the inventory: for each control, type a label, enter edit mode where needed, move **only that control** (continuous: full down then full up; selector: step through every position; switch: toggle on/off/on), then leave edit mode without saving. Isolate reverb mix and IR cab in separate steps (preset 16/17), and identify the knob behind preset 6. Records stay in `captures/private/`
-- [ ] T039 [US2] Researcher reviews the records step by step: for each step, list the changed offsets, old → new values, extremes, and co-moving bytes. Steps with co-moving bytes or no change are noted, and repeated if the cause is unclear (owner re-runs T038 for those controls)
+- [X] T037 [US2] Owner lists every physical control (knobs as printed, selector knobs, footswitches, buttons, modes) and whether it needs edit mode. Record it as the "Control inventory" table in `specs/protocol/command-layer.md`, using our own descriptive words (research R13)
+  - Control inventory table in `command-layer.md` (21 controls, from the owner's report and the sessions)
+- [X] T038 [US2] Owner runs `uv run openvave watch` and works through the inventory: for each control, type a label, enter edit mode where needed, move **only that control** (continuous: full down then full up; selector: step through every position; switch: toggle on/off/on), then leave edit mode without saving. Isolate reverb mix and IR cab in separate steps (preset 16/17), and identify the knob behind preset 6. Records stay in `captures/private/`
+  - Owner, 2026-11-16 18:25–18:50: six sessions (knobs one at a time; preset walk 9A–9D, 1A–1D, 2A, 2B; block switches; edit mode; tuner). Raw records in `captures/private/` of the worktree and copied to the main checkout's `captures/private/`
+- [X] T039 [US2] Researcher reviews the records step by step: for each step, list the changed offsets, old → new values, extremes, and co-moving bytes. Steps with co-moving bytes or no change are noted, and repeated if the cause is unclear (owner re-runs T038 for those controls)
+  - Reviewed per step with the change lists; steps with co-moving bytes (first block off-switch copies the knob positions; preset loads) are excluded from single-step fixtures and explained in "Watch session findings"
 
 ### Recording findings (one commit per control or control group)
 
-- [ ] T040 [US2] For each isolated finding, cut an excerpt `captures/fw96/<date>-step-<field>.jsonl` (excerpt rules, label text reviewed) and add it to the fixture-pair index. Run `tests/integration/test_fixture_pairs.py`: it fails for the new field
-- [ ] T041 [US2] Add or update the row in `specs/protocol/command-layer.md` (R1 columns, `observed`, evidence path, range seen, linked control) and the matching `ByteMapEntry` in `src/openvave/protocol/bytemap.py` in the same commit. Fixture-pair, bytemap and doc tests green. Use neutral names for anything still `hypothesis` (research R8)
-- [ ] T042 [US2] Update the existing hypotheses in docs and map: preset 16 and 17 resolved (renamed or confirmed at `observed`), preset 6 given its real name (keep `knob_unknown` as the JSON name until M4 and list the rename for the CHANGELOG), and global 3 kept or refined. Refuted claims are noted under the table, not deleted (US2 scenario 4)
-- [ ] T043 [US2] For every control with "no change", fill its inventory row with the session date. For every byte still unknown in 4–17, write the controls tried in its Notes (FR-007, SC-003)
-- [ ] T044 [P] [US3] Extend `tests/contract/test_cli_preset_dump.py` expectations for the newly named fields on the fw96 capture (decoded names, values and confidence match the doc table)
+- [X] T040 [US2] For each isolated finding, cut an excerpt `captures/fw96/<date>-step-<field>.jsonl` (excerpt rules, label text reviewed) and add it to the fixture-pair index. Run `tests/integration/test_fixture_pairs.py`: it fails for the new field
+  - 21 excerpts `captures/fw96/20261116-step-*.jsonl`, cut with `tests/support/excerpt.py`; label text reviewed (only "test …" step labels)
+- [X] T041 [US2] Add or update the row in `specs/protocol/command-layer.md` (R1 columns, `observed`, evidence path, range seen, linked control) and the matching `ByteMapEntry` in `src/openvave/protocol/bytemap.py` in the same commit. Fixture-pair, bytemap and doc tests green. Use neutral names for anything still `hypothesis` (research R8)
+  - 26 rows; preset 0–17 and global 0–3 named; doc↔code test green
+- [X] T042 [US2] Update the existing hypotheses in docs and map: preset 16 and 17 resolved (renamed or confirmed at `observed`), preset 6 given its real name (keep `knob_unknown` as the JSON name until M4 and list the rename for the CHANGELOG), and global 3 kept or refined. Refuted claims are noted under the table, not deleted (US2 scenario 4)
+  - preset 16/17 isolated → observed; preset 6 = gain (JSON `knob_unknown` until M4); global 3 refined to a mode selector 0 edit / 1 normal / 2 tuner (JSON `not_in_edit_mode` until M4), confirmed. Renames for the 0.2.0 CHANGELOG: `knob_unknown` → `gain`, `not_in_edit_mode` → `mode`
+- [X] T043 [US2] For every control with "no change", fill its inventory row with the session date. For every byte still unknown in 4–17, write the controls tried in its Notes (FR-007, SC-003)
+  - every inventory control mapped; open ranges listed in the rows' Notes and in "Not yet known"
+- [X] T044 [P] [US3] Extend `tests/contract/test_cli_preset_dump.py` expectations for the newly named fields on the fw96 capture (decoded names, values and confidence match the doc table)
+  - `preset dump` / `info` / `watch` contract expectations updated to the full map (value column widened to 6 so `normal` fits)
 
 ### Live verification (milestone gate)
 
-- [ ] T045 [US2] Run the full hardware-free suite, ruff, format and mypy; record counts. Check SC-001 (every inventory control has a result), SC-003 (bytes 4–17 attributed) and SC-004 (fixture-pair test count = number of named fields); list them in the PR
+- [X] T045 [US2] Run the full hardware-free suite, ruff, format and mypy; record counts. Check SC-001 (every inventory control has a result), SC-003 (bytes 4–17 attributed) and SC-004 (fixture-pair test count = number of named fields); list them in the PR
+  - Evidence (2026-11-16): pytest 682 passed, 4 skipped; ruff, format, mypy clean. SC-001: all 21 inventory controls have a result. SC-003: preset 4–17 all named at observed or better. SC-004: 23 fixture pairs, every observed/confirmed field indexed (test-enforced)
 - [ ] T046 [US3] Owner: `uv run openvave preset dump` in edit mode with three continuous knobs set to min and then max; decoded values show the documented range ends. Record in the PR
+  - Not run: needs the owner to sweep noise gate, middle, bass, volume (and treble to max) fully, then `preset dump` at each end
 
-**Checkpoint**: Milestone 2 DONE
+**Checkpoint**: Milestone 2 DONE — mapping recorded 2026-11-16; owner range check T046 pending
 
 ---
 
@@ -225,27 +237,36 @@ promoted to `confirmed`.
 
 ### Tests (write first, must fail)
 
-- [ ] T047 [P] [US4] Add the preset-switch excerpt(s) to the fixture-pair index with the expected status change (from T049), and a test in `tests/integration/test_fixture_pairs.py` that the decoded status `index` field equals the expected preset number for each switch step
-- [ ] T048 [P] [US2] Add a test in `tests/unit/test_bytemap.py` that every byte listed as "differs per preset" in the doc's preset comparison table is either a named entry or an `unknown` entry whose Notes contain its per-preset values (parsed via `tests/support/bytemap_doc.py`)
+- [X] T047 [P] [US4] Add the preset-switch excerpt(s) to the fixture-pair index with the expected status change (from T049), and a test in `tests/integration/test_fixture_pairs.py` that the decoded status `index` field equals the expected preset number for each switch step
+  - Adapted: the status byte does not track the preset (always `01`), so the index test checks global browsed bank / bank / slot over the preset-walk excerpts instead (`test_preset_selection_moves_bank_and_slot`)
+- [X] T048 [P] [US2] Add a test in `tests/unit/test_bytemap.py` that every byte listed as "differs per preset" in the doc's preset comparison table is either a named entry or an `unknown` entry whose Notes contain its per-preset values (parsed via `tests/support/bytemap_doc.py`)
+  - `test_per_preset_bytes_are_named_or_documented` parses the "Preset comparison (fw 96)" table (10 presets)
 
 ### Evidence gathering (pedal owner, hardware)
 
-- [ ] T049 [US4] Owner runs `uv run openvave watch`, labels each step, and selects at least 5 different stored presets on the pedal one at a time (no edit mode, no saving). Also enter and leave edit mode once on two of them (global 3, status)
+- [X] T049 [US4] Owner runs `uv run openvave watch`, labels each step, and selects at least 5 different stored presets on the pedal one at a time (no edit mode, no saving). Also enter and leave edit mode once on two of them (global 3, status)
+  - Preset walk 9A–9D, 1A–1D, 2A (18:41, unlabelled, order from the owner's report; confirmed by global 0–2) and 2B (18:43); edit mode entered/left on 2A (18:43) and 1B (18:47)
 - [ ] T050 [US2] Owner runs a **second, independent** `watch` session (new connection, a different stored preset than in M2) repeating the single-control steps for the fields that should become `confirmed` (at least: reverb mix, IR cab, the preset 6 knob, and every other `observed` field the owner can repeat)
+  - Partly: the mode byte has two independent labelled sessions (18:43, 18:47); the knobs and switches were each exercised in one session only, so they stay observed until a second session repeats them
 
 ### Recording findings
 
-- [ ] T051 [US4] Document the status byte in `specs/protocol/command-layer.md` and `src/openvave/protocol/bytemap.py` (`index` encoding with base and range seen, or `unknown` with per-preset values); excerpt `captures/fw96/<date>-step-preset_switch.jsonl`; T047 green
-- [ ] T052 [US2] Add a "Preset comparison (fw 96)" table to `specs/protocol/command-layer.md`: one column per compared preset (identified by position only, no personal names), one row per byte that differs; update the Notes of the matching rows, and document global bytes 0–2 (named or unknown with values seen); T048 green
+- [X] T051 [US4] Document the status byte in `specs/protocol/command-layer.md` and `src/openvave/protocol/bytemap.py` (`index` encoding with base and range seen, or `unknown` with per-preset values); excerpt `captures/fw96/<date>-step-preset_switch.jsonl`; T047 green
+  - status documented as unknown with values seen (`01` everywhere); no index excerpt possible
+- [X] T052 [US2] Add a "Preset comparison (fw 96)" table to `specs/protocol/command-layer.md`: one column per compared preset (identified by position only, no personal names), one row per byte that differs; update the Notes of the matching rows, and document global bytes 0–2 (named or unknown with values seen); T048 green
+  - "Preset comparison (fw 96)" table: 10 presets × 19 differing bytes; global 0–2 named
 - [ ] T053 [US2] Promote every row reproduced in T050 to `confirmed` in the doc and the map, citing both session excerpts; add the second-session excerpts to `captures/fw96/`; bytemap/doc tests green
-- [ ] T054 [US2] Update "Next steps" in `specs/protocol/command-layer.md`: what remains unknown and the questions for the write spec (e.g. app-only settings, stored-preset reads)
+  - Partly: global 3 promoted to confirmed (sessions 18:43 + 18:47, plus the probe). The rest needs T050's second session
+- [X] T054 [US2] Update "Next steps" in `specs/protocol/command-layer.md`: what remains unknown and the questions for the write spec (e.g. app-only settings, stored-preset reads)
 
 ### Live verification (milestone gate)
 
-- [ ] T055 [US2] Run the full suite, ruff, format and mypy. Check SC-002 (26 rows, none missing) and SC-008 (≥ 5 presets compared, differing bytes covered); list them in the PR
+- [X] T055 [US2] Run the full suite, ruff, format and mypy. Check SC-002 (26 rows, none missing) and SC-008 (≥ 5 presets compared, differing bytes covered); list them in the PR
+  - Evidence: 26 rows, none missing (SC-002, test-enforced); 10 presets compared, every differing byte named or noted (SC-008, test-enforced)
 - [ ] T056 [US4] Owner: `uv run openvave info` on two different presets shows the decoded status value matching the selected preset (if mapped); record in the PR
+  - Not applicable as written: the status byte does not follow the selected preset. `info` shows bank and slot instead (global 1–2)
 
-**Checkpoint**: Milestone 3 DONE
+**Checkpoint**: Milestone 3 DONE — partly: preset comparison and status done; second-session confirmations (T050/T053) pending
 
 ---
 

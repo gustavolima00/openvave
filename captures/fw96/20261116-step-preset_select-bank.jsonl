@@ -1,0 +1,78 @@
+{"event": "meta", "firmware": 96, "device": "TANK-Gv2", "platform": "macOS", "att_mtu": 185, "date": "2026-11-16", "tool": "openvave watch 0.1.0", "interval": 0.5, "sanitized": []}
+{"t": 6.0251, "event": "tx", "label": "query", "hex": "00 59 11 00 00 00 ff"}
+{"t": 6.0657, "event": "rx-chunk", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7"}
+{"t": 6.0658, "event": "rx", "label": "query", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7", "cmd": 17}
+{"t": 90.7285, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 90.7851, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3"}
+{"t": 90.7853, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3", "cmd": 35}
+{"t": 90.7857, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 90.8472, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3"}
+{"t": 90.8474, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3", "cmd": 35}
+{"t": 90.8477, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 90.9051, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 90.9053, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}
+{"t": 91.2292, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 91.2654, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3"}
+{"t": 91.2656, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3", "cmd": 35}
+{"t": 91.266, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 91.3272, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3"}
+{"t": 91.3274, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3", "cmd": 35}
+{"t": 91.3277, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 91.3853, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 91.3856, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}
+{"t": 91.7303, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 91.7749, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3"}
+{"t": 91.775, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 03 01 d3", "cmd": 35}
+{"t": 91.7751, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 91.8372, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3"}
+{"t": 91.8374, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3", "cmd": 35}
+{"t": 91.8377, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 91.8955, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 91.8958, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}
+{"t": 92.2314, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 92.285, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 00 03 01 d2"}
+{"t": 92.2852, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 00 03 01 d2", "cmd": 35}
+{"t": 92.2855, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 92.3473, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3"}
+{"t": 92.3476, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3 a3", "cmd": 35}
+{"t": 92.3479, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 92.4053, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 92.4055, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}
+{"t": 92.406, "event": "change", "cycle": 173, "region": "global", "offset": 0, "old": 0, "new": 1, "label": "test"}
+{"t": 92.7325, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 92.7952, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 01 00 01 d4"}
+{"t": 92.7954, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 01 00 01 d4", "cmd": 35}
+{"t": 92.7955, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 92.857, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25"}
+{"t": 92.857, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25", "cmd": 35}
+{"t": 92.8572, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 92.915, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 92.9151, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "global", "offset": 1, "old": 0, "new": 1, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "global", "offset": 2, "old": 3, "new": 0, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 1, "old": 1, "new": 0, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 4, "old": 64, "new": 18, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 6, "old": 100, "new": 65, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 7, "old": 43, "new": 55, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 8, "old": 88, "new": 65, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 9, "old": 83, "new": 55, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 10, "old": 64, "new": 50, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 11, "old": 20, "new": 0, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 12, "old": 41, "new": 0, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 13, "old": 15, "new": 12, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 14, "old": 53, "new": 40, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 15, "old": 9, "new": 53, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 16, "old": 5, "new": 15, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 17, "old": 4, "new": 7, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 18, "old": 119, "new": 255, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 19, "old": 179, "new": 247, "label": "test"}
+{"t": 92.9155, "event": "change", "cycle": 174, "region": "preset", "offset": 20, "old": 179, "new": 0, "label": "test"}
+{"t": 93.2336, "event": "tx", "label": "global", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"t": 93.275, "event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 01 00 01 d4"}
+{"t": 93.2751, "event": "rx", "label": "global", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 01 01 00 01 d4", "cmd": 35}
+{"t": 93.2753, "event": "tx", "label": "preset", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 93.3368, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25"}
+{"t": 93.3369, "event": "rx", "label": "preset", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25", "cmd": 35}
+{"t": 93.3371, "event": "tx", "label": "status", "hex": "00 59 23 08 00 00 04 00 00 00 d0 01 00 00 2a"}
+{"t": 93.3955, "event": "rx-chunk", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29"}
+{"t": 93.3957, "event": "rx", "label": "status", "hex": "00 59 23 09 00 00 04 00 00 00 d0 01 00 00 01 29", "cmd": 35}

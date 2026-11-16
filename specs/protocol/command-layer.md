@@ -97,7 +97,8 @@ Preset reading: bytes 4–17 are the 14-byte block the app rewrites when a knob 
 
 ### Preset / global byte map (in progress)
 
-Method: poll the regions read-only while moving one control at a time (2026-11-16, fw 96).
+Method: poll the regions read-only while moving one control at a time (2026-11-16, fw 96): first
+with a probe script, then with `openvave watch` (six sessions, 18:25–18:50, owner at the pedal).
 
 One row per byte of the current preset (21), the global block (4) and the status byte (1): 26
 rows. This table is authoritative; `src/openvave/protocol/bytemap.py` mirrors it row for row, and
@@ -116,32 +117,32 @@ rows. This table is authoritative; `src/openvave/protocol/bytemap.py` mirrors it
 
 | Region | Offset | Mask | Name | Encoding | Range | Control | Confidence | Firmware | Evidence | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| global | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
-| global | 1 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
-| global | 2 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
-| global | 3 | — | `not_in_edit_mode` | switch | on=1 off=0 | edit mode | observed | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `1` normally, `0` while the pedal is in edit mode (flips on entering edit mode before any knob moves; back to `1` on leaving without saving), 2026-11-16. fw96: `0x01` |
-| preset | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
-| preset | 1 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
-| preset | 2 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00` |
-| preset | 3 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
-| preset | 4 | — | — | unknown | — | — | — | 96 | — | fw96: `0x0f`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 5 | — | — | unknown | — | — | — | 96 | — | fw96: `0x04`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 6 | — | `knob_unknown` | continuous | 0–127 | — | observed | 96 | `captures/fw96/20261116-probe-connect.jsonl` | moves with one front-panel knob, which one not yet identified (2026-11-16). fw96: `0x3c` |
-| preset | 7 | — | — | unknown | — | — | — | 96 | — | fw96: `0x3c`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 8 | — | — | unknown | — | — | — | 96 | — | fw96: `0x46`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 9 | — | — | unknown | — | — | — | 96 | — | fw96: `0x32`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 10 | — | — | unknown | — | — | — | 96 | — | fw96: `0x32`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 11 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 12 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 13 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
-| preset | 14 | — | — | unknown | — | — | — | 96 | — | fw96: `0x00`; in the 4–17 block the app rewrites when a knob moves |
+| global | 0 | — | `browse_bank` | index | 0–8 | preset selection | observed | 96 | `captures/fw96/20261116-step-preset_select-bank.jsonl`, `captures/fw96/20261116-step-preset_select-slots.jsonl` | Bank shown while browsing, base 0 (0 = bank 1 … 8 = bank 9). Moves 0.5–1.5 s **before** global 1 when the owner changes bank, then global 1 follows as the preset loads. Seen 0, 1, 8 (preset walk 9A–9D, 1A–1D, 2A, 2026-11-16). fw96: `0x00` |
+| global | 1 | — | `bank` | index | 0–8 | preset selection | observed | 96 | `captures/fw96/20261116-step-preset_select-bank.jsonl`, `captures/fw96/20261116-step-preset_select-slots.jsonl` | Bank of the loaded preset, base 0. 9 banks × 4 slots = the app's `presetNum = 36`. Seen 0, 1, 8. fw96: `0x00` |
+| global | 2 | — | `slot` | index | 0–3 | preset selection | observed | 96 | `captures/fw96/20261116-step-preset_select-bank.jsonl`, `captures/fw96/20261116-step-preset_select-slots.jsonl` | Slot of the loaded preset, base 0 (0–3 = A–D); changes in the same cycle as the preset bytes. `0xff` seen for one cycle while a preset loaded, with every preset byte `00` (session 18:43): a loading state, flagged out of range. fw96: `0x01` (the capture is preset 1B) |
+| global | 3 | — | `not_in_edit_mode` | selector | 0–2 | edit mode, tuner | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-mode-1843.jsonl`, `captures/fw96/20261116-step-mode-1847.jsonl` | Pedal mode: `0` edit, `1` normal, `2` tuner. Edit 1 → 0 → 1 seen in four sessions, tuner 1 → 2 → 1 in three (labelled in session 18:47). Was documented as an edit-mode switch; the tuner value refutes a two-state reading. JSON name `not_in_edit_mode` kept until the 0.2.0 rename (planned: `mode`). fw96: `0x01` |
+| preset | 0 | — | `amp_on` | switch | on=1 off=0 | amp block switch | observed | 96 | `captures/fw96/20261116-step-amp_on.jsonl` | Amp block on/off; labelled off/on steps (session 18:47). `1` on every compared preset. fw96: `0x01` |
+| preset | 1 | — | `mod_on` | switch | on=1 off=0 | mod block switch | observed | 96 | `captures/fw96/20261116-step-mod_on.jsonl` | Mod block on/off; toggled twice (session 18:47). `1` only on 1D, the only compared preset with mod settings above 0. fw96: `0x00` |
+| preset | 2 | — | `delay_on` | switch | on=1 off=0 | delay block switch | observed | 96 | `captures/fw96/20261116-step-delay_on.jsonl` | Delay block on/off (session 18:47). `1` exactly on the compared presets with delay settings above 0. fw96: `0x00` |
+| preset | 3 | — | `reverb_on` | switch | on=1 off=0 | reverb block switch | observed | 96 | `captures/fw96/20261116-step-reverb_on.jsonl` | Reverb block on/off (session 18:47). `1` on every compared preset. fw96: `0x01` |
+| preset | 4 | — | `noise_gate` | continuous | 0–127 | noise gate knob | observed | 96 | `captures/fw96/20261116-step-noise_gate.jsonl` | Only byte to move with the noise gate knob (session 18:25); range seen 2–15 in the step, 0–78 across presets; ends not yet swept. fw96: `0x0f` |
+| preset | 5 | — | `amp_type` | selector | 0–127 | amp type selector | observed | 96 | `captures/fw96/20261116-step-amp_type.jsonl` | Stepped: 4 → 3 → 1 → 0 in the step (session 18:25); 0, 3, 4, 5, 8 across presets. Positions not counted yet; range is a 7-bit placeholder. fw96: `0x04` |
+| preset | 6 | — | `knob_unknown` | continuous | 0–127 | gain knob | observed | 96 | `captures/fw96/20261116-step-gain.jsonl` | Gain: the knob behind this byte, unidentified until 2026-11-16 (60 → 120 → 96 → 127, alone). JSON name `knob_unknown` kept until the 0.2.0 rename (planned: `gain`). fw96: `0x3c` |
+| preset | 7 | — | `treble` | continuous | 0–127 | treble knob | observed | 96 | `captures/fw96/20261116-step-treble.jsonl` | Alone; reached 0, top not yet swept (session 18:25). fw96: `0x3c` |
+| preset | 8 | — | `middle` | continuous | 0–127 | middle knob | observed | 96 | `captures/fw96/20261116-step-middle.jsonl` | Alone; range seen 60–80, ends not yet swept. fw96: `0x46` |
+| preset | 9 | — | `bass` | continuous | 0–127 | bass knob | observed | 96 | `captures/fw96/20261116-step-bass.jsonl` | Alone; range seen 50–91, ends not yet swept. fw96: `0x32` |
+| preset | 10 | — | `volume` | continuous | 0–127 | volume knob | observed | 96 | `captures/fw96/20261116-step-volume.jsonl` | Alone; range seen 20–64 in the step; 127 stored on preset 2B. fw96: `0x32` |
+| preset | 11 | — | `mod_fx` | continuous | 0–127 | mod fx knob | observed | 96 | `captures/fw96/20261116-step-mod_fx.jsonl` | Alone, 0 → 127 (session 18:25); smooth values. Whether it picks the effect type or its depth is not known. fw96: `0x00` |
+| preset | 12 | — | `mod_speed` | continuous | 0–127 | mod speed knob | observed | 96 | `captures/fw96/20261116-step-mod_speed.jsonl` | Alone, 0 → 127. fw96: `0x00` |
+| preset | 13 | — | `delay_mix` | continuous | 0–127 | delay mix knob | observed | 96 | `captures/fw96/20261116-step-delay_mix.jsonl` | Alone, 0 → 127. fw96: `0x00` |
+| preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | observed | 96 | `captures/fw96/20261116-step-delay_time.jsonl` | Alone, 0 → 127, swept three times. fw96: `0x00` |
 | preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). fw96: `0x05` |
-| preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | hypothesis | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `04` → `7f` when turned to max in edit mode, in the same step as IR cab (2026-11-16); needs a one-knob step. fw96: `0x04` |
-| preset | 17 | — | `ir_cab` | selector | 0–127 | IR cab selector | hypothesis | 96 | `captures/fw96/20261116-probe-connect.jsonl` | `07` → `08` (one step) when turned to max in edit mode, in the same step as reverb mix (2026-11-16). Range is a placeholder (7-bit): positions not yet counted. fw96: `0x07` |
-| preset | 18 | — | — | unknown | — | — | — | 96 | — | fw96: `0x43` |
-| preset | 19 | — | — | unknown | — | — | — | 96 | — | fw96: `0x16` |
-| preset | 20 | — | — | unknown | — | — | — | 96 | — | fw96: `0x43` |
-| status | 0 | — | — | unknown | — | — | — | 96 | — | fw96: `0x01` |
+| preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | observed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). fw96: `0x04` |
+| preset | 17 | — | `ir_cab` | selector | 0–127 | IR cab selector | observed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Positions not counted yet; range is a 7-bit placeholder. fw96: `0x07` |
+| preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
+| preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x16` |
+| preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
+| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all six watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 
@@ -158,6 +159,8 @@ report). The byte 16 / 17 assignment rests on the ranges (127 = continuous maxim
 selector step, and the user confirms IR cab is a selector); both knobs were moved in the same
 step, so a one-knob-at-a-time run is needed to promote them to observed. Leaving edit mode
 without saving restores the preset buffer (observed).
+Later the same day (session 18:25) reverb mix and IR cab were each moved alone: rows 16 and 17
+are now `observed`, and global 3 turned out to have a third value (tuner).
 
 Reads are deterministic for global, current preset and status: two probes minutes apart returned
 byte-identical frames (confirmed), and 10 `openvave info` runs agreed (2026-11-16). **Exception**:
@@ -170,6 +173,96 @@ read just before: `43 f3` after the capture's preset reply (`… 43 f3`), `43 79
 reverb-decay reply (`… 43 79`), and `00 00` on a first connection. Two paired readings fit and none
 contradicts it; the one `43 77` reading had no logged preset reply to compare with.
 Pedal edits are **not** pushed: they only become visible to a host that re-reads (confirmed).
+
+### Watch session findings (2026-11-16, fw 96)
+
+Six `openvave watch` sessions by the owner, 18:25–18:50, phone app disconnected. Raw records stay
+in `captures/private/`; the committed step excerpts are listed in the Evidence column above and
+indexed in `tests/integration/fixture_pairs.py`. Session 18:25 has no stdin labels (they were
+typed into the wrong window): its steps are identified by the owner's report and their timing.
+Sessions 18:43 and 18:41 are unlabelled too; session 18:47 is fully labelled.
+
+- **Edit buffer vs knob position** (observed). In edit mode, switching a block off and on copies
+  the **current physical knob positions** of that block into its bytes. Switching reverb off made
+  preset 15/16 jump from the stored `05 04` to `7f 7f`; switching amp off set preset 5–10 to
+  `00 7f 0d 3c 44 37`. Both match where the knobs had been left at the end of session 18:25.
+  Leaving edit mode without saving restores the stored bytes (all of them, in one cycle). The
+  stored value and the knob position are therefore separate, which matters for writes and for
+  range sweeps (a value only reaches an end once the knob has really moved there).
+- **Block switches** (observed): preset 0–3 = amp, mod, delay, reverb on/off. The first
+  off-switch of a block in edit mode co-moves that block's knob bytes (previous bullet), so the
+  fixture for each switch is a step that moved the switch byte alone.
+- **Preset position** (observed): global 0 = bank being browsed, global 1 = bank of the loaded
+  preset, global 2 = slot A–D, all 0-based. Changing bank moves global 0 first; global 1 and 2 move
+  in the cycle where the preset bytes change. One load showed a transient (global 2 = `ff`, all
+  preset bytes `00`) for a single cycle.
+- **Mode** (confirmed): global 3 = 0 edit, 1 normal, 2 tuner.
+- **Status byte**: `01` throughout (unknown; the earlier "current preset index?" guess is not
+  supported).
+- **Disconnect**: the 18:46 session lost the link with the tuner on (`stop` reason
+  `connection_lost`, exit 6), and the next connection found the pedal still in tuner mode. A
+  later tuner on/off (18:47) kept the link; cause unknown.
+
+### Preset comparison (fw 96)
+
+Stored presets read during the walk (sessions 18:41 and 18:43; nothing saved), identified by
+position only. Bytes not listed were equal on all ten: preset 0 and 3 (`01`). 1C holds the same
+bytes as 1B (the fw96 capture), and 2A the same as 1A. preset 18–20 differ per preset but never
+moved with a control; their meaning is unknown.
+
+| Byte | 1A | 1B | 1C | 1D | 2A | 2B | 9A | 9B | 9C | 9D | Field |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `preset[1]` | 00 | 00 | 00 | 01 | 00 | 00 | 00 | 00 | 00 | 00 | mod on |
+| `preset[2]` | 01 | 00 | 00 | 01 | 01 | 00 | 00 | 00 | 00 | 01 | delay on |
+| `preset[4]` | 12 | 0f | 0f | 40 | 12 | 00 | 00 | 4e | 4c | 00 | noise gate |
+| `preset[5]` | 05 | 04 | 04 | 05 | 05 | 00 | 00 | 03 | 08 | 08 | amp type |
+| `preset[6]` | 41 | 3c | 3c | 64 | 41 | 50 | 5e | 66 | 4a | 4f | gain |
+| `preset[7]` | 37 | 3c | 3c | 2b | 37 | 3f | 5a | 44 | 50 | 42 | treble |
+| `preset[8]` | 41 | 46 | 46 | 58 | 41 | 3f | 3f | 3f | 32 | 46 | middle |
+| `preset[9]` | 37 | 32 | 32 | 53 | 37 | 3f | 3f | 37 | 40 | 54 | bass |
+| `preset[10]` | 32 | 32 | 32 | 40 | 32 | 7f | 64 | 3c | 37 | 32 | volume |
+| `preset[11]` | 00 | 00 | 00 | 14 | 00 | 00 | 00 | 00 | 00 | 00 | mod fx |
+| `preset[12]` | 00 | 00 | 00 | 29 | 00 | 00 | 00 | 00 | 00 | 00 | mod speed |
+| `preset[13]` | 0c | 00 | 00 | 0f | 0c | 00 | 00 | 00 | 00 | 31 | delay mix |
+| `preset[14]` | 28 | 00 | 00 | 35 | 28 | 00 | 00 | 00 | 00 | 37 | delay time |
+| `preset[15]` | 35 | 05 | 05 | 09 | 35 | 18 | 0c | 0c | 38 | 0c | reverb decay |
+| `preset[16]` | 0f | 04 | 04 | 05 | 0f | 00 | 05 | 05 | 00 | 08 | reverb mix |
+| `preset[17]` | 07 | 07 | 07 | 04 | 07 | 00 | 00 | 01 | 01 | 08 | IR cab |
+| `preset[18]` | ff | 43 | 43 | 77 | ff | 87 | ff | 55 | ff | 55 | unknown |
+| `preset[19]` | f7 | 16 | 16 | b3 | f7 | 00 | 00 | aa | aa | ff | unknown |
+| `preset[20]` | 00 | 43 | 43 | b3 | 00 | ca | 00 | ff | ff | 7f | unknown |
+
+### Control inventory (fw 96)
+
+Every control exercised so far, in our own words. "Mapped" means the byte moved alone when only
+that control was used.
+
+| Control | Kind | Needs edit mode | Result | Date |
+|---|---|---|---|---|
+| amp type | stepped knob | yes | preset 5 | 2026-11-16 |
+| gain | knob | yes | preset 6 | 2026-11-16 |
+| treble | knob | yes | preset 7 | 2026-11-16 |
+| middle | knob | yes | preset 8 | 2026-11-16 |
+| bass | knob | yes | preset 9 | 2026-11-16 |
+| volume | knob | yes | preset 10 | 2026-11-16 |
+| noise gate | knob | yes | preset 4 | 2026-11-16 |
+| mod fx | knob | yes | preset 11 | 2026-11-16 |
+| mod speed | knob | yes | preset 12 | 2026-11-16 |
+| delay mix | knob | yes | preset 13 | 2026-11-16 |
+| delay time | knob | yes | preset 14 | 2026-11-16 |
+| reverb decay | knob | yes | preset 15 | 2026-11-16 |
+| reverb mix | knob | yes | preset 16 | 2026-11-16 |
+| IR cab | stepped knob | yes | preset 17 | 2026-11-16 |
+| amp block switch | switch | yes | preset 0 | 2026-11-16 |
+| mod block switch | switch | yes | preset 1 | 2026-11-16 |
+| delay block switch | switch | yes | preset 2 | 2026-11-16 |
+| reverb block switch | switch | yes | preset 3 | 2026-11-16 |
+| edit mode | mode | — | global 3 (`0`) | 2026-11-16 |
+| tuner | mode | no | global 3 (`2`) | 2026-11-16 |
+| bank / preset selection | selection | no | global 0, 1, 2 (+ preset bytes) | 2026-11-16 |
+
+Not yet known: whether other controls exist that we have not tried, the number of amp type and
+IR cab positions, and the full ranges of noise gate, middle, bass, volume and treble.
 
 ### Background polling
 
@@ -202,8 +295,16 @@ tail 0 B (the app verifies this layout for the `tankG` product).
   encoder only accepts `0x11` and `0x23`; writes stay disabled until confirmed (Constitution IV).
 - Note: a macOS relay (`poc/ble_mitm.py`) is not discovered by the app, likely because it matches
   advertising data macOS cannot emit; a Linux/ESP32 relay would be needed for live app captures.
-- Correlate `0x10000004` byte positions with specific knobs: enter edit mode, then move one knob
-  at a time (bytes 16/17 started above).
+- ~~Correlate `0x10000004` byte positions with specific knobs~~ done (2026-11-16): preset 4–17
+  are the 14 front-panel knobs, preset 0–3 the block switches (see the byte map). The app's
+  14-byte write to `0x10000004` therefore carries every knob of the preset at once.
+- Still unknown (read-only work): preset 18–20 (per preset, no control moves them); the status
+  byte (always `01`); the number of amp type and IR cab positions; full ranges of noise gate,
+  middle, bass, volume and treble; any app-only settings not on the front panel.
+- Questions for the write spec: is the edit buffer (`0x10000000`) written directly while the
+  knobs keep their physical positions (see "Edit buffer vs knob position")? Do `0xE0000002/3`
+  select a slot or save one (the app re-reads the preset after them; global 0–2 hold the bank and
+  slot)? How are stored presets addressed (`presetStoreOffset = 2`, 36 × 21 B)?
 - Determine what `0xE0000002/3` do (preset up/down? select index?).
 
 ### Host observations (from the 001 milestone gates)
