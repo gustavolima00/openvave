@@ -189,6 +189,8 @@ class WatchRun:
         self.json_mode = json_mode
         self.clock = clock
         self.started_at = clock.monotonic()
+        self.polling_since: float | None = None
+        """Run time when polling began (after connecting): ``--duration`` counts from here."""
         self.stopped = asyncio.Event()
         self.stop_reason: str | None = None
         self.finished = False
@@ -239,6 +241,7 @@ class WatchRun:
     def begin(self, identity: DeviceIdentity, transport: Transport | None) -> None:
         """After the handshake: open the record with its ``meta`` line."""
         self.begun = True
+        self.polling_since = self.now()
         if self.record is not None:
             self.record.open(
                 {
@@ -346,7 +349,7 @@ class WatchRun:
     def check(self) -> None:
         """``--duration`` elapsed? Time for the edit-mode hint?"""
         now = self.now()
-        if self.duration is not None and now >= self.duration:
+        if self.duration is not None and self._remaining() <= 0:
             self.stop("duration")
         if (
             not self.hinted
@@ -358,11 +361,21 @@ class WatchRun:
             self.hinted = True
             print(HINT, file=sys.stderr, flush=True)
 
+    def _remaining(self) -> float:
+        """Seconds of ``--duration`` left (infinite without one)."""
+        if self.duration is None:
+            return float("inf")
+        return (
+            self.polling_since + self.duration - self.now()
+            if self.polling_since is not None
+            else self.duration
+        )
+
     async def sleep(self, seconds: float) -> None:
         """The pause between poll cycles; ends the run exactly at ``--duration``."""
         self.check()
         if self.duration is not None:
-            remaining = self.duration - self.now()
+            remaining = self._remaining()
             if remaining <= seconds:
                 await self.clock.sleep(max(remaining, 0.0))
                 self.stop("duration")
