@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:cli:watch-event:v1",
+  "title": "One line of `openvave watch --json` (JSON Lines)",
+  "type": "object",
+  "required": ["schema_version", "event", "t"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event": { "enum": ["start", "label", "change", "stop"] },
+    "t": { "type": "number", "minimum": 0, "description": "seconds since the watch started (monotonic)" }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "event": { "const": "start" },
+        "identity": { "type": "object", "required": ["name", "firmware", "firmware_untested", "raw"] },
+        "interval": { "type": "number", "minimum": 0.2 },
+        "record": { "type": ["string", "null"] },
+        "regions": {
+          "type": "object",
+          "required": ["global", "current_preset", "status"],
+          "additionalProperties": { "$ref": "#/$defs/region" }
+        }
+      },
+      "required": ["identity", "interval", "record", "regions"]
+    },
+    {
+      "properties": {
+        "event": { "const": "label" },
+        "text": { "type": "string", "minLength": 1 }
+      },
+      "required": ["text"]
+    },
+    {
+      "properties": {
+        "event": { "const": "change" },
+        "cycle": { "type": "integer", "minimum": 1 },
+        "label": { "type": ["string", "null"] },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["region", "offset", "old", "new", "field"],
+            "properties": {
+              "region": { "enum": ["global", "current_preset", "status"] },
+              "offset": { "type": "integer", "minimum": 0 },
+              "old": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "new": { "type": "integer", "minimum": 0, "maximum": 255 },
+              "field": { "type": ["string", "null"], "description": "byte map name, null if unknown" }
+            }
+          }
+        }
+      },
+      "required": ["cycle", "label", "changes"]
+    },
+    {
+      "properties": {
+        "event": { "const": "stop" },
+        "reason": { "enum": ["quit", "interrupt", "duration", "connection_lost", "protocol_error"] },
+        "error": { "type": ["string", "null"] },
+        "changes": { "type": "integer", "minimum": 0 },
+        "cycles": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["reason", "error"]
+    }
+  ],
+  "$defs": {
+    "region": {
+      "type": "object",
+      "required": ["data", "fields", "unknown_offsets", "map_firmware"],
+      "properties": {
+        "data": { "type": "string", "pattern": "^([0-9a-f]{2}( [0-9a-f]{2})*)?$" },
+        "fields": { "type": "array", "items": { "$ref": "decoded-field.schema.json" } },
+        "unknown_offsets": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "map_firmware": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:cli:decoded-field:v1",
+  "title": "One item of a region's `fields` array (info / preset dump / watch)",
+  "description": "Superset of the 001 field item: offset, size, name, value and confidence keep their 001 meaning; the other keys are additive (schema_version 1).",
+  "type": "object",
+  "required": ["offset", "size", "name", "value", "confidence", "raw", "mask", "encoding", "range", "display", "out_of_range"],
+  "additionalProperties": true,
+  "properties": {
+    "offset": { "type": "integer", "minimum": 0 },
+    "size": { "const": 1 },
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "value": { "type": "integer", "minimum": 0, "maximum": 255, "description": "raw byte, or raw & mask for flags" },
+    "confidence": { "enum": ["confirmed", "observed", "hypothesis"] },
+    "raw": { "type": "integer", "minimum": 0, "maximum": 255 },
+    "mask": { "type": ["integer", "null"], "minimum": 1, "maximum": 255 },
+    "encoding": { "enum": ["continuous", "switch", "selector", "flag", "index"] },
+    "range": {
+      "type": ["object", "null"],
+      "required": ["min", "max"],
+      "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } }
+    },
+    "display": { "type": "string" },
+    "interpreted": { "type": ["integer", "boolean"] },
+    "out_of_range": { "type": "boolean" }
+  }
+}
