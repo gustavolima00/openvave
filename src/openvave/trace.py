@@ -28,3 +28,9 @@ def trace_rx_chunk(chunk: bytes) -> None:
 def trace_rx(frame: bytes) -> None:
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("RX %s", _hex(frame))
+
+
+def trace_rx_stray(chunk: bytes) -> None:
+    """Bytes that could not start a frame (ignored by the session)."""
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("RX stray %s", _hex(chunk))
