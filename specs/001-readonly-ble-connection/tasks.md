@@ -226,19 +226,35 @@ preset (JSON only) and status, raw with offsets and confidence-labelled fields.
 
 ### Tests for User Story 2 (write first, must fail)
 
-- [ ] T037 [P] [US2] Write `tests/integration/test_session_snapshot.py`: `snapshot()` over the capture → regions DEVICE_INFO/GLOBAL/CURRENT_PRESET/STATUS equal the recorded data, `fake.sent == capture.ordered_tx`; `disconnect_after=3` → `ConnectionLostError` and no snapshot returned; `drop={"global …": 1}` → `RequestTimeoutError` (reads are not retried); `split=4` → identical snapshot; `read_at` is timezone-aware UTC
-- [ ] T038 [P] [US2] Write `tests/contract/test_cli_info_regions.py`: `info --json` validates against `specs/001-readonly-ble-connection/contracts/info.schema.json` with `jsonschema`; region `data` equals capture hex; `fields` contains GLOBAL offset 3 with `confidence` "hypothesis"; two runs with `read_at` removed are identical; human output contains the 16-bytes-per-line hex dumps with `00:`/`10:` offsets for device info, global and status, `[meaning: unknown]` headers and `(hypothesis)` on the global flag
+- [X] T037 [P] [US2] Write `tests/integration/test_session_snapshot.py`: `snapshot()` over the capture → regions DEVICE_INFO/GLOBAL/CURRENT_PRESET/STATUS equal the recorded data, `fake.sent == capture.ordered_tx`; `disconnect_after=3` → `ConnectionLostError` and no snapshot returned; `drop={"global …": 1}` → `RequestTimeoutError` (reads are not retried); `split=4` → identical snapshot; `read_at` is timezone-aware UTC
+- [X] T038 [P] [US2] Write `tests/contract/test_cli_info_regions.py`: `info --json` validates against `specs/001-readonly-ble-connection/contracts/info.schema.json` with `jsonschema`; region `data` equals capture hex; `fields` contains GLOBAL offset 3 with `confidence` "hypothesis"; two runs with `read_at` removed are identical; human output contains the 16-bytes-per-line hex dumps with `00:`/`10:` offsets for device info, global and status, `[meaning: unknown]` headers and `(hypothesis)` on the global flag
 
 ### Implementation for User Story 2
 
-- [ ] T039 [US2] Add `TankG.read(region: Region) -> RegionRead` (rejects non-`Region` with `TypeError`) and `TankG.snapshot() -> DeviceSnapshot` (reads in order DEVICE_INFO, GLOBAL, CURRENT_PRESET, STATUS) to `src/openvave/session.py` until T037 passes
-- [ ] T040 [US2] Extend `src/openvave/cli/render.py`: human region blocks (header `type T @ 0xADDRESS, N bytes`, hex dump, `KNOWN_FIELDS` lines `[offset] name = value   (confidence)`), JSON `regions` object with `type`, `address` (`0x%08x`), `length`, `data`, `fields`; and make `info` in `src/openvave/cli/__init__.py` call `snapshot()` until T038 passes
-- [ ] T041 [US2] Extend `tests/hardware/test_hw_identity.py` (or add `tests/hardware/test_hw_snapshot.py`): snapshot on fw 96 returns DEVICE_INFO bytes 0–3 `0a 30 39 36` and STATUS length 1
+- [X] T039 [US2] Add `TankG.read(region: Region) -> RegionRead` (rejects non-`Region` with `TypeError`) and `TankG.snapshot() -> DeviceSnapshot` (reads in order DEVICE_INFO, GLOBAL, CURRENT_PRESET, STATUS) to `src/openvave/session.py` until T037 passes
+- [X] T040 [US2] Extend `src/openvave/cli/render.py`: human region blocks (header `type T @ 0xADDRESS, N bytes`, hex dump, `KNOWN_FIELDS` lines `[offset] name = value   (confidence)`), JSON `regions` object with `type`, `address` (`0x%08x`), `length`, `data`, `fields`; and make `info` in `src/openvave/cli/__init__.py` call `snapshot()` until T038 passes
+- [X] T041 [US2] Extend `tests/hardware/test_hw_identity.py` (or add `tests/hardware/test_hw_snapshot.py`): snapshot on fw 96 returns DEVICE_INFO bytes 0–3 `0a 30 39 36` and STATUS length 1
 
 ### Live verification (milestone gate)
 
 - [ ] T042 [US2] On macOS + fw 96 run `uv run openvave info` and `uv run openvave info --json | python -m json.tool`; confirm Global `00 00 01 01` (after a fresh preset load) and Status `01`; move a knob and re-run to see Global byte 3 change (records evidence for the hypothesis); record results in the PR
 - [ ] T043 [US2] If the knob experiment confirms or refutes the global byte 3 hypothesis, update its confidence in `specs/protocol/command-layer.md` and `KNOWN_FIELDS` in `src/openvave/models.py` in the same PR (Constitution I)
+
+**Gate evidence (2026-11-16, macOS 26 / Darwin 25.5, local)**:
+
+- [X] `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src` (strict): clean.
+- [X] `uv run pytest -q`: **464 passed, 2 skipped** (the hardware tests) on Python 3.13.12 and
+  3.11.13.
+- [X] Independent criteria over `FakeTransport`: `snapshot()` returns the four regions equal to
+  the recorded data and `fake.sent == capture.ordered_tx` (`test_snapshot_matches_capture`);
+  `info --json` validates against `contracts/info.schema.json` (Draft 2020-12) and two runs differ
+  only in `read_at` (`test_json_validates_against_schema`,
+  `test_two_runs_identical_except_read_at`); human output shows `00: 00 00 01 01` and
+  `[3] edited flag? = 1   (hypothesis)` (`test_human_region_blocks`). A dropped read → exit 6,
+  not retried (`test_read_timeout_exit_6`).
+- [ ] T042/T043 on hardware: pending. The agent's Terminal-panel tab reaches Bluetooth (no TCC
+  crash this time): `uv run openvave info` → `error: no TANK-Gv2_BLE found`, exit 3, because the
+  pedal was not advertising.
 
 **Checkpoint**: Milestone 2 DONE
 
