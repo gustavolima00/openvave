@@ -9,7 +9,10 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: The examples below include test tasks. Per Constitution Principle III, capture-based
+fixture tests are MANDATORY for any protocol encoder/decoder/parser work and must be written
+before the implementation; other tests are OPTIONAL unless requested in the feature
+specification. Hardware-dependent tests must be opt-in and excluded from CI.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 

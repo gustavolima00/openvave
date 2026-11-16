@@ -40,7 +40,13 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] **I. Protocol docs**: every message touched is (or will be) documented in `specs/` in this feature
+- [ ] **II. Evidence**: each protocol claim cites a capture, firmware/app version, and a confidence level
+- [ ] **III. Capture-driven tests**: fixture round-trip tests planned first; suite runs without hardware
+- [ ] **IV. Device safety**: writes are explicit, dry-run + backup planned; no `hypothesis` messages sent by default
+- [ ] **V. Library-first/CLI**: protocol layer free of CLI/transport code; CLI exposes it with text + JSON output
+- [ ] **VI. Clean-room**: no vendor binaries/firmware/decompiled code; captures sanitized
+- [ ] **VII. Simplicity**: transports behind one interface; new deps/abstractions justified below
 
 ## Project Structure
 
