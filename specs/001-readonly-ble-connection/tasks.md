@@ -167,8 +167,8 @@ everything every story needs.
 
 Run on macOS with a fw-96 pedal, phone app disconnected:
 
-- [ ] T035 [US1] Run `uv run openvave info`, `uv run openvave info --json`, `uv run openvave --trace info` and `uv run pytest --hardware tests/hardware`; confirm `TANK-Gv2 (firmware 96)`, exit 0, < 10 s, and the trace shows only `TX 00 59 11 00 00 00 ff`; record OS version, firmware and output in the PR description
-- [ ] T036 [US1] With the pedal off, run `uv run openvave info --scan-timeout 3`: `error:` on stderr, exit 3, ~3 s; with Bluetooth off: exit 5 with hint; record results in the PR
+- [X] T035 [US1] Run `uv run openvave info`, `uv run openvave info --json`, `uv run openvave --trace info` and `uv run pytest --hardware tests/hardware`; confirm `TANK-Gv2 (firmware 96)`, exit 0, < 10 s, and the trace shows only `TX 00 59 11 00 00 00 ff`; record OS version, firmware and output in the PR description
+- [X] T036 [US1] With the pedal off, run `uv run openvave info --scan-timeout 3`: `error:` on stderr, exit 3, ~3 s; with Bluetooth off: exit 5 with hint; record results in the PR
 
 **Gate evidence (2026-11-16, macOS 26.5.2, local)**:
 
@@ -202,9 +202,13 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
 - [X] Hardware: pedal off, `time uv run openvave info --scan-timeout 3` → `error: no TANK-Gv2_BLE
   found` + `hint:` line, **exit 3**, 3.13 s total. With the pedal on, the same command
   succeeds in 3.88 s end-to-end.
-- [ ] Still to run for T036: Mac Bluetooth off → exit 5 with hint.
+- [X] Hardware: Mac Bluetooth off, `uv run openvave info` → `error: Bluetooth unavailable: …
+  turned off` + the System Settings `hint:` line, **exit 5**. The first run printed bleak's raw
+  `(message, reason)` tuple; fixed in this milestone (`error_message()` in
+  `transport/ble.py`, unit-tested): the error line now shows only the message.
+- [X] Suite after the fix: 439 passed, 1 skipped; ruff, format and mypy clean.
 
-**Checkpoint**: Milestone 1 DONE — MVP usable — pending hardware gate (T035/T036)
+**Checkpoint**: Milestone 1 DONE — MVP usable (hardware gate passed 2026-11-16, macOS 26.5.2, fw 96) ✅
 
 ---
 
