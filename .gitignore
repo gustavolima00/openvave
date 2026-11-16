@@ -7,3 +7,6 @@ build/
 .env
 *.log
 captures/private/
+
+# exploration scripts (throwaway; findings live in specs/protocol/)
+poc/
