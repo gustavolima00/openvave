@@ -137,7 +137,7 @@ def test_deprecated_known_fields_alias() -> None:
         for s in KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
     ] == [
         (6, "knob_unknown", "knob (which one: unknown)", "observed"),
-        (15, "reverb_decay", "reverb decay", "observed"),
+        (15, "reverb_decay", "reverb decay", "confirmed"),
         (16, "reverb_mix", "reverb mix?", "hypothesis"),
         (17, "ir_cab", "IR cab?", "hypothesis"),
     ]

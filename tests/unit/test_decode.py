@@ -32,7 +32,7 @@ def summary(read: RegionRead) -> list[tuple[int, str | None, int, str, str | Non
 def test_preset_fields() -> None:
     assert summary(PRESET_READ) == [
         (6, "knob_unknown", 60, "60", "observed"),
-        (15, "reverb_decay", 5, "5", "observed"),
+        (15, "reverb_decay", 5, "5", "confirmed"),
         (16, "reverb_mix", 4, "4", "hypothesis"),
         (17, "ir_cab", 7, "#7", "hypothesis"),
     ]

@@ -30,7 +30,7 @@ ECHO_LEN = 8
 FW97_IDENTITY = b"TANK-Gv2_097".ljust(27, b"\x00")
 DECODED_LINES = [
     "      [6]  knob (which one: unknown)   60      0–127      observed",
-    "      [15] reverb decay                 5      0–127      observed",
+    "      [15] reverb decay                 5      0–127      confirmed",
     "      [16] reverb mix                   4      0–127      hypothesis ?",
     "      [17] IR cab                      #7      selector   hypothesis ?",
     "      unknown: 0 1 2 3 4 5 7 8 9 10 11 12 13 14 18 19 20",
@@ -90,7 +90,7 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
     assert (preset["type"], preset["address"], preset["length"]) == (4, "0x10000000", 21)
     assert [(f["offset"], f["name"], f["value"], f["confidence"]) for f in preset["fields"]] == [
         (6, "knob_unknown", 60, "observed"),
-        (15, "reverb_decay", 5, "observed"),
+        (15, "reverb_decay", 5, "confirmed"),
         (16, "reverb_mix", 4, "hypothesis"),
         (17, "ir_cab", 7, "hypothesis"),
     ]
@@ -145,7 +145,7 @@ def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:
         "size": 1,
         "name": "reverb_decay",
         "value": 5,
-        "confidence": "observed",
+        "confidence": "confirmed",
         "raw": 5,
         "mask": None,
         "encoding": "continuous",

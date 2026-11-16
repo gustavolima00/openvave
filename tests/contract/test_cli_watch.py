@@ -13,7 +13,8 @@ import pytest
 from referencing import Registry, Resource
 
 from openvave.cli import main
-from openvave.models import DeviceInfo
+from openvave.models import DeviceInfo, Region
+from openvave.protocol import BYTE_MAP
 from openvave.transport import Transport
 from tests.support.captures import REPO_ROOT
 from tests.support.watch import (
@@ -36,6 +37,9 @@ REGISTRY = Registry().with_resources(
 )
 VALIDATOR = jsonschema.Draft202012Validator(WATCH_SCHEMA, registry=REGISTRY)
 PEDAL = DeviceInfo("3F1A-UUID", "TANK-Gv2_BLE", -58)
+BYTE_MAP_LABELS = {
+    e.offset: e.label for e in BYTE_MAP if e.region is Region.CURRENT_PRESET and e.name
+}
 HINT = "hint: no preset byte changed in 30 s and the pedal is not in edit mode"
 
 # The contracts/cli.md walkthrough: edit mode on, reverb decay sweep, a co-moving step.
@@ -421,3 +425,21 @@ def test_only_query_and_reads_sent(
     run = run_watch(capsys, monkeypatch, tmp_path, ["--no-record", "--duration", "2"])
     assert {f[2] for f in run.fake.sent} <= {0x11, 0x23}
     assert run.fake.closed
+
+
+def test_long_labels_keep_the_value_column_aligned(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run = run_watch(
+        capsys,
+        monkeypatch,
+        tmp_path,
+        ["--no-record", "--duration", "1"],
+        cycles=[{}, {"preset": {6: 74, 7: 0x50, 15: 9}}],
+    )
+    assert run.code == 0, run.err
+    lines = [line for line in run.out.splitlines() if "preset[" in line and "→" in line]
+    assert len(lines) == 3
+    arrows = {line.index("→") for line in lines}
+    assert len(arrows) == 1, lines
+    assert re.search(re.escape(BYTE_MAP_LABELS[6]) + r" +60 → 74", lines[0]), lines[0]

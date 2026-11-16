@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from pathlib import Path
 
 import pytest
 
+from openvave.cli.render import WATCH_REGION_KEYS
 from openvave.errors import ConnectionLostError
 from openvave.models import Region, WatchChange, WatchStart
 from openvave.protocol import build_query, build_read
 from openvave.session import TankG
 from openvave.transport.fake import FakeTransport
-from tests.support.captures import DEVICE_INFO
+from tests.support.captures import CAPTURES_DIR, DEVICE_INFO, load_capture
 from tests.support.watch import BASE, SleepRecorder, watch_fake, watch_script
 
 WATCHED = (Region.GLOBAL, Region.CURRENT_PRESET, Region.STATUS)
@@ -194,3 +196,39 @@ async def test_break_stops_and_closes() -> None:
             break
     assert fake.closed
     assert len(fake.sent) == 1 + 3
+
+
+# -- replay of committed hardware excerpts (T032) ------------------------------------------------
+
+REVERB_DECAY_STEP = CAPTURES_DIR / "fw96" / "20261116-step-reverb_decay.jsonl"
+
+
+def recorded_changes(path: Path) -> list[list[tuple[str, int, int, int]]]:
+    """The excerpt's own ``change`` lines, grouped per cycle, in order."""
+    by_cycle: dict[int, list[tuple[str, int, int, int]]] = {}
+    for record in load_capture(path).records:
+        if record["event"] == "change":
+            change = (record["region"], record["offset"], record["old"], record["new"])
+            by_cycle.setdefault(record["cycle"], []).append(change)
+    return list(by_cycle.values())
+
+
+async def replayed_changes(path: Path) -> list[list[tuple[str, int, int, int]]]:
+    cycles = len(load_capture(path).rx_all("global"))
+    events = await collect(FakeTransport.from_capture(path), cycles=cycles)
+    assert isinstance(events[0], WatchStart)
+    return [
+        [(WATCH_REGION_KEYS[c.region], c.offset, c.old, c.new) for c in e.changes]
+        for e in events[1:]
+        if isinstance(e, WatchChange)
+    ]
+
+
+async def test_reverb_decay_excerpt_replays_to_the_recorded_changes() -> None:
+    replayed = await replayed_changes(REVERB_DECAY_STEP)
+    assert replayed == recorded_changes(REVERB_DECAY_STEP)
+    values = [new for cycle in replayed for (_, _, _, new) in cycle]
+    assert {(region, offset) for cycle in replayed for (region, offset, _, _) in cycle} == {
+        ("preset", 15)
+    }
+    assert min(values) == 0 and max(values) == 127

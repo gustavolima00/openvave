@@ -289,13 +289,15 @@ def watch_change_lines(event: WatchChange, t: float) -> list[str]:
     """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked."""
     lines = []
     count = len(event.changes)
-    for i, change in enumerate(event.changes):
+    cells = [_change_cells(change) for change in event.changes]
+    # Labels longer than the column widen it for this event, so values stay aligned.
+    width = max([WATCH_NAME_WIDTH, *(len(name) + 1 for name, _, _ in cells)])
+    for i, (change, (name, old, new)) in enumerate(zip(event.changes, cells, strict=True)):
         time_cell = f"+{t:.2f}s" if i == 0 else ""
         location = f"{WATCH_REGION_KEYS[change.region]}[{change.offset}]"
-        name, old, new = _change_cells(change)
         line = (
             f"{time_cell:>{WATCH_TIME_WIDTH}}  {location:<{WATCH_LOCATION_WIDTH}}"
-            f"{name:<{WATCH_NAME_WIDTH}}{old:>{WATCH_VALUE_WIDTH}} → {new}"
+            f"{name:<{width}}{old:>{WATCH_VALUE_WIDTH}} → {new}"
         )
         if i == 0 and count > 1:
             line += f"     (co-moving: {count})"

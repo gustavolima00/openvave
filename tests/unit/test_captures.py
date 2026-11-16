@@ -43,15 +43,30 @@ def test_rx_chunks_concatenate_to_rx() -> None:
         assert b"".join(cap.rx_chunks[label]) == rx
 
 
-@pytest.mark.parametrize("path", sorted(CAPTURES_DIR.glob("**/*.jsonl")), ids=str)
+COMMITTED = sorted(
+    p for p in CAPTURES_DIR.glob("**/*.jsonl") if "private" not in p.relative_to(CAPTURES_DIR).parts
+)
+"""Committed captures only: ``captures/private/`` is git-ignored raw material."""
+
+
+@pytest.mark.parametrize("path", COMMITTED, ids=lambda p: str(p.relative_to(CAPTURES_DIR)))
 def test_no_mac_like_identifiers_in_meta_or_labels(path: object) -> None:
     for line in open(str(path), encoding="utf-8"):
         record = json.loads(line)
-        texts = [record.get("label", "")]
+        texts = [record.get("label") or "", record.get("text") or ""]
         if record.get("event") == "meta":
             texts.append(json.dumps(record))
         for text in texts:
             assert not MAC_LIKE.search(text), f"MAC-like value in {path}: {text!r}"
+
+
+@pytest.mark.parametrize("path", COMMITTED, ids=lambda p: str(p.relative_to(CAPTURES_DIR)))
+def test_committed_frames_valid(path: object) -> None:
+    cap = load_capture(str(path))
+    for label, frames in cap.all_rx.items():
+        _frame_ok(cap.tx(label))
+        for frame in frames:
+            _frame_ok(frame)
 
 
 def test_repeated_labels_rx_all_in_order(tmp_path: Path) -> None:
