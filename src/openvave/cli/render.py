@@ -377,9 +377,9 @@ MODE_NAMES = {0: "edit", 1: "normal", 2: "tuner"}
 REFUSAL_TEXT = {
     "not_edit_mode": "the pedal is not in edit mode",
     "out_of_range": "value out of range",
-    "untested_firmware": "firmware not covered by a confirmed write gate (--experimental)",
-    "experimental_required": "message not confirmed yet (--experimental)",
-    "edits_would_be_discarded": "unsaved edits would be discarded (--discard-edits)",
+    "untested_firmware": "firmware not covered by a confirmed write gate; needs --experimental",
+    "experimental_required": "message not confirmed yet; needs --experimental",
+    "edits_would_be_discarded": "unsaved edits would be discarded; needs --discard-edits",
 }
 
 
@@ -423,7 +423,7 @@ def _refusal_lines(plan: WritePlan) -> list[str]:
         return []
     detail = REFUSAL_TEXT.get(plan.refusal, plan.refusal)
     if plan.refusal == "experimental_required":
-        detail = f"{plan.target.kind} is '{plan.confidence}' (--experimental)"
+        detail = f"{plan.target.kind} is '{plan.confidence}'; needs --experimental"
     return [f"  refused: {plan.refusal} ({detail})"]
 
 

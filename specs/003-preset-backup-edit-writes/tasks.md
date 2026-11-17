@@ -197,6 +197,16 @@ milestone.
     and `field`; `encode_frame(0x22, body)` itself refuses non-allowlisted bodies; with `--json`
     an exit-8 failure leaves stdout empty (001 rule), and human output prints the not-applied result.
 - [ ] T045 Owner, hardware (dry-run only, no write): in edit mode run `uv run openvave set gain 90 --dry-run --trace` and `uv run openvave preset select 2C --dry-run --discard-edits --trace`; confirm the printed frames, `dry run: nothing sent`, and that the trace contains only `0x11`/`0x23`; leave edit mode without saving; record in the PR
+  - Evidence, `set gain 90` (2026-11-17, fw 96, owner's terminal): global `00 00 01 00` (1B, mode
+    0 = edit); edit buffer `00 00 00 01 0f 00 7f 00 00 00 00 00 00 00 00 05 04 07 43 16 43` (the
+    owner's unsaved pedal edits: amp off, amp type 0, gain 127, treble…delay time 0). Output
+    `Set gain 127 → 90   (current preset 1B, edit mode)`, frame `00 59 22 16 00 00 04 04 00 00
+    10 0e 00 00 0f 00 5a 00 00 00 00 00 00 00 00 05 04 07 60`: the knob block rebuilt from the
+    live buffer with only byte 6 changed (re-encoded independently, allowlisted by the audit).
+    `refused: experimental_required`, `dry run: nothing sent`, stderr empty. Trace: one `0x11`,
+    two `0x23`, no `0x22`. The refusal line read `… 'hypothesis' (--experimental))`; the wording
+    is now `… is 'hypothesis'; needs --experimental`.
+  - `preset select 2C --dry-run --discard-edits --trace`: pending.
 - [X] T046 Owner, hardware: outside edit mode run `uv run openvave set gain 90 --dry-run`; confirm it prints the `not_edit_mode` refusal and exits 0; record in the PR
   - Evidence (2026-11-17, fw 96, owner's terminal, run with `--trace`): global read `00 00 01 01`
     (1B, mode 1 = normal), edit buffer = public 1B preset. Output `Set gain 60 → 90   (current
