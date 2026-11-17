@@ -66,14 +66,16 @@ offset  size  field
 |---|---|---|---|
 | query name + version (`CMD_Q_NAME_AND_VER`) | `0x11` | empty → request is `00 59 11 00 00 00 FF` | 27 bytes ASCII, NUL padded (`TANK-Gv2_096`) |
 | read memory | `0x23` | type(1) · address(4, LE) · length(3, LE) | same 8-byte prefix · data(length) |
-| write memory | `0x22` | type(1) · address(4, LE) · length(3, LE) · data | 1 status byte (reply frame = 8 bytes) |
+| write memory | `0x22` | type(1) · address(4, LE) · length(3, LE) · data (length may be 0) | 1 status byte (reply frame = 8 bytes); see "Write acknowledgement" |
 | erase | `0x21` | 5 bytes | not analysed; **never sent by this project** without an explicit unsafe opt-in |
 | MIDI over command channel | `0x15` | not analysed yet | — |
 
 Worked example (read the current preset): `00 59 23 08 00 00 04 00 00 00 10 15 00 00 D6`.
 
-Reply handling in the app: the command byte (offset 2) is echoed back; a write reply carries a
-status byte at offset 6; read data starts at offset 14. Replies longer than one notification
+Reply handling in the app: a read reply echoes the command byte (offset 2) and the 8-byte
+type/address/length prefix; read data starts at offset 14. A write reply is different (see
+"Write acknowledgement" below): offset 2 is `0x00`, not the command, and offset 6 is a status
+byte. Replies longer than one notification
 are reassembled from consecutive `ae42` notifications using the length field.
 Reassembly across notifications stays **observed** (from the app's code only): in the committed
 capture every reply, the largest being 47 bytes, fit in one notification at ATT MTU 185.
@@ -151,10 +153,10 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
 | preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x05` |
 | preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | confirmed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl`, `captures/fw96/20261116-step-reverb_mix-1917.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). Session 19:17 (labelled `reverb mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x04` |
 | preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. fw96: `0x07` |
-| preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
-| preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x16` |
-| preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. fw96: `0x43` |
-| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. fw96: `0x01` |
+| preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
+| preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): green component of the preset's LED colour. fw96: `0x16` |
+| preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): blue component of the preset's LED colour. fw96: `0x43` |
+| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. Hypothesis (app code, 2026-11-17): a loopback on/off flag, `1` = on (see "Status byte = loopback flag"). fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 
@@ -285,21 +287,113 @@ per second ("glob polling"). This is the 1 s write/notify pair seen in the logs 
 
 ### Address map
 
-| Address | Type | Len | Seen as | Meaning (hypothesis) |
-|---|---|---|---|---|
-| `0xD0000000` | 5 | 32 | read at handshake | device info block |
-| `0xD0000000` | 4 | 1 | read after preset load | status byte (current preset index?) |
-| `0x20000000` | 4 | 4 | read on connect | global settings |
-| `0x10000000` | 4 | 21 | read on connect and after each `0xE000000x` write | current/edit preset buffer (1 patch = 21 B) |
-| `0x10000001` | 4 | 1 | write | single preset field at offset 1 (effect on/off or module select?) |
-| `0x10000004` | 4 | 14 | write, many times while editing | parameter block at offsets 4–17 of the patch (knob moves send the whole block) |
-| `0xE0000002` | 4 | 1 | write, then preset re-read | command register (preset change?) |
-| `0xE0000003` | 4 | 1 | write, then preset re-read | command register (preset change?) |
+Updated 2026-11-17 from the app's code (see "Stored presets, switching and saving"). "Log" =
+seen in the app's logcat; "code" = only read from the app's compiled code.
+
+| Address | Type | Len | Op | Meaning | Confidence |
+|---|---|---|---|---|---|
+| `0x00000000` | 4 | 758 | read (code) | stored-preset image: 2-byte header + 36 × 21 B | hypothesis |
+| `0x00000002 + 21·i` | 4 | 21 | read, write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | hypothesis |
+| `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
+| `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (log, k = 1); hypothesis for the others |
+| `0x10000004` | 4 | 14 | write (log) | the 14 knob bytes (preset 4–17) in one write | observed |
+| `0x10000012` | 4 | 3 | write (code) | preset LED colour R, G, B (preset 18–20) | hypothesis |
+| `0x20000000` | 4 | 4 | read (log, hardware) | global block (bank browsed, bank, slot, mode) | confirmed (read) |
+| `0xD0000000` | 5 | 32 | read (log, hardware) | device info block | confirmed (read) |
+| `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
+| `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3) | load stored preset `i` | observed (log); meaning hypothesis |
+| `0xF0000000` | 4 | 0 | write, empty data (code) | commit / save stored presets | hypothesis |
+
+Types 5 and 6 appear elsewhere in the app: type 5 for the device info read and for reading
+resource (model) names on other products; type 6 only together with the erase command (`0x21`,
+erase in 4096-byte steps, then write) in factory-restore flows of other products and in a generic
+"restore all" path. No Tank-G flow found uses type 6 or erase (hypothesis). The app also has
+registers `0x70000000`, `0x70200000` (swap two presets by index), `0x70300000`, `0x70400000` and
+`0x70500000` (snapshot slots); the Tank-G screens do not use them (it swaps presets by reading and
+rewriting both slots instead), so they are out of scope.
 
 ### Storage layout (app-declared)
 
 `patchSize = 21 B × presetNum = 36 = 756 B`, `presetStoreOffset = 2`, factory image 758 B,
-tail 0 B (the app verifies this layout for the `tankG` product).
+tail 0 B (the app verifies this layout for the `tankG` product). From the app's code
+(2026-11-17, hypothesis until read on hardware): the image lives at type 4, address `0`; stored
+preset `i` starts at address `presetStoreOffset + 21·i = 2 + 21·i`, so the last one (9D, i = 35)
+ends at address 757. The 2 header bytes are not explained by the app.
+
+### Stored presets, switching and saving (app code, 2026-11-17)
+
+Source: a local analysis of the official app's compiled code (v3.9.2314, no vendor code kept;
+described in our own words). Every row below is **hypothesis** unless it says otherwise; nothing
+here has been sent to the pedal yet. The app's Tank-G screen shares its preset logic with the
+app's "Tank-B" product code.
+
+**Preset index.** The app computes the loaded preset as `global[1] · 4 + global[2]` (bank · 4 +
+slot, 0–35), and keeps its previous index while `global[2]` is `0xFF`. That matches the one-cycle
+loading state seen on hardware (global 2 = `ff`, see Watch session findings).
+
+**Reading every stored preset (backup).** The app's "export all presets" reads the whole image
+with **one** read: type 4, address `0`, length 758 (the app takes the length from its factory
+image; fallback 36 × 21). Request: `00 59 23 08 00 00 04 00 00 00 00 F6 02 00 03`. The reply is
+758 + 15 = 773 bytes, so it spans several `ae42` notifications (4 at the app's MTU 247, 5 at
+macOS's 185) and needs the reassembly that is still only observed from code. The app splits a
+read into chunks of at most 1015 bytes, so 758 B is a single request. When it swaps two presets
+the app instead reads each one alone: type 4, address `2 + 21·i`, length 21 (one notification,
+same frame shape as the current-preset read that is already confirmed). Either way the backup
+is read-only (`0x23`) and its replies can be checked with the usual checksum.
+
+**Switching preset (`0xE000000x`).** The app's "switch preset" writes one byte `01` (type 4) to
+`0xE0000000 + i`, where `i` is the 0-based stored preset index, then waits 100 ms and re-reads
+the edit buffer `0x10000000`. Request for preset `i = 2` (1C):
+`00 59 22 09 00 00 04 02 00 00 E0 01 00 00 01 17`. The logged `0xE0000002` and `0xE0000003`
+writes were therefore loads of presets 1C and 1D, each followed by the preset re-read seen in
+the log (log: observed; meaning: hypothesis). It is the only preset-selection write the app has;
+there is no up/down command.
+
+**Saving.** Every flow that changes stored presets ends the same way: write the bytes into the
+stored area (address `2 + 21·i` for one preset, or the whole image at address `0` for "import
+all" / factory restore), wait (300 ms in the save path), then write **zero bytes** to
+`0xF0000000` (request `00 59 22 08 00 00 04 00 00 00 F0 00 00 00 0B`), wait 100 ms, then switch
+to the preset (`0xE0000000 + i`). The empty write to `0xF0000000` is the only commit-like
+command found, which suggests the stored area is a RAM copy that `0xF0000000` writes to flash.
+Whether a write to `2 + 21·i` without the commit survives a power cycle is unknown. The app's
+flows:
+
+| App action | Writes, in order |
+|---|---|
+| Save edited preset to slot `i` | 21 B to `2 + 21·i` → empty write to `0xF0000000` → `01` to `0xE0000000 + i` |
+| Swap presets `a` and `b` | read both (21 B each) → write each to the other's address → `0xF0000000` → `0xE0000000 + …` |
+| Import all / factory restore presets | 758 B to address `0` → `0xF0000000` → reload |
+| Move a knob / switch / colour | `0x10000004` (14 B), `0x10000000 + k` (1 B), `0x10000012` (3 B): edit buffer only, no commit |
+
+**Volatile vs persistent.** Writes to the edit buffer (`0x10000000`–`0x10000014`) are never
+followed by a commit in the app; leaving edit mode without saving restores the stored preset
+(observed on hardware for pedal-side edits). Writes to the stored area at address `0…757` are
+always followed by the commit, so treat them as persistent. The loopback flag at `0xD0000000` is
+written alone, without a commit; whether it survives a power cycle is unknown.
+
+### Write acknowledgement (app code, 2026-11-17)
+
+A write reply is an 8-byte frame. The app accepts it only when **byte 2 = `0x00` and byte 6 =
+`0x00`**, i.e. the ACK is `00 59 00 01 00 00 00 FF` (command byte `00`, one body byte `00`,
+checksum `FF`). Anything else is a NAK: the app logs the reply and flushes its command queue; it
+retries a send up to 3 times only when no reply arrives. No other status value is named in the
+app, so non-zero status codes are unknown. (Hypothesis; the logged writes all succeeded and the
+log shows 8-byte replies, consistent with this.)
+
+### Preset LED colour (app code, 2026-11-17)
+
+The app's preset structure is: 4 one-byte block switches (amp, mod, delay, reverb), a 14-byte
+knob array, then a 3-byte `rgb` array; it reads R, G and B at preset offsets 18, 19 and 20 and
+sends a colour change as a 3-byte write to `0x10000012`. The stored values look like colours
+(9A `ff 00 00`, 1A `ff f7 00`, 9B `55 aa ff`), so preset 18–20 are very likely the LED colour of
+the preset (hypothesis; the owner could confirm by comparing a preset's LED with its bytes).
+
+### Status byte = loopback flag (app code, 2026-11-17)
+
+On connect the app reads type 4 `0xD0000000` × 1 and stores "loopback enabled" = (byte == 1);
+its loopback toggle writes `01` or `00` (type 4, 1 byte) to the same address. The always-`01`
+status byte is therefore most likely loopback **on** (hypothesis; what loopback does on the
+Tank-G, probably routing USB playback back into the USB recording, is not known).
 
 ## Next steps
 
@@ -312,14 +406,18 @@ tail 0 B (the app verifies this layout for the `tankG` product).
 - ~~Correlate `0x10000004` byte positions with specific knobs~~ done (2026-11-16): preset 4–17
   are the 14 front-panel knobs, preset 0–3 the block switches (see the byte map). The app's
   14-byte write to `0x10000004` therefore carries every knob of the preset at once.
-- Still unknown (read-only work): preset 18–20 (per preset, no control moves them); the status
-  byte (always `01`); the names of the 9 amp types and 9 IR cabs; any app-only settings not on
-  the front panel.
-- Questions for the write spec: is the edit buffer (`0x10000000`) written directly while the
-  knobs keep their physical positions (see "Edit buffer vs knob position")? Do `0xE0000002/3`
-  select a slot or save one (the app re-reads the preset after them; global 0–2 hold the bank and
-  slot)? How are stored presets addressed (`presetStoreOffset = 2`, 36 × 21 B)?
-- Determine what `0xE0000002/3` do (preset up/down? select index?).
+- Preset 18–20 and the status byte now have app-code hypotheses (LED colour; loopback flag).
+  Still unknown: the 2 header bytes of the stored image; the names of the 9 amp types and 9 IR
+  cabs; non-zero write status codes; whether an uncommitted stored-area write persists.
+- Read-only hardware check of the storage hypothesis (2026-11-17, not run yet):
+  `poc/probe_storage.py` reads the header (`0x0` × 2), each preset (`2 + 21·i` × 21) and the whole
+  image (`0x0` × 758), then checks that the image equals the 36 single reads and that the loaded
+  preset's stored bytes equal the edit buffer (outside edit mode).
+- Answered from app code (hypothesis until replayed): `0xE0000000 + i` loads stored preset `i`;
+  stored presets are at `2 + 21·i`; saving is an empty write to `0xF0000000`. Still open for the
+  write spec: does writing the edit buffer move the stored value or only the sound while the
+  knobs keep their physical positions (see "Edit buffer vs knob position")? Does a host write
+  need edit mode (global 3 = `0`)?
 
 ### Host observations (from the 001 milestone gates)
 
