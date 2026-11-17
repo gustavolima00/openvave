@@ -23,6 +23,7 @@ from openvave.models import (
     WritePlan,
     WriteResult,
 )
+from openvave.protocol.bytemap import reverb_decay_parts
 from openvave.protocol.decode import decode_field, decode_region
 from openvave.protocol.storage import EXPECTED_HEADER, position
 from openvave.protocol.writes import WRITABLE_FIELDS
@@ -95,6 +96,18 @@ def _range_cell(field: DecodedField) -> str:
     return f"{entry.min}–{entry.max}"
 
 
+def app_reading(field: DecodedField) -> str | None:
+    """How the phone app shows the field, for human output only (JSON keeps the raw value).
+
+    Only ``reverb_decay`` has one: its colour section and position, ``blue 6`` or ``orange X``
+    (command-layer.md "Reverb decay sections"). ``None`` for every other field and out of range.
+    """
+    if field.entry.name != "reverb_decay" or field.out_of_range:
+        return None
+    section, position = reverb_decay_parts(field.value)
+    return f"{section} {'X' if position is None else position}"
+
+
 def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     """``[15] reverb decay   5   0–127   observed`` (contracts/cli.md column layout)."""
     entry = field.entry
@@ -107,6 +120,9 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
         line += " ?"
     if field.out_of_range:
         line += "  OUT OF RANGE"
+    reading = app_reading(field)
+    if reading is not None:
+        line += f"  app: {reading}"
     return line
 
 
@@ -274,12 +290,20 @@ def watch_label_line(text: str) -> str:
     return f"── label: {text} ──"
 
 
+def _with_reading(field: DecodedField) -> str:
+    """``5`` or, where the app has its own reading, ``5 (blue 6)``."""
+    reading = app_reading(field)
+    return field.display if reading is None else f"{field.display} ({reading})"
+
+
 def _change_cells(change: ByteChange) -> tuple[str, str, str]:
     """(label, old, new) in the field's display form, or raw hex for unknown/flag bytes."""
     if change.field is not None:
-        old = decode_field(change.field, change.old).display
-        new = decode_field(change.field, change.new).display
-        return change.field.label, old, new
+        return (
+            change.field.label,
+            _with_reading(decode_field(change.field, change.old)),
+            _with_reading(decode_field(change.field, change.new)),
+        )
     name = " / ".join(e.label for e in change.fields) if change.fields else "unknown"
     return name, f"0x{change.old:02x}", f"0x{change.new:02x}"
 
@@ -291,12 +315,14 @@ def watch_change_lines(event: WatchChange, t: float) -> list[str]:
     cells = [_change_cells(change) for change in event.changes]
     # Labels longer than the column widen it for this event, so values stay aligned.
     width = max([WATCH_NAME_WIDTH, *(len(name) + 1 for name, _, _ in cells)])
+    # Same for old values carrying an app reading (``5 (blue 6)``): arrows stay in one column.
+    value_width = max([WATCH_VALUE_WIDTH, *(len(old) for _, old, _ in cells)])
     for i, (change, (name, old, new)) in enumerate(zip(event.changes, cells, strict=True)):
         time_cell = f"+{t:.2f}s" if i == 0 else ""
         location = f"{WATCH_REGION_KEYS[change.region]}[{change.offset}]"
         line = (
             f"{time_cell:>{WATCH_TIME_WIDTH}}  {location:<{WATCH_LOCATION_WIDTH}}"
-            f"{name:<{width}}{old:>{WATCH_VALUE_WIDTH}} → {new}"
+            f"{name:<{width}}{old:>{value_width}} → {new}"
         )
         if i == 0 and count > 1:
             line += f"     (co-moving: {count})"

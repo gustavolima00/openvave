@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `preset dump` and `watch` human output show reverb decay (preset byte 15) the way the
+  phone app does, as colour section and position: `app: blue 6` after the field line, and
+  `5 (blue 6) → 64 (orange 21)` in watch changes. JSON is unchanged (`schema_version` 2, raw value
+  only). Library: `openvave.cli.render.app_reading()`.
+
+### Documentation
+
+- [`specs/protocol/app-features.md`](specs/protocol/app-features.md): inventory of the official
+  app's Tank-G features and the messages behind each (edit mode, save, bypass, loopback, import /
+  export, factory restore), with confidence, risk and a proposed scope for spec 004.
+
 ## [0.3.0]
 
 The first release that **writes** to the pedal, and only to the edit buffer: a full backup of the

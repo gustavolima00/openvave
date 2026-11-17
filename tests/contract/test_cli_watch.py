@@ -129,8 +129,8 @@ def test_human_walkthrough(
     assert strip_time(body[1]) == "  global[3]   mode              normal → edit"
     assert re.match(r"^ *\+\d+\.\d\ds  ", body[1])
     assert body[2] == "── label: reverb decay min→max ──"
-    assert strip_time(body[3]) == "  preset[15]  reverb decay         5 → 64"
-    assert strip_time(body[4]) == "  preset[15]  reverb decay        64 → 127"
+    assert strip_time(body[3]) == "  preset[15]  reverb decay      5 (blue 6) → 64 (orange 21)"
+    assert strip_time(body[4]) == "  preset[15]  reverb decay      64 (orange 21) → 127 (green 40)"
     assert body[5] == "── label: reverb mix only ──"
     assert strip_time(body[6]) == "  preset[16]  reverb mix           4 → 90     (co-moving: 2)"
     assert body[7] == "         preset[17]  IR cab              #7 → #8"

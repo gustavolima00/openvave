@@ -63,7 +63,8 @@ def test_release_is_not_left_under_unreleased() -> None:
     assert text.index(f"## [{VERSION}]") < text.index("## [0.2.0]")
     unreleased = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", text, re.S | re.M)
     assert unreleased is not None
-    assert "###" not in unreleased.group(1), "entries left under [Unreleased]"
+    # Later changes may be listed under [Unreleased]; the 0.3.0 entries must not be.
+    assert "openvave preset backup [--output" not in unreleased.group(1), "0.3.0 left unreleased"
 
 
 def test_versions_agree() -> None:

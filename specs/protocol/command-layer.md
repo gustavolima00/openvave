@@ -2,6 +2,9 @@
 
 Status: early research. Confidence per Constitution II.
 
+Which app feature uses which message (edit mode, save, bypass, import/export, factory restore):
+[app-features.md](app-features.md).
+
 Evidence: the official app's own logcat output, recovered from an Android bugreport on 2026-11-16
 (`captures/private/android/`, not committed). App: `com.digAmp.m_efcs` ("M-effects")
 v3.9.2314, Flutter + `flutter_blue_plus`. The app logs its command queue (`[CmdQ]`) with
@@ -283,7 +286,12 @@ blue 6, 1D `09` blue 10, 2B `18` blue 25, 9A/9B/9D `0c` blue 13, 9C `38` orange 
 
 Code: `REVERB_SECTIONS`, `REVERB_SECTION_SIZE`, `REVERB_SECTION_STEPS` and `reverb_decay_parts`
 in `src/openvave/protocol/bytemap.py`; `tests/unit/test_bytemap_doc.py` checks this table
-against them. `preset dump` still shows the raw value.
+against them. Since the unreleased change after 0.3.0, the human output of `preset dump`
+and `watch` add this reading (`5    0–127   confirmed  app: blue 6`, `5 (blue 6) → 64 (orange 21)`);
+JSON still carries only the raw value.
+
+The app draws MOD FX (byte 11) and DLY Mix (byte 13) with the same three-section widget
+(hypothesis, app code; see [app-features.md](app-features.md)).
 
 ### Control inventory (fw 96)
 
@@ -332,12 +340,14 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0x00000000` | 4 | 758 | read (code, hardware) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17) |
 | `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write hypothesis |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
+| `0x10000000` | 4 | 21 | write (code) | whole edit buffer, after import all / factory restore | hypothesis |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1; openvave, 2026-11-17) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (write, all k; gate session A) |
 | `0x10000004` | 4 | 14 | write (log; openvave, 2026-11-17) | the 14 knob bytes (preset 4–17) in one write | confirmed (write; gate sessions A and B) |
 | `0x10000012` | 4 | 3 | write (code; openvave, 2026-11-17) | preset bytes 18–20 (LED colour R, G, B per app code) | write observed (gate session A); LED meaning hypothesis |
 | `0x20000000` | 4 | 4 | read (log, hardware) | global block (bank browsed, bank, slot, mode) | confirmed (read) |
 | `0xD0000000` | 5 | 32 | read (log, hardware) | device info block | confirmed (read) |
 | `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
+| `0xE1000000 + i` | 4 | 1 | write `01` (code) | BYPASS on for loaded preset `i`; off = select `i` again | hypothesis |
 | `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
 | `0xF0000000` | 4 | 0 | write, empty data (code) | commit / save stored presets | hypothesis |
 

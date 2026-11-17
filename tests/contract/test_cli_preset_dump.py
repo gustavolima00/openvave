@@ -44,7 +44,7 @@ DECODED_LINES = [
     "      [12] mod speed                      0    0–127      confirmed",
     "      [13] delay mix                      0    0–127      confirmed",
     "      [14] delay time                     0    0–127      confirmed",
-    "      [15] reverb decay                   5    0–127      confirmed",
+    "      [15] reverb decay                   5    0–127      confirmed  app: blue 6",
     "      [16] reverb mix                     4    0–127      confirmed",
     "      [17] IR cab                        #7    selector   confirmed",
     "      unknown: 18 19 20",
