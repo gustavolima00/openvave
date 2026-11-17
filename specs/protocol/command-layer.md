@@ -338,7 +338,7 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | Address | Type | Len | Op | Meaning | Confidence |
 |---|---|---|---|---|---|
 | `0x00000000` | 4 | 758 | read (code, hardware) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17) |
-| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write hypothesis |
+| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code; check 3, i = 1) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write observed with unchanged bytes only (check 3) |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
 | `0x10000000` | 4 | 21 | write (code) | whole edit buffer, after import all / factory restore | hypothesis |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1; openvave, 2026-11-17) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (write, all k; gate session A) |
@@ -349,7 +349,7 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
 | `0xE1000000 + i` | 4 | 1 | write `01` (code; check 2, 2026-11-17, i = 1) | BYPASS on for loaded preset `i`: buffer reads all `00`, global slot `ff`; off = select `i` again | observed (one session) |
 | `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
-| `0xF0000000` | 4 | 0 | write, empty data (code) | commit / save stored presets | hypothesis |
+| `0xF0000000` | 4 | 0 | write, empty data (code; check 3) | commit / save stored presets | ACK observed after an unchanged slot write (check 3); that it persists changes is hypothesis |
 
 Types 5 and 6 appear elsewhere in the app: type 5 for the device info read and for reading
 resource (model) names on other products; type 6 only together with the erase command (`0x21`,

@@ -98,7 +98,7 @@ names none of them. REV Mix (16) and MOD Speed / DLY Time are plain 0–127 knob
 
 | Control | Messages | Confidence | Risk |
 |---|---|---|---|
-| Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | hypothesis | persistent |
+| Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | sequence observed as a no-op (check 3); a changed save not yet sent | persistent |
 | Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis | persistent |
 | BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | observed (check 2) | volatile: all blocks off, clean sound; edit buffer reads all zero and global slot reads `ff` |
 | BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | observed (check 2) | volatile; reloads the stored preset, so unsaved edits are lost |
@@ -147,9 +147,32 @@ after. Ordered by risk:
 1. ~~**Edit-buffer write in normal mode**~~ done 2026-11-17: applied, mode stays normal, select
    restores, backups identical (see "Edit mode from the computer").
 2. ~~**BYPASS**~~ done 2026-11-17, see "BYPASS on hardware" below.
-3. **Save as a no-op** (persistent, but writes the bytes already there): write 1B's own stored 21
-   bytes back to `2 + 21·5` + commit + select. The backup after must equal the one before. Then a
-   real save of a changed field, and a restore of the original bytes from the backup.
+3. ~~**Save as a no-op**~~ done 2026-11-17, see "Save on hardware" below. Next: a real save of
+   one changed field into a slot, a power cycle to check it persists, then a restore of the
+   original bytes from the backup.
+
+## Save on hardware (check 3, 2026-11-17, fw 96, observed as a no-op)
+
+One session, owner at the pedal, 1B in normal mode. The app's save sequence with the bytes 1B
+already holds (read fresh from the pedal), so stored data must not change:
+
+- 21 bytes to stored slot 1B (`0x17`), the same bytes: ACK; stored 1B read back identical.
+- 300 ms, then the empty write to `0xF0000000` (commit): ACK; global and the edit buffer
+  unchanged.
+- 100 ms, then select 1B: ACK; 1B loaded, buffer = stored 1B, same sound.
+- The owner heard a mute of a few milliseconds during the sequence, like a blink, and saw no
+  LED or display change. Whether it came from the commit (for example while the pedal writes its
+  flash) or from the reload by the select is not separated; checks 1 and 2 also ended with a
+  select and no mute was reported there.
+- Backups before and after were identical (all 36 presets and the image), and equal to the
+  backup taken before check 1.
+
+So the pedal accepts the stored-area write and the commit and harms nothing when the bytes are
+unchanged. It does not yet show that a changed slot write is stored, nor that the commit is what
+makes it survive a power cycle.
+
+Evidence: `captures/fw96/20261117-check3-noop_save.jsonl` (not a `-gate-` excerpt: openvave cannot
+encode these writes yet), checked by `tests/integration/test_noop_save_capture.py`.
 
 ## BYPASS on hardware (check 2, 2026-11-17, fw 96, observed)
 
