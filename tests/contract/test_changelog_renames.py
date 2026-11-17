@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-import openvave
 from openvave.protocol import BYTE_MAP
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +56,6 @@ def test_rename_table_has_only_real_renames() -> None:
     assert not set(renames) & _current_names()
 
 
-def test_version_matches_the_release() -> None:
-    assert openvave.__version__ == "0.2.0"
+def test_release_section_is_kept() -> None:
+    # The current version is pinned in test_changelog_030.py; 0.2.0's section stays as released.
     assert "## [0.2.0]" in CHANGELOG.read_text(encoding="utf-8")

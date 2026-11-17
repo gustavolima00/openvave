@@ -13,11 +13,14 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 ## Status
 
-Version 0.2.0 is **read-only**: it identifies a connected pedal, reads its state over BLE and
-decodes every byte of the current preset and global settings that is understood (all but 4 of
-26). It can only send the handshake query (`0x11`) and region reads (`0x23`); nothing that writes to
-the pedal exists in the code. Protocol notes live in [`specs/protocol/`](specs/protocol/); feature
-specs are driven by [Spec Kit](https://github.com/github/spec-kit).
+Version 0.3.0 identifies a connected pedal, decodes every byte of the current preset and global
+settings that is understood (all but 4 of 26), **backs up** the 36 stored presets, and makes its
+first **writes**: one field of the current preset in the edit buffer, or a preset select. It never
+saves: stored presets are only ever read, and leaving edit mode on the pedal without saving undoes
+any edit. Every write openvave can send is listed, with its evidence, under "Write messages" in
+[`command-layer.md`](specs/protocol/command-layer.md); nothing else can be encoded. Protocol notes
+live in [`specs/protocol/`](specs/protocol/); feature specs are driven by
+[Spec Kit](https://github.com/github/spec-kit).
 
 | Platform | Status |
 |---|---|
@@ -149,20 +152,94 @@ Stopped after 34.0 s: 3 changes in 3 cycles. Record: captures/private/20261117-1
 - `--json` prints JSON Lines, one event per line
   ([schema](specs/002-preset-byte-map/contracts/watch-event.schema.json)).
 
+### `openvave preset backup`
+
+Take a backup before you write anything. It reads the 36 stored presets one by one and the whole
+stored image, checks that both agree, and saves a JSON file
+([schema](specs/003-preset-backup-edit-writes/contracts/backup.schema.json)). It only reads.
+
+```text
+$ openvave preset backup
+Backup of TANK-Gv2 (firmware 96)   36 presets, header a5 5a
+  1A  01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00
+  …
+  9D  …
+Cross-check with whole-image read: OK
+Saved tankg-backup-20261117-100500.json
+```
+
+`--output PATH` picks the file (default `./tankg-backup-<date>-<time>.json`); an existing file is
+kept unless you add `--force`. If the two reads disagree, no file is written and the exit code is
+7. Two backups with no write in between are identical apart from `created_at`. openvave cannot
+restore a backup yet: the file is your record of every stored preset.
+
+### Writing to the pedal: `openvave set` and `openvave preset select`
+
+Backup first, then:
+
+1. Put the pedal in **edit mode**.
+2. Check the write with `--dry-run`: it reads the pedal, prints the exact frame, and sends nothing.
+3. Run the same command without `--dry-run`.
+4. To undo, **leave edit mode on the pedal without saving**. Nothing openvave does is saved; only
+   saving on the pedal (or in the phone app) stores the edit.
+
+```text
+$ openvave set gain 90
+Set gain 60 → 90   (current preset 1B, edit mode)
+  write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 76
+  reply  00 59 00 01 00 00 00 ff   ACK
+  after  [6] gain 90   applied
+Not saved: leave edit mode on the pedal without saving to restore the stored preset.
+```
+
+`set <field> <value>` changes one field of the current preset, and only in edit mode:
+
+| Field | Value |
+|---|---|
+| `noise_gate`, `gain`, `treble`, `middle`, `bass`, `volume`, `mod_fx`, `mod_speed`, `delay_mix`, `delay_time`, `reverb_decay`, `reverb_mix` | 0–127 |
+| `amp_type`, `ir_cab` | 0–8 |
+| `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` |
+| `led_colour` | `#rrggbb` or `r,g,b` |
+
+`preset select <position>` loads preset `1A`–`9D` (or index 0–35). In edit mode it is refused,
+because the unsaved edits would be lost; `--discard-edits` selects anyway.
+
+```text
+$ openvave preset select 2C
+Select 2C (index 6)   from 1B
+  write  00 59 22 09 00 00 04 06 00 00 e0 01 00 00 01 13
+  reply  00 59 00 01 00 00 00 ff   ACK
+  now    bank 2, slot C   buffer = stored 2C   applied
+```
+
+Every write is checked: after the pedal's ACK, openvave reads the pedal again and reports
+`applied` only if the change is there. A NAK (exit 7) or a write that did not apply (exit 8) is
+reported with the raw bytes and is never retried.
+
+**`--experimental`.** A write runs by default only when its message is `confirmed` (seen the same
+way in two independent sessions on the pedal) and the firmware is 96. Today that is the knob
+block (every knob and selector) and preset select. The block switches and `led_colour` are
+`observed` (one session) and need `--experimental`, as does any write on other firmware. Whether
+`led_colour` changes the preset's LED has not been seen yet: the bytes it writes are documented as
+a hypothesis.
+
 ### Options
 
 `--json`, `--device ID`, `--scan-timeout SECONDS` (default 5), `--timeout SECONDS` (default 2)
 and `--trace` (hex of every frame on stderr) work on every command, before or after it. The full
-list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md) and
-[its 0.2.0 additions](specs/002-preset-byte-map/contracts/cli.md).
+list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md) and its
+[0.2.0](specs/002-preset-byte-map/contracts/cli.md) and
+[0.3.0](specs/003-preset-backup-edit-writes/contracts/cli.md) additions.
 
 ### JSON output
 
 With `--json`, stdout carries exactly one JSON document on success and nothing on failure
 (`watch --json` is the exception: one JSON line per event).
 Schemas: [`info`](specs/001-readonly-ble-connection/contracts/info.schema.json),
-[`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), and each
-decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json). Bytes
+[`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), each
+decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json),
+[`preset backup`](specs/003-preset-backup-edit-writes/contracts/backup.schema.json) and the
+[`set` / `preset select` result](specs/003-preset-backup-edit-writes/contracts/write-result.schema.json). Bytes
 are lowercase, space-separated hex.
 
 Every document has `"schema_version": 2` (0.2.0 renamed two fields; see the
@@ -172,10 +249,13 @@ bumps `schema_version`.
 
 ### Exit codes
 
-`0` success · `1` internal error · `2` usage error · `3` no pedal found · `4` more than one pedal
-(use `--device`) · `5` Bluetooth unavailable or permission denied · `6` connection lost or timed
-out · `7` protocol error. Details in the
-[CLI contract](specs/001-readonly-ble-connection/contracts/cli.md#exit-codes).
+`0` success · `1` internal error, or a write refused (not in edit mode, out of range, untested
+firmware, `--experimental` needed, edits would be discarded) · `2` usage error · `3` no pedal
+found · `4` more than one pedal (use `--device`) · `5` Bluetooth unavailable or permission denied ·
+`6` connection lost or timed out · `7` protocol error, NAK or backup cross-check mismatch · `8`
+write acknowledged but not applied. Details in the
+[CLI contract](specs/001-readonly-ble-connection/contracts/cli.md#exit-codes) and its
+[0.3.0 additions](specs/003-preset-backup-edit-writes/contracts/cli.md#exit-codes-additions).
 
 ### Library
 
@@ -196,10 +276,13 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`TankG.watch()` yields the same events as `openvave watch`. See the library contracts
-([0.1.0](specs/001-readonly-ble-connection/contracts/library-api.md),
-[0.2.0 additions](specs/002-preset-byte-map/contracts/library-api.md)), including how to test
-against `FakeTransport` without a pedal.
+`TankG.watch()` yields the same events as `openvave watch`; `backup()`, `plan_set()` /
+`set_field()` and `plan_select()` / `select_preset()` do what `preset backup`, `set` and
+`preset select` do (writes take `experimental=True` where the CLI needs `--experimental`). See the
+library contracts ([0.1.0](specs/001-readonly-ble-connection/contracts/library-api.md),
+[0.2.0](specs/002-preset-byte-map/contracts/library-api.md) and
+[0.3.0](specs/003-preset-backup-edit-writes/contracts/library-api.md) additions), including how to
+test against `FakeTransport` without a pedal.
 
 ## Development
 

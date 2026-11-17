@@ -481,19 +481,44 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
 
 ### Tests (write first, must fail)
 
-- [ ] T065 [P] Extend `tests/contract/test_changelog_renames.py` (or a new `tests/contract/test_changelog_030.py`): `CHANGELOG.md` has a `0.3.0` section listing `preset backup`, `set`, `preset select`, exit code 8, the `0x22` allowlist and (if named) the new byte map names; `openvave --version` reports `0.3.0`
-- [ ] T066 [P] If M2 observed the LED colour: extend `tests/unit/test_bytemap.py` expectations for preset 18–20 named `led_red`, `led_green`, `led_blue` (`continuous`, 0–255, `observed`, evidence = the `led_colour` gate excerpt); otherwise skip this task and record why
+- [X] T065 [P] Extend `tests/contract/test_changelog_renames.py` (or a new `tests/contract/test_changelog_030.py`): `CHANGELOG.md` has a `0.3.0` section listing `preset backup`, `set`, `preset select`, exit code 8, the `0x22` allowlist and (if named) the new byte map names; `openvave --version` reports `0.3.0`
+  - Done (2026-11-17): new `tests/contract/test_changelog_030.py` (commands, `--dry-run`,
+    `--experimental`, exit code 8, `0x22` and the four allowlisted targets, `0x21`/`0xF0000000`
+    never sent, nothing left under `[Unreleased]`, `__version__` = `pyproject.toml` = 0.3.0,
+    `openvave --version`). Failed 15/15 before T069. The 0.2.0 version pin in
+    `test_changelog_renames.py` became "the 0.2.0 section is kept". No new byte map names (T066).
+- [X] T066 [P] If M2 observed the LED colour: extend `tests/unit/test_bytemap.py` expectations for preset 18–20 named `led_red`, `led_green`, `led_blue` (`continuous`, 0–255, `observed`, evidence = the `led_colour` gate excerpt); otherwise skip this task and record why
+  - Skipped (2026-11-17): M2 observed the `led_colour` **write** (ACK, bytes 18–20 changed) but not
+    the LED: in edit mode the pedal's LEDs show block colours, and leaving edit mode restores the
+    buffer (T052). That 18–20 drive the preset LED stays a hypothesis, so they stay unnamed.
 
 ### Implementation
 
-- [ ] T067 Name preset 18–20 in `specs/protocol/command-layer.md` byte map and `src/openvave/protocol/bytemap.py` per T066 (additive; `schema_version` stays 2)
-- [ ] T068 [P] Update `README.md`: backup-first workflow, `preset backup`, `set`, `preset select`, `--dry-run`, `--experimental`, "nothing is saved — leave edit mode without saving to undo", exit codes, the unofficial disclaimer unchanged
-- [ ] T069 [P] Update `CHANGELOG.md` (0.3.0) and bump the version in `pyproject.toml` and `src/openvave/__init__.py`, until T065 passes
-- [ ] T070 [P] Update `captures/README.md`: the gate excerpt format (`*-gate-<step>.jsonl`: meta with firmware/date/step, write frame, reply, re-reads), the synthetic stored-image fixture, and the rule that real stored images stay in `captures/private/`
+- [X] T067 Name preset 18–20 in `specs/protocol/command-layer.md` byte map and `src/openvave/protocol/bytemap.py` per T066 (additive; `schema_version` stays 2)
+  - Skipped with T066 (no naming without evidence); byte map and `bytemap.py` unchanged.
+- [X] T068 [P] Update `README.md`: backup-first workflow, `preset backup`, `set`, `preset select`, `--dry-run`, `--experimental`, "nothing is saved — leave edit mode without saving to undo", exit codes, the unofficial disclaimer unchanged
+  - Done: Status rewritten for 0.3.0; new sections `openvave preset backup` and "Writing to the
+    pedal" (backup → edit mode → `--dry-run` → run → leave edit mode without saving; field table;
+    `--discard-edits`; ACK + re-read, no retries; `--experimental` and which rows are confirmed);
+    exit codes 1/7/8 extended; links to the 003 CLI, JSON and library contracts. Examples match
+    `cli/render.py`. Disclaimer line unchanged.
+- [X] T069 [P] Update `CHANGELOG.md` (0.3.0) and bump the version in `pyproject.toml` and `src/openvave/__init__.py`, until T065 passes
+  - Done: `CHANGELOG.md` `[0.3.0]` (Added: backup, set, select, `--dry-run`, `--experimental`,
+    exit code 8, JSON, library, plus the reverb sections entry moved from Unreleased; Changed: the
+    `0x22` allowlist and what stays unencodable; Tested). Version 0.3.0 in `pyproject.toml`,
+    `src/openvave/__init__.py` and `uv.lock`. T065 passes (19/19 with the renames test).
+- [X] T070 [P] Update `captures/README.md`: the gate excerpt format (`*-gate-<step>.jsonl`: meta with firmware/date/step, write frame, reply, re-reads), the synthetic stored-image fixture, and the rule that real stored images stay in `captures/private/`
+  - Done: `captures/README.md` table row for `fw96/20261117-gate-<step>.jsonl`, new sections
+    "Gate excerpts (writes)" (meta incl. `replay`, frame order, labels from bytes, cutting with
+    `tests/support/gate_excerpt.py`, what `test_gate_excerpts.py` checks) and "Stored image and
+    backups" (synthetic fixture; real images, backups and raw traces stay in `captures/private/`).
 
 ### Live verification (milestone gate)
 
-- [ ] T071 Run the full suite, ruff, format check, mypy; record counts
+- [X] T071 Run the full suite, ruff, format check, mypy; record counts
+  - Evidence (2026-11-17): `uv run pytest` → 1120 passed, 5 skipped, 0 xfailed (M3: 1085);
+    `ruff check .` all passed; `ruff format --check .` 110 files formatted; `mypy src` no issues in
+    24 files; `uv run openvave --version` → `openvave 0.3.0`. Quickstart §1 (offline) passes.
 - [ ] T072 Owner, hardware: run [quickstart.md](quickstart.md) §1–§5 end to end (writes approved per step); review SC-001…SC-007 in the PR with evidence links
 
 **Checkpoint**: Milestone 4 DONE — 0.3.0 released

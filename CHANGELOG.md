@@ -6,12 +6,69 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0]
+
+The first release that **writes** to the pedal, and only to the edit buffer: a full backup of the
+36 stored presets, then guarded writes of one field or one preset select at a time. Nothing is
+ever saved: leaving edit mode on the pedal without saving restores the stored preset. Every write
+was first sent by hand on the owner's pedal (fw 96) with a backup before and after; the backups
+were identical.
+
 ### Added
 
+- `openvave preset backup [--output PATH] [--force]`: reads the stored-image header, the 36 stored
+  presets one by one and the whole image, cross-checks them, and writes a versioned JSON file
+  ([`backup.schema.json`](specs/003-preset-backup-edit-writes/contracts/backup.schema.json)).
+  Read-only (`0x11` and `0x23` only). A cross-check mismatch writes no file and exits 7.
+- `openvave set <field> <value>`: changes one field of the current preset in the edit buffer. Knobs
+  and selectors (`gain`, `treble`, …, `amp_type`, `ir_cab`), block switches (`amp_on`, `mod_on`,
+  `delay_on`, `reverb_on`: `on`/`off`) and `led_colour` (`#rrggbb` or `r,g,b`). Refused unless
+  the pedal is in edit mode. After the write it checks the ACK and re-reads the buffer.
+- `openvave preset select <position>`: selects preset `1A`–`9D` (or index 0–35). Refused in edit
+  mode unless `--discard-edits` (the unsaved edits are lost). Reports applied only when the pedal
+  shows the new bank and slot and the buffer equals the stored preset.
+- `--dry-run` on `set` and `preset select`: does the reads, prints the exact write frame, sends
+  nothing. The frame printed is the frame that would be sent.
+- `--experimental`: needed for a write whose message is not yet `confirmed`, or on firmware other
+  than 96. Confirmed on fw 96 (two independent hardware sessions): the knob block and preset
+  select, so `set gain 90` and `preset select 2C` run without it. Still `observed` (one session):
+  the four block switches and the LED colour.
+- Exit code 8: the pedal acknowledged a write but the re-read does not show it (not applied).
+  Exit 1 now also covers a refused write; exit 7 covers a NAK (raw reply printed). Writes are never
+  retried.
+- `--json` for the three commands: the 0.2.0 envelope plus `backup` / `saved_to`, or `plan` and
+  `result`
+  ([`write-result.schema.json`](specs/003-preset-backup-edit-writes/contracts/write-result.schema.json)).
+  `schema_version` stays 2.
+- Library: `TankG.backup()`, `plan_set()`, `set_field()`, `plan_select()`, `select_preset()`;
+  types `Backup`, `StoredPreset`, `WritePlan`, `WriteResult`; errors `WriteRefusedError`,
+  `WriteNakError`, `WriteNotAppliedError`; `openvave.protocol.StorageRead`, `WriteTarget`,
+  `WRITE_MESSAGES`, `build_write`, `parse_write_reply`, `build_storage_read`,
+  `parse_storage_reply`
+  ([library contract](specs/003-preset-backup-edit-writes/contracts/library-api.md)).
 - `openvave.protocol.reverb_decay_parts(raw)` and `REVERB_SECTIONS`: preset byte 15
   (`reverb_decay`) read the way the phone app shows it, as a colour section (blue, orange or green,
   44 raw values each; most likely the reverb type) and a position 1–40, or `X` past 40. JSON is
   unchanged (`schema_version` 2): `reverb_decay` still reports the raw 0–127 value.
+
+### Changed
+
+- Safety: the encoder now accepts write memory (`0x22`), but only to four targets, all in the
+  edit buffer ([Write messages](specs/protocol/command-layer.md)):
+  - knob block `0x10000004` × 14 (preset bytes 4–17),
+  - block switch `0x10000000 + k` × 1, k = 0–3 (preset bytes 0–3),
+  - LED colour `0x10000012` × 3 (preset bytes 18–20; whether they drive the LED is still a
+    hypothesis, so the byte map leaves them unnamed),
+  - preset select `0xE0000000 + i` × 1, data `01`, i = 0–35.
+
+  Erase (`0x21`), the save commit (`0xF0000000`), stored-preset writes (`0x0`–`0x2F5`) and the
+  loopback write (`0xD0000000`) still cannot be encoded: openvave never saves or overwrites a
+  stored preset.
+
+### Tested
+
+- Firmware 96 on macOS 26: two backups identical; two gate sessions of writes (2026-11-17),
+  eleven writes in all, each ACKed and applied, each followed by a backup equal to the first.
 
 ## [0.2.0]
 

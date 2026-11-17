@@ -68,7 +68,7 @@ from openvave.transport import Transport
 from openvave.transport.ble import discover
 from openvave.transport.fake import FakeTransport
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Backup",
