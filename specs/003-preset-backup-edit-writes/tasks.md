@@ -115,8 +115,10 @@ Projected PR count: **5** (≤ 8). Milestone N+1 starts only after Milestone N's
     read: OK`, `warnings: []`. Comparing the two files key by key, the only difference is
     `created_at`; both load with `Backup.from_document` and have identical images (SC-002).
     An earlier attempt failed at the BLE connect step (`connect failed: TimeoutError`, nothing
-    sent); it worked on retry. The duration was not timed (SC-001 < 10 s unmeasured; the
-    trace shows 39 one-at-a-time request/reply pairs, with no retries).
+    sent); it worked on retry. SC-001: a third run (`time uv run openvave preset backup --output
+    /tmp/backup-c.json`) took 8.8 s wall clock end to end, including the BLE scan (default 5 s
+    scan timeout) and connect, so the reads themselves take ≈ 3–4 s. Run C is identical to run A
+    apart from `created_at`. Under 10 s, but with little margin because of the fixed scan time.
 - [X] T020 Owner, hardware: one run with `--trace`; confirm only `0x11`/`0x23` frames and that the image reply arrived as several chunks; record in the PR
   - Evidence (run B, `--trace`): 39 TX frames: one `0x11` (handshake), then 38 `0x23` (header
     `0x0`×2, the 36 presets `2 + 21·i`×21, image `0x0`×758). No other command byte. The
