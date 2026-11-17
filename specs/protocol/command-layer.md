@@ -292,8 +292,8 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 
 | Address | Type | Len | Op | Meaning | Confidence |
 |---|---|---|---|---|---|
-| `0x00000000` | 4 | 758 | read (code) | stored-preset image: 2-byte header + 36 × 21 B | hypothesis |
-| `0x00000002 + 21·i` | 4 | 21 | read, write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | hypothesis |
+| `0x00000000` | 4 | 758 | read (code, hardware) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17) |
+| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write hypothesis |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (log, k = 1); hypothesis for the others |
 | `0x10000004` | 4 | 14 | write (log) | the 14 knob bytes (preset 4–17) in one write | observed |
@@ -315,16 +315,33 @@ rewriting both slots instead), so they are out of scope.
 ### Storage layout (app-declared)
 
 `patchSize = 21 B × presetNum = 36 = 756 B`, `presetStoreOffset = 2`, factory image 758 B,
-tail 0 B (the app verifies this layout for the `tankG` product). From the app's code
-(2026-11-17, hypothesis until read on hardware): the image lives at type 4, address `0`; stored
-preset `i` starts at address `presetStoreOffset + 21·i = 2 + 21·i`, so the last one (9D, i = 35)
-ends at address 757. The 2 header bytes are not explained by the app.
+tail 0 B (the app verifies this layout for the `tankG` product). The image lives at type 4,
+address `0`; stored preset `i` starts at address `presetStoreOffset + 21·i = 2 + 21·i`, so the
+last one (9D, i = 35) ends at address 757. **Confirmed on hardware** (read-only, 2026-11-17, fw 96,
+macOS, MTU 185, `captures/private/20261117-100138-storage.jsonl`):
+
+- The header (`0x0` × 2) read `a5 5a`. The app does not explain it; the complementary pattern
+  looks like a "storage valid" marker (hypothesis).
+- All 36 single reads (`2 + 21·i` × 21) and the one-request image read (`0x0` × 758) returned valid
+  checksums and echoed type/address/length; bytes 2–757 of the image equal the 36 single reads.
+- The single reads of 1A–1D, 2A, 2B and 9A–9D are byte-identical to the Preset comparison table,
+  which was recorded on 2026-11-16 by loading each preset on the pedal and reading the edit buffer.
+  So address `2 + 21·i` is stored preset `i` with `i = bank·4 + slot`.
+- Outside edit mode the loaded preset's stored bytes (1B, global `00 00 01 01`) equal the edit
+  buffer `0x10000000`.
+- The 773-byte image reply arrived in 5 notifications (182, 182, 182, 182 and 45 bytes) within
+  0.3 s and was reassembled by length: multi-notification reassembly is confirmed.
+- 34 of the 36 presets differ (1B = 1C and 1A = 2A, as seen before).
+
+The capture is not committed: the 36 presets are most likely the factory content, which
+Constitution VI keeps out of the repo. A committed fixture for spec 003 should carry only the
+header plus presets already public in `captures/fw96/` (e.g. 1B), or synthetic preset bytes.
 
 ### Stored presets, switching and saving (app code, 2026-11-17)
 
 Source: a local analysis of the official app's compiled code (v3.9.2314, no vendor code kept;
-described in our own words). Every row below is **hypothesis** unless it says otherwise; nothing
-here has been sent to the pedal yet. The app's Tank-G screen shares its preset logic with the
+described in our own words). Every row below is **hypothesis** unless it says otherwise. Only the
+backup reads have been sent to the pedal (confirmed, see Storage layout); no write has. The app's Tank-G screen shares its preset logic with the
 app's "Tank-B" product code.
 
 **Preset index.** The app computes the loaded preset as `global[1] · 4 + global[2]` (bank · 4 +
@@ -407,12 +424,10 @@ Tank-G, probably routing USB playback back into the USB recording, is not known)
   are the 14 front-panel knobs, preset 0–3 the block switches (see the byte map). The app's
   14-byte write to `0x10000004` therefore carries every knob of the preset at once.
 - Preset 18–20 and the status byte now have app-code hypotheses (LED colour; loopback flag).
-  Still unknown: the 2 header bytes of the stored image; the names of the 9 amp types and 9 IR
+  Still unknown: the meaning of the header `a5 5a`; the names of the 9 amp types and 9 IR
   cabs; non-zero write status codes; whether an uncommitted stored-area write persists.
-- Read-only hardware check of the storage hypothesis (2026-11-17, not run yet):
-  `poc/probe_storage.py` reads the header (`0x0` × 2), each preset (`2 + 21·i` × 21) and the whole
-  image (`0x0` × 758), then checks that the image equals the 36 single reads and that the loaded
-  preset's stored bytes equal the edit buffer (outside edit mode).
+- ~~Read-only hardware check of the storage layout~~ done (2026-11-17): header, 36 single reads
+  and the 758-byte image read all confirmed (see Storage layout).
 - Answered from app code (hypothesis until replayed): `0xE0000000 + i` loads stored preset `i`;
   stored presets are at `2 + 21·i`; saving is an empty write to `0xF0000000`. Still open for the
   write spec: does writing the edit buffer move the stored value or only the sound while the
