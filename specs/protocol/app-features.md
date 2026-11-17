@@ -49,7 +49,7 @@ What this means for openvave:
   without saving also restores the stored bytes (observed).
 - **Keep (save)**: the app writes its own 21-byte copy of the preset to the stored slot
   `2 + 21·i`, waits 300 ms, writes zero bytes to `0xF0000000` (commit), waits 100 ms, then selects
-  `i` (hypothesis). It does not read the buffer back first, so a host should read
+  `i` (observed, checks 3 and 4: the change survives a power cycle). It does not read the buffer back first, so a host should read
   `0x10000000` × 21 and write those bytes. "Save" uses the loaded slot, "Save to" lets the user pick
   any slot. Whether the slot write survives a power cycle without the commit is unknown.
 - Writing global byte 3 by hand (`0x20000003`) is untested and not something the app ever does:
