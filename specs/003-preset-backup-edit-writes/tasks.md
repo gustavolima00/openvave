@@ -109,10 +109,22 @@ Projected PR count: **5** (≤ 8). Milestone N+1 starts only after Milestone N's
     `uv run pytest` → 823 passed, 4 skipped (baseline 741 passed); `ruff check` → all checks
     passed; `ruff format --check` → 89 files already formatted; `mypy src` → no issues in 23
     files. The session audit (`tests/conftest.py`) still sees only `0x11`/`0x23`.
-- [ ] T019 Owner, hardware (read-only, no approval needed): quickstart §2 — two `uv run openvave preset backup --output …` runs; record exit codes, header, duration, and that the two files are identical except `created_at` (SC-001: < 10 s, SC-002)
-- [ ] T020 Owner, hardware: one run with `--trace`; confirm only `0x11`/`0x23` frames and that the image reply arrived as several chunks; record in the PR
+- [X] T019 Owner, hardware (read-only, no approval needed): quickstart §2 — two `uv run openvave preset backup --output …` runs; record exit codes, header, duration, and that the two files are identical except `created_at` (SC-001: < 10 s, SC-002)
+  - Evidence (2026-11-17, fw 96, macOS, owner's terminal): run A 13:34:18Z and run B 13:35:09Z
+    (UTC `created_at`), both exit 0, `36 presets, header a5 5a`, `Cross-check with whole-image
+    read: OK`, `warnings: []`. Comparing the two files key by key, the only difference is
+    `created_at`; both load with `Backup.from_document` and have identical images (SC-002).
+    An earlier attempt failed at the BLE connect step (`connect failed: TimeoutError`, nothing
+    sent); it worked on retry. The duration was not timed (SC-001 < 10 s unmeasured; the
+    trace shows 39 one-at-a-time request/reply pairs, with no retries).
+- [X] T020 Owner, hardware: one run with `--trace`; confirm only `0x11`/`0x23` frames and that the image reply arrived as several chunks; record in the PR
+  - Evidence (run B, `--trace`): 39 TX frames: one `0x11` (handshake), then 38 `0x23` (header
+    `0x0`×2, the 36 presets `2 + 21·i`×21, image `0x0`×758). No other command byte. The
+    773-byte image reply came in 5 notification chunks and reassembled with a valid checksum.
+    Stored 1B in the trace equals the public `20261116-probe-connect` preset. Files stay in
+    `/tmp` (not committed, Constitution VI).
 
-**Checkpoint**: Milestone 0 DONE — the owner has a verified backup before any write exists
+**Checkpoint**: ✅ Milestone 0 DONE (2026-11-17) — the owner has a verified backup before any write exists
 
 ---
 
