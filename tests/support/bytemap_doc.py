@@ -194,3 +194,72 @@ def load_comparison(
             values.append(int(hex_match.group(1), 16))
         rows.append((match.group(1), int(match.group(2)), values))
     return header[1:], rows
+
+
+REVERB_HEADING = "### Reverb decay sections (fw 96"
+SPAN_RE = re.compile(r"^(\d+)–(\d+)$")
+
+
+@dataclass(frozen=True)
+class ReverbSectionRow:
+    section: str
+    raw: tuple[int, int]
+    numbered: tuple[int, int]
+    x: tuple[int, int] | None
+    confidence: str
+
+
+def _span(cell: str) -> tuple[int, int]:
+    match = SPAN_RE.match(cell)
+    if not match:
+        raise ValueError(f"bad span {cell!r}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def _reverb_tables(path: Path) -> list[list[list[str]]]:
+    """Every table under the reverb sections heading, as rows of cells (separators dropped)."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.startswith(REVERB_HEADING))
+    except StopIteration:
+        raise ValueError(f"heading {REVERB_HEADING!r} not found") from None
+    tables: list[list[list[str]]] = []
+    current: list[list[str]] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("#"):
+            break
+        if line.startswith("|"):
+            cells = _split_row(line)
+            if not all(set(c) <= {"-"} for c in cells):
+                current.append(cells)
+        elif current:
+            tables.append(current)
+            current = []
+    if current:
+        tables.append(current)
+    return tables
+
+
+def load_reverb_sections(path: Path = COMMAND_LAYER) -> list[ReverbSectionRow]:
+    """The section table: section, raw span, numbered span, X span (or ``—``), confidence."""
+    table = _reverb_tables(path)[0]
+    if table[0] != ["Section", "Raw", "App 1–40", "App X", "Confidence"]:
+        raise ValueError(f"unexpected reverb section header {table[0]}")
+    return [
+        ReverbSectionRow(
+            section=cells[0],
+            raw=_span(cells[1]),
+            numbered=_span(cells[2]),
+            x=None if cells[3] == NONE else _span(cells[3]),
+            confidence=cells[4],
+        )
+        for cells in table[1:]
+    ]
+
+
+def load_reverb_readings(path: Path = COMMAND_LAYER) -> list[tuple[str, int]]:
+    """The readings table: (app position, raw byte 15) in column order."""
+    header, values = _reverb_tables(path)[1]
+    if header[0] != "App" or values[0] != "Raw":
+        raise ValueError(f"unexpected reverb readings table {header}, {values}")
+    return [(app, int(raw)) for app, raw in zip(header[1:], values[1:], strict=True)]

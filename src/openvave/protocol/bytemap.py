@@ -19,6 +19,7 @@ MAP_FIRMWARE = 96
 
 _FW96 = "captures/fw96/"
 _FW96_CONNECT = _FW96 + "20261116-probe-connect.jsonl"
+_FW96_REVERB_APP = _FW96 + "20261117-reverb-sections-app.jsonl"
 
 
 def _step(field: str) -> str:
@@ -148,7 +149,15 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
     _knob(12, "mod_speed", "mod speed", "mod_speed", "0-127 swept"),
     _knob(13, "delay_mix", "delay mix", "delay_mix", "0-127 swept"),
     _knob(14, "delay_time", "delay time", "delay_time", "0-127 swept"),
-    _knob(15, "reverb_decay", "reverb decay", "reverb_decay", "0-127 swept", _FW96_CONNECT),
+    _knob(
+        15,
+        "reverb_decay",
+        "reverb decay",
+        "reverb_decay",
+        "0-127 swept; the app splits it into 3 sections of 44 (see REVERB_SECTIONS)",
+        _FW96_CONNECT,
+        _FW96_REVERB_APP,
+    ),
     _knob(16, "reverb_mix", "reverb mix", "reverb_mix", "0-127 swept"),
     _selector(17, "ir_cab", "IR cab"),
     _unknown(Region.CURRENT_PRESET, 18, _PER_PRESET),
@@ -157,3 +166,24 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
     _unknown(Region.STATUS, 0, "0x01 in all seven sessions, every preset and mode"),
 )
 """Every byte of ``GLOBAL`` (4), ``CURRENT_PRESET`` (21) and ``STATUS`` (1): 26 offsets."""
+
+
+REVERB_SECTION_SIZE = 44
+"""Raw values per section of ``reverb_decay`` (preset byte 15) as the phone app splits it."""
+REVERB_SECTION_STEPS = 40
+"""Numbered app positions per section (1–40); the rest of a section shows as ``X``."""
+REVERB_SECTIONS: tuple[str, ...] = ("blue", "orange", "green")
+"""Section names, by the colour the app draws them in (it gives them no names). Each is most
+likely a reverb type (hypothesis); the split itself is ``observed`` (2026-11-17, fw 96)."""
+
+
+def reverb_decay_parts(raw: int) -> tuple[str, int | None]:
+    """``reverb_decay`` as the phone app shows it: (section, position 1–40, or ``None`` for X).
+
+    Mirrors "Reverb decay sections" in ``specs/protocol/command-layer.md``: section
+    ``raw // 44``, position ``raw % 44 + 1`` up to 40. Green (88–127) has 40 values and no X.
+    """
+    if not 0 <= raw <= 127:
+        raise ValueError(f"reverb_decay raw value must be 0-127, got {raw}")
+    section, step = divmod(raw, REVERB_SECTION_SIZE)
+    return REVERB_SECTIONS[section], (step + 1 if step < REVERB_SECTION_STEPS else None)

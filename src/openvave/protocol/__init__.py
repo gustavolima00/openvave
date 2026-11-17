@@ -1,7 +1,14 @@
 """Pure Tank-G protocol codec: bytes in, bytes out, no I/O."""
 
 from openvave.protocol.assembler import FrameAssembler
-from openvave.protocol.bytemap import BYTE_MAP, MAP_FIRMWARE
+from openvave.protocol.bytemap import (
+    BYTE_MAP,
+    MAP_FIRMWARE,
+    REVERB_SECTION_SIZE,
+    REVERB_SECTION_STEPS,
+    REVERB_SECTIONS,
+    reverb_decay_parts,
+)
 from openvave.protocol.commands import (
     build_query,
     build_read,
@@ -23,6 +30,9 @@ __all__ = [
     "Frame",
     "FrameAssembler",
     "MAP_FIRMWARE",
+    "REVERB_SECTIONS",
+    "REVERB_SECTION_SIZE",
+    "REVERB_SECTION_STEPS",
     "StorageRead",
     "TESTED_FIRMWARE",
     "WRITE_MESSAGES",
@@ -41,4 +51,5 @@ __all__ = [
     "parse_read_reply",
     "parse_storage_reply",
     "parse_write_reply",
+    "reverb_decay_parts",
 ]

@@ -150,7 +150,7 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
 | preset | 12 | — | `mod_speed` | continuous | 0–127 | mod speed knob | confirmed | 96 | `captures/fw96/20261116-step-mod_speed.jsonl`, `captures/fw96/20261116-step-mod_speed-1917.jsonl` | Alone, 0 → 127. Session 19:17 (labelled `mod speed`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
 | preset | 13 | — | `delay_mix` | continuous | 0–127 | delay mix knob | confirmed | 96 | `captures/fw96/20261116-step-delay_mix.jsonl`, `captures/fw96/20261116-step-delay_mix-1917.jsonl` | Alone, 0 → 127. Session 19:17 (labelled `delay mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
 | preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | confirmed | 96 | `captures/fw96/20261116-step-delay_time.jsonl`, `captures/fw96/20261116-step-delay_time-1917.jsonl` | Alone, 0 → 127, swept three times. Session 19:17 (labelled `delay time`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
-| preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x05` |
+| preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261117-reverb-sections-app.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. The phone app splits this one byte into three colour sections of 44 values (blue, orange, green), each numbered 1–40 with `X` past 40; see "Reverb decay sections" (2026-11-17, observed). The raw byte stays one continuous knob. fw96: `0x05` |
 | preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | confirmed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl`, `captures/fw96/20261116-step-reverb_mix-1917.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). Session 19:17 (labelled `reverb mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x04` |
 | preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. fw96: `0x07` |
 | preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
@@ -247,6 +247,43 @@ moved with a control; their meaning is unknown.
 | `preset[18]` | ff | 43 | 43 | 77 | ff | 87 | ff | 55 | ff | 55 | unknown |
 | `preset[19]` | f7 | 16 | 16 | b3 | f7 | 00 | 00 | aa | aa | ff | unknown |
 | `preset[20]` | 00 | 43 | 43 | b3 | 00 | ca | 00 | ff | ff | 7f | unknown |
+
+### Reverb decay sections (fw 96, phone app, 2026-11-17)
+
+The app's Decay knob for the reverb block is one arc in three colours, blue, then orange, then
+green. Each colour is numbered 1–40, and a few positions past 40 show `X`. The app gives the
+sections no names (the block panel just says "REV"), and on the pedal the decay knob sweeps
+byte 15 continuously from `0` to `127`. Each section is most likely a reverb type (hypothesis:
+no names, sound not compared). The split itself is **observed**:
+
+- section = `raw // 44` (`0` blue, `1` orange, `2` green);
+- app position = `raw % 44 + 1` while `raw % 44 < 40`, else `X`;
+- green has only 40 values (88–127), so it has no `X`: green 40 is the knob's top, `127`.
+
+| Section | Raw | App 1–40 | App X | Confidence |
+|---|---|---|---|---|
+| blue | 0–43 | 0–39 | 40–43 | observed |
+| orange | 44–87 | 44–83 | 84–87 | observed |
+| green | 88–127 | 88–127 | — | observed |
+
+Readings (owner, preset 1B in edit mode: set the position in the app, closed the app, then
+`openvave preset dump`; nothing saved; transcribed to
+`captures/fw96/20261117-reverb-sections-app.jsonl`):
+
+| App | blue 1 | blue 40 | blue X | orange 1 | orange 40 | orange X | green 1 | green 40 |
+|---|---|---|---|---|---|---|---|---|
+| Raw | 0 | 39 | 43 | 44 | 83 | 86 | 88 | 127 |
+
+Earlier the same day, restoring 1A with the app gave orange 9 → 52, orange 10 → 53 and
+orange 11 → 54 (backups in `captures/private/`, not committed; a fourth reading, raw 55, was
+orange 12 or 13 and is not used). Not yet observed: raw 40–42 and 84–85 (assumed `X` by
+position in the section), 87 (assumed orange `X`), and whether the app offers an `X` after
+green 40. The stored presets in the comparison table read as: 1A/2A `35` orange 10, 1B/1C `05`
+blue 6, 1D `09` blue 10, 2B `18` blue 25, 9A/9B/9D `0c` blue 13, 9C `38` orange 13.
+
+Code: `REVERB_SECTIONS`, `REVERB_SECTION_SIZE`, `REVERB_SECTION_STEPS` and `reverb_decay_parts`
+in `src/openvave/protocol/bytemap.py`; `tests/unit/test_bytemap_doc.py` checks this table
+against them. `preset dump` still shows the raw value.
 
 ### Control inventory (fw 96)
 

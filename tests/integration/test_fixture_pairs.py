@@ -7,7 +7,7 @@ import pytest
 from openvave.models import ByteMapEntry, Region, RegionRead
 from openvave.protocol import BYTE_MAP, decode_region, diff, parse_read_reply
 from tests.integration.fixture_pairs import FW96, PAIRS, SELECTIONS, FixturePair
-from tests.support.captures import load_capture
+from tests.support.captures import PRESET, load_capture
 
 REGIONS = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET}
 
@@ -70,3 +70,26 @@ def test_every_pair_file_exists_and_is_indexed_once_per_field() -> None:
         assert pair.path.is_file(), pair.file
     committed = {p.name for p in FW96.glob("*-step-*.jsonl")}
     assert committed == {p.file for p in PAIRS}, "every committed step excerpt is indexed"
+
+
+def test_reverb_section_reads_move_only_byte_15() -> None:
+    """The app-reading capture: each read is 1B with byte 15 at the app position's raw value."""
+    from openvave.protocol import reverb_decay_parts
+    from tests.support import reverb_fixture as rf
+
+    capture = load_capture(rf.REVERB_CAPTURE)
+    labels = [r["text"] for r in capture.records if r["event"] == "label"]
+    series = [parse_read_reply(Region.CURRENT_PRESET, f) for f in capture.rx_all(PRESET)]
+    assert len(series) == len(rf.READINGS) == len(labels)
+    decay = entry(Region.CURRENT_PRESET, "reverb_decay")
+    for label, (app, raw), read in zip(labels, rf.READINGS, series, strict=True):
+        assert label == f"app decay {app}"
+        assert read.data[decay.offset] == raw
+        assert [
+            i for i, (a, b) in enumerate(zip(read.data, rf.PUBLIC_1B, strict=True)) if a != b
+        ] in (
+            [],
+            [decay.offset],
+        )
+        section, position = app.split()
+        assert reverb_decay_parts(raw) == (section, None if position == "X" else int(position))
