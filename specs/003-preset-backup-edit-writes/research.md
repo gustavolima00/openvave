@@ -53,9 +53,10 @@ come from [`command-layer.md`](../protocol/command-layer.md) (confidence as stat
 - **Alternatives**: gate only on `hypothesis` (would let app-log-only `observed` rows send by
   default before we ever replayed them); a hard-coded set (drifts from docs).
 
-Initial rows (before M2): knob block `observed` (app log), switch k = 1 `observed`, k = 0/2/3
-`hypothesis`, LED colour `hypothesis`, preset select `observed` (meaning hypothesis), ACK
-`hypothesis`. Before M3 every write therefore needs `--experimental`.
+Initial rows (before M2): every write row and the ACK row are `hypothesis`. A row becomes
+`observed` only when it cites a committed capture of this project's own send; the app-log
+sightings (knob block, switch k = 1, preset select) are recorded in Notes, not as evidence,
+because the log has no raw bytes. Before M3 every write therefore needs `--experimental`.
 
 ## R5 — Where writes live in the library
 
