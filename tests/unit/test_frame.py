@@ -66,14 +66,35 @@ def test_decode_accepts_any_command_byte() -> None:
     assert frame.command == 0x22
 
 
+ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
+SELECT_6 = bytes.fromhex("00 59 22 09 00 00 04 06 00 00 e0 01 00 00 01 13")
+
+
 @pytest.mark.parametrize("command", range(256))
-def test_only_query_and_read_encode(command: int) -> None:
+def test_only_query_read_and_allowlisted_write_encode(command: int) -> None:
     if command in (0x11, 0x23):
         assert encode_frame(command, b"")[2] == command
+    elif command == 0x22:
+        # 0x22 encodes only an allowlisted write body (spec 003 R2); an empty body is not one.
+        with pytest.raises(UnsafeCommandError):
+            encode_frame(command, b"")
+        assert encode_frame(command, SELECT_6[6:-1]) == SELECT_6
     else:
         with pytest.raises(UnsafeCommandError):
             encode_frame(command, b"")
 
 
-def test_allowlist_is_exactly_query_and_read() -> None:
-    assert frozenset({0x11, 0x23}) == ALLOWED_COMMANDS
+def test_allowlist_is_query_read_and_write() -> None:
+    assert frozenset({0x11, 0x23, 0x22}) == ALLOWED_COMMANDS
+
+
+@pytest.mark.parametrize("command", [0x21, 0x15])
+def test_erase_and_midi_never_encode(command: int) -> None:
+    with pytest.raises(UnsafeCommandError):
+        encode_frame(command, SELECT_6[6:-1])
+
+
+def test_decode_ack() -> None:
+    frame = decode_frame(ACK)
+    assert frame.command == 0x00
+    assert frame.body == b"\x00"

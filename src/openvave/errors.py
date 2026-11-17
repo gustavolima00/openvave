@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from openvave.models import DeviceInfo
+    from openvave.models import DeviceInfo, WriteResult
 
 
 class OpenvaveError(Exception):
@@ -73,6 +73,51 @@ class HandshakeError(OpenvaveError):
 
 
 class UnsafeCommandError(OpenvaveError):
-    """Attempt to encode a command byte outside the read-only allowlist (programming error)."""
+    """Attempt to encode a frame outside the command allowlist (programming error).
+
+    Allowed: ``0x11``, ``0x23``, and ``0x22`` only to an allowlisted write target (spec 003 R2).
+    """
 
     exit_code = 1
+
+
+class WriteRefusedError(UnsafeCommandError):
+    """A write was refused before anything was sent (spec 003 FR-009/010/014/015/017).
+
+    ``reason`` is one of ``not_edit_mode``, ``out_of_range``, ``untested_firmware``,
+    ``experimental_required``, ``edits_would_be_discarded``, ``unknown_field``.
+    """
+
+    exit_code = 1
+
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
+class WriteNakError(ProtocolError):
+    """The pedal answered a write with something other than the ACK (FR-011).
+
+    ``reply`` holds the raw reply frame; it is never retried.
+    """
+
+    def __init__(self, reply: bytes) -> None:
+        self.reply = bytes(reply)
+        super().__init__(
+            "nak", self.reply.hex(" "), f"write not acknowledged: reply {self.reply.hex(' ')}"
+        )
+
+
+class WriteNotAppliedError(OpenvaveError):
+    """The write was acknowledged but the re-read does not show it (FR-012, exit code 8).
+
+    ``result`` is the :class:`~openvave.models.WriteResult` with ``applied`` false.
+    """
+
+    exit_code = 8
+
+    def __init__(self, result: WriteResult, message: str | None = None) -> None:
+        self.result = result
+        super().__init__(
+            message or f"{result.plan.action}: acknowledged but not applied (re-read differs)"
+        )

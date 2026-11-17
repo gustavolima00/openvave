@@ -32,7 +32,8 @@ SENT_FRAMES: list[bytes] = []
 
 @pytest.fixture(scope="session", autouse=True)
 def _sc004_audit() -> Iterator[list[bytes]]:
-    """Fail the session if any frame written to a FakeTransport is not a query/read."""
+    """Fail the session if any frame written to a FakeTransport is not a query, a read or an
+    allowlisted write (``tests/support/audit.py``)."""
     from openvave.transport.fake import FakeTransport
     from tests.support.audit import unsafe_frames
 
@@ -51,7 +52,7 @@ def _sc004_audit() -> Iterator[list[bytes]]:
     bad = unsafe_frames(SENT_FRAMES)
     if bad:
         pytest.fail(
-            "SC-004 violated: non read-only frames were sent: "
+            "SC-004/FR-013 violated: frames outside the command allowlist were sent: "
             + ", ".join(f.hex(" ") for f in bad),
             pytrace=False,
         )

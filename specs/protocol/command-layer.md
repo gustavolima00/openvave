@@ -405,6 +405,32 @@ retries a send up to 3 times only when no reply arrives. No other status value i
 app, so non-zero status codes are unknown. (Hypothesis; the logged writes all succeeded and the
 log shows 8-byte replies, consistent with this.)
 
+### Write messages
+
+The only writes openvave can encode (spec 003, 0.3.0). This table is authoritative;
+`src/openvave/protocol/writes.py` `WRITE_MESSAGES` mirrors it row for row, and
+`tests/unit/test_writes_doc.py` fails on any difference. Every write is type 4 and carries the
+usual frame: `00 59 22 | len | type | address (4, LE) | length (3, LE) | data | checksum`. The
+encoder refuses every other `0x22` body; erase (`0x21`), the commit (`0xF0000000`), stored-area
+writes (`0x0`–`0x2F5`) and the loopback write (`0xD0000000`) are not encodable.
+
+Rule: a row is `observed` only when it cites a committed capture of **this project's own send**
+(a gate excerpt in `captures/fw96/`), and `confirmed` when it cites two independent sessions.
+Sightings in the app's log or code go in Notes, not in Evidence (the log has no raw bytes). A
+write is sent without `--experimental` only when its row is `confirmed`, the `ack` row is at least
+`observed`, and the pedal's firmware is listed (research R4).
+
+| Target | Type | Address | Len | Data | Reply | Confidence | Firmware | Evidence | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| `knob_block` | 4 | `0x10000004` | 14 | preset bytes 4–17, rebuilt from a fresh edit-buffer read with one byte changed | ACK | hypothesis | 96 | — | seen in the app's log (2026-11-16) for knob moves; not yet sent by openvave |
+| `block_switch(0)` | 4 | `0x10000000` | 1 | amp on `01` / off `00` | ACK | hypothesis | 96 | — | app code only |
+| `block_switch(1)` | 4 | `0x10000001` | 1 | mod on `01` / off `00` | ACK | hypothesis | 96 | — | seen in the app's log (2026-11-16); the pedal may also copy physical knob positions |
+| `block_switch(2)` | 4 | `0x10000002` | 1 | delay on `01` / off `00` | ACK | hypothesis | 96 | — | app code only |
+| `block_switch(3)` | 4 | `0x10000003` | 1 | reverb on `01` / off `00` | ACK | hypothesis | 96 | — | app code only |
+| `led_colour` | 4 | `0x10000012` | 3 | R, G, B, 0–255 each (preset 18–20) | ACK | hypothesis | 96 | — | app code only; meaning of preset 18–20 is itself a hypothesis |
+| `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | hypothesis | 96 | — | seen in the app's log (2026-11-16) for i = 2, 3; pedal shows slot `ff` for one read while loading |
+| `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | hypothesis | 96 | — | the reply the app accepts (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
+
 ### Preset LED colour (app code, 2026-11-17)
 
 The app's preset structure is: 4 one-byte block switches (amp, mod, delay, reverb), a 14-byte
@@ -426,6 +452,8 @@ Tank-G, probably routing USB playback back into the USB recording, is not known)
 - ~~Replay **read-only** commands (`CMD_Q_NAME_AND_VER`, reads) from the library~~ done: the
   read-only client lives in `src/openvave/` (`openvave info`, `openvave preset dump`, `TankG`). Its
   encoder only accepts `0x11` and `0x23`; writes stay disabled until confirmed (Constitution IV).
+  Spec 003 adds `0x22`, but only to the targets in "Write messages", behind `--experimental` until
+  each row is confirmed by this project's own gate sessions.
 - Note: a macOS relay (`poc/ble_mitm.py`) is not discovered by the app, likely because it matches
   advertising data macOS cannot emit; a Linux/ESP32 relay would be needed for live app captures.
 - ~~Correlate `0x10000004` byte positions with specific knobs~~ done (2026-11-16): preset 4–17

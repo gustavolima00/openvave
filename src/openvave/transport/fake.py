@@ -12,10 +12,17 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from openvave.errors import ConnectionLostError, ProtocolError
-from openvave.protocol.frame import READ, decode_frame, encode_frame
+from openvave.protocol.frame import READ, WRITE, decode_frame, encode_frame
 
 ECHO_LEN = 8
 MEMORY_TYPE = 4
+STORE_ADDRESS = 0
+EDIT_BUFFER = 0x10000000
+GLOBAL_ADDRESS = 0x20000000
+SELECT_BASE = 0xE0000000
+PRESET_SIZE = 21
+STORE_OFFSET = 2
+WRITE_ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
 
 
 def _label(text: str) -> str:
@@ -56,6 +63,14 @@ class FakeTransport:
       requests are then left unanswered (the session times out) instead of failing the test.
     - ``chunk_size``: deliver every reply as notification chunks of at most this many bytes
       (182 = what the pedal sends at ATT MTU 185). Exclusive with ``split``.
+    - ``apply_writes``: answer unscripted allowlisted writes (``0x22``) with the ACK and apply
+      them to ``memory``: edit-buffer writes change the block at ``0x10000000``; a preset select
+      ``i`` copies stored preset ``i`` (block at address 0) into the edit buffer, sets global
+      bytes 0–2 (browsed bank, bank, slot) and leaves edit mode (mode 0 → 1). This models the
+      pedal as the app describes it; it is not hardware evidence. Without it, an unscripted write
+      is a test error.
+    - ``select_transient``: after each applied preset select, the next this-many global reads
+      return slot ``ff`` (the loading state seen once on hardware).
 
     Every frame written is recorded in :attr:`sent`. Without ``memory``, a request that is not in
     the script raises ``AssertionError`` (the test is wrong, not the pedal). Scripted labels
@@ -72,7 +87,11 @@ class FakeTransport:
         replies: Mapping[str, Replies] | None = None,
         memory: Mapping[int, bytes] | None = None,
         chunk_size: int | None = None,
+        apply_writes: bool = False,
+        select_transient: int = 0,
     ) -> None:
+        if apply_writes and memory is None:
+            raise ValueError("apply_writes needs memory")
         if chunk_size is not None and (chunk_size < 1 or split is not None):
             raise ValueError("chunk_size must be >= 1 and cannot be combined with split")
         self._replies = {label: _reply_list(label, rx) for label, (_, rx) in script.items()}
@@ -91,6 +110,9 @@ class FakeTransport:
             None if memory is None else {addr: bytes(block) for addr, block in memory.items()}
         )
         self._disconnect_after = disconnect_after
+        self._apply_writes = apply_writes
+        self._select_transient = select_transient
+        self._transient_left = 0
         self._callback: Callable[[bytes], None] | None = None
         self.sent: list[bytes] = []
         """Every frame written, in order."""
@@ -108,6 +130,8 @@ class FakeTransport:
         replies: Mapping[str, Replies] | None = None,
         memory: Mapping[int, bytes] | None = None,
         chunk_size: int | None = None,
+        apply_writes: bool = False,
+        select_transient: int = 0,
     ) -> FakeTransport:
         """Build a fake from a capture file (labels are whitespace-normalised).
 
@@ -141,6 +165,8 @@ class FakeTransport:
             replies=replies,
             memory=memory,
             chunk_size=chunk_size,
+            apply_writes=apply_writes,
+            select_transient=select_transient,
         )
 
     async def open(self) -> None:
@@ -164,6 +190,9 @@ class FakeTransport:
             raise ConnectionLostError("simulated disconnect")
         self.sent.append(frame)
         label = self._labels.get(frame)
+        if label is None and self._apply_writes and frame[2:3] == bytes([WRITE]):
+            self._deliver(self._apply_write(frame))
+            return
         if label is None and self._memory is not None:
             reply = self._memory_reply(frame)
             if reply is not None:
@@ -178,6 +207,45 @@ class FakeTransport:
         served = self._served.get(label, 0)
         self._served[label] = served + 1
         self._deliver(frames[min(served, len(frames) - 1)])
+
+    def _apply_write(self, frame: bytes) -> bytes:
+        """Apply an allowlisted write to :attr:`_memory` and return the ACK."""
+        from openvave.protocol.writes import allowed_write_body
+
+        assert self._memory is not None
+        body = decode_frame(frame).body
+        if not allowed_write_body(body):
+            raise AssertionError(f"FakeTransport: write outside the allowlist {frame.hex(' ')}")
+        address = int.from_bytes(body[1:5], "little")
+        data = body[ECHO_LEN:]
+        if address >= SELECT_BASE:
+            self._select(address - SELECT_BASE)
+        else:
+            self._poke(address, data)
+        return WRITE_ACK
+
+    def _block_at(self, address: int, length: int) -> tuple[int, bytes]:
+        assert self._memory is not None
+        for start, block in self._memory.items():
+            if start <= address and address + length <= start + len(block):
+                return start, block
+        raise AssertionError(f"FakeTransport: no memory at 0x{address:08x} x{length}")
+
+    def _poke(self, address: int, data: bytes) -> None:
+        assert self._memory is not None
+        start, block = self._block_at(address, len(data))
+        at = address - start
+        self._memory[start] = block[:at] + data + block[at + len(data) :]
+
+    def _select(self, index: int) -> None:
+        stored = STORE_ADDRESS + STORE_OFFSET + PRESET_SIZE * index
+        start, image = self._block_at(stored, PRESET_SIZE)
+        self._poke(EDIT_BUFFER, image[stored - start : stored - start + PRESET_SIZE])
+        _, glob = self._block_at(GLOBAL_ADDRESS, 4)
+        mode = 1 if glob[3] == 0 else glob[3]
+        bank, slot = divmod(index, 4)
+        self._poke(GLOBAL_ADDRESS, bytes([bank, bank, slot, mode]))
+        self._transient_left = self._select_transient
 
     def _memory_reply(self, frame: bytes) -> bytes | None:
         """A read reply built from :attr:`_memory`, or ``None`` if the request is not covered."""
@@ -194,6 +262,9 @@ class FakeTransport:
         for start, block in self._memory.items():
             if start <= address and address + length <= start + len(block):
                 data = block[address - start : address - start + length]
+                if address == GLOBAL_ADDRESS and length == 4 and self._transient_left > 0:
+                    self._transient_left -= 1
+                    data = data[:2] + b"\xff" + data[3:]
                 return encode_frame(READ, body + data)
         return None
 

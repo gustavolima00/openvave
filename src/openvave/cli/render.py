@@ -20,9 +20,12 @@ from openvave.models import (
     RegionRead,
     WatchChange,
     WatchStart,
+    WritePlan,
+    WriteResult,
 )
 from openvave.protocol.decode import decode_field, decode_region
-from openvave.protocol.storage import EXPECTED_HEADER
+from openvave.protocol.storage import EXPECTED_HEADER, position
+from openvave.protocol.writes import WRITABLE_FIELDS
 
 SCHEMA_VERSION = 2
 """JSON contract version; 2 since 0.2.0 (field renames, CHANGELOG)."""
@@ -365,3 +368,169 @@ def watch_stop_json(
 def json_line(document: dict[str, Any]) -> str:
     """One JSON Lines record (``watch --json``)."""
     return json.dumps(document, ensure_ascii=False)
+
+
+# -- writes (contracts/cli.md "openvave set" / "openvave preset select") ------------------------
+
+NOT_SAVED = "Not saved: leave edit mode on the pedal without saving to restore the stored preset."
+MODE_NAMES = {0: "edit", 1: "normal", 2: "tuner"}
+REFUSAL_TEXT = {
+    "not_edit_mode": "the pedal is not in edit mode",
+    "out_of_range": "value out of range",
+    "untested_firmware": "firmware not covered by a confirmed write gate (--experimental)",
+    "experimental_required": "message not confirmed yet (--experimental)",
+    "edits_would_be_discarded": "unsaved edits would be discarded (--discard-edits)",
+}
+
+
+def _loaded_position(glob: RegionRead) -> str:
+    bank, slot = glob.data[1], glob.data[2]
+    if bank > 8 or slot > 3:
+        return "?"
+    return f"{bank + 1}{'ABCD'[slot]}"
+
+
+def _field_value(plan: WritePlan, data: bytes) -> str:
+    """Display form of a field value from the preset bytes ``data`` (21) or the write data."""
+    spec = WRITABLE_FIELDS[plan.field or ""]
+    if spec.kind == "led_colour":
+        return "#" + data[spec.offset : spec.offset + 3].hex()
+    assert spec.entry is not None
+    return decode_field(spec.entry, data[spec.offset]).display
+
+
+def _requested(plan: WritePlan) -> bytes:
+    """The edit buffer as it would be after the write (for the requested value display)."""
+    buffer = bytearray(plan.before.data)
+    target = plan.target
+    start = target.address - 0x10000000
+    buffer[start : start + len(plan.data)] = plan.data
+    return bytes(buffer)
+
+
+def _change_text(change: ByteChange) -> str:
+    if change.region is Region.GLOBAL:
+        where = f"global[{change.offset}]"
+    else:
+        where = f"[{change.offset}]"
+    if change.field is not None:
+        return f"{where} {change.field.name} {decode_field(change.field, change.new).display}"
+    return f"{where} {change.new}"
+
+
+def _refusal_lines(plan: WritePlan) -> list[str]:
+    if plan.refusal is None:
+        return []
+    detail = REFUSAL_TEXT.get(plan.refusal, plan.refusal)
+    if plan.refusal == "experimental_required":
+        detail = f"{plan.target.kind} is '{plan.confidence}' (--experimental)"
+    return [f"  refused: {plan.refusal} ({detail})"]
+
+
+def human_set(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Set gain 60 → 90   (current preset 1B, edit mode)`` + write/reply/after lines."""
+    field = plan.field or ""
+    if plan.no_change and plan.refusal is None:
+        return f"{field} is already {_field_value(plan, plan.before.data)}; nothing sent"
+    mode = MODE_NAMES.get(plan.global_before.data[3], str(plan.global_before.data[3]))
+    old = _field_value(plan, plan.before.data)
+    new = "?" if not plan.data else _field_value(plan, _requested(plan))
+    lines = [
+        f"Set {field} {old} → {new}   "
+        f"(current preset {_loaded_position(plan.global_before)}, {mode} mode)"
+    ]
+    if plan.frame:
+        lines.append(f"  write  {hex_bytes(plan.frame)}")
+    lines += _refusal_lines(plan)
+    if dry_run or result is None:
+        lines.append("  dry run: nothing sent")
+        return "\n".join(lines)
+    lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
+    status = "applied" if result.applied else "not applied"
+    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    lines.append(f"  after  {texts[0]}   {status}")
+    lines += [f"         {text}" for text in texts[1:]]
+    lines.append(NOT_SAVED)
+    return "\n".join(lines)
+
+
+def human_select(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Select 2C (index 6)   from 1B`` + write/reply/now lines."""
+    index = plan.target.argument
+    assert index is not None
+    target = position(index)
+    lines = [
+        f"Select {target} (index {index})   from {_loaded_position(plan.global_before)}",
+        f"  write  {hex_bytes(plan.frame)}",
+    ]
+    lines += _refusal_lines(plan)
+    if dry_run or result is None:
+        lines.append("  dry run: nothing sent")
+        return "\n".join(lines)
+    lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
+    glob = result.global_after.data
+    bank = str(glob[1] + 1) if glob[1] <= 8 else "?"
+    slot = "ABCD"[glob[2]] if glob[2] <= 3 else "?"
+    now = f"  now    bank {bank}, slot {slot}   "
+    if result.applied:
+        lines.append(now + f"buffer = stored {target}   applied")
+    else:
+        lines.append(now + f"not applied (expected {target} with its stored bytes)")
+    return "\n".join(lines)
+
+
+def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
+    return [
+        {
+            "region": "global" if c.region is Region.GLOBAL else "preset",
+            "offset": c.offset,
+            "before": c.old,
+            "after": c.new,
+            "name": c.field.name if c.field is not None else None,
+        }
+        for c in changes
+    ]
+
+
+def write_json(
+    command: str,
+    plan: WritePlan,
+    result: WriteResult | None,
+    *,
+    dry_run: bool,
+    read_at: datetime,
+    device: DeviceInfo | None,
+    identity: DeviceIdentity,
+) -> dict[str, Any]:
+    """``set --json`` / ``preset select --json`` (``contracts/write-result.schema.json``)."""
+    target = plan.target
+    document = envelope(command, read_at, device, identity)
+    document["plan"] = {
+        "action": plan.action,
+        "target": {
+            "kind": target.kind,
+            "type": target.type,
+            "address": f"0x{target.address:08x}",
+            "length": target.length,
+            "argument": target.argument,
+        },
+        "data": hex_bytes(plan.data),
+        "frame": hex_bytes(plan.frame),
+        "reads": [hex_bytes(r) for r in plan.reads],
+        "before": hex_bytes(plan.before.data),
+        "global_before": hex_bytes(plan.global_before.data),
+        "no_change": plan.no_change,
+        "refusal": plan.refusal,
+        "dry_run": dry_run,
+        "confidence": plan.confidence,
+    }
+    if result is not None and not dry_run and not plan.no_change:
+        document["result"] = {
+            "reply": hex_bytes(result.reply),
+            "ack": True,
+            "after": hex_bytes(result.after.data),
+            "global_after": hex_bytes(result.global_after.data),
+            "changes": _changes_json(result.changes),
+            "applied": result.applied,
+        }
+    return document

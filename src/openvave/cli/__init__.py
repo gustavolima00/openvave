@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 import traceback
 from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
@@ -19,9 +20,16 @@ from pathlib import Path
 
 from openvave import __version__
 from openvave.cli import files, render, watch
-from openvave.errors import BluetoothUnavailableError, MultipleDevicesError, OpenvaveError
-from openvave.models import DeviceInfo, Region
-from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, TankG
+from openvave.errors import (
+    BluetoothUnavailableError,
+    MultipleDevicesError,
+    OpenvaveError,
+    WriteNotAppliedError,
+)
+from openvave.models import DeviceInfo, Region, WritePlan, WriteResult
+from openvave.protocol.storage import parse_position
+from openvave.protocol.writes import WRITABLE_FIELDS
+from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, FieldValue, TankG
 from openvave.transport import Transport
 
 TransportFactory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
@@ -79,10 +87,22 @@ def _global_options(parser: argparse.ArgumentParser, *, suppress: bool) -> None:
     )
 
 
+def _write_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--dry-run", action="store_true", help="do the reads and print the frame; send no write"
+    )
+    parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="allow writes not yet confirmed in the protocol docs, or on untested firmware",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openvave",
-        description="Read-only client for the M-VAVE Tank-G pedal. Unofficial. "
+        description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded "
+        "edit-buffer writes (never saved). Unofficial. "
         "Not affiliated with or endorsed by M-VAVE / Cuvave.",
     )
     parser.add_argument("--version", action="version", version=f"openvave {__version__}")
@@ -106,6 +126,28 @@ def _parser() -> argparse.ArgumentParser:
         help="backup file (default ./tankg-backup-<YYYYmmdd-HHMMSS>.json)",
     )
     backup.add_argument("--force", action="store_true", help="overwrite an existing file")
+    select = preset_sub.add_parser(
+        "select",
+        parents=[common],
+        help="load a stored preset (1A–9D or 0–35) with the preset-select write",
+    )
+    select.add_argument("position", help="1A–9D (case-insensitive) or index 0–35")
+    _write_options(select)
+    select.add_argument(
+        "--discard-edits",
+        action="store_true",
+        help="select even in edit mode (the pedal's unsaved edits are lost)",
+    )
+    set_parser = sub.add_parser(
+        "set",
+        parents=[common],
+        help="change one field of the current preset in the edit buffer (never saved)",
+        description="Writable fields: " + ", ".join(WRITABLE_FIELDS) + ". Leave edit mode on "
+        "the pedal without saving to restore the stored preset.",
+    )
+    set_parser.add_argument("field", help="byte map field name, e.g. gain, mod_on, led_colour")
+    set_parser.add_argument("value", help="0–127, 0–8, on/off, or #rrggbb / r,g,b")
+    _write_options(set_parser)
     watch_parser = sub.add_parser(
         "watch",
         parents=[common],
@@ -213,9 +255,115 @@ async def _preset_backup(args: argparse.Namespace, factory: TransportFactory) ->
     return render.human_backup(backup, str(args.output))
 
 
+class UsageError(Exception):
+    """A command-line value that cannot be used (exit 2, nothing sent)."""
+
+
+_COLOUR_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+_COLOUR_RGB = re.compile(r"^\s*-?\d+\s*,\s*-?\d+\s*,\s*-?\d+\s*$")
+_INTEGER = re.compile(r"^-?\d+$")
+
+
+def parse_field_value(field: str, text: str) -> FieldValue:
+    """Command-line value for ``openvave set``; :class:`UsageError` for an unusable one.
+
+    Range is not checked here: an out-of-range value is a refusal (exit 1) from the library.
+    """
+    spec = WRITABLE_FIELDS.get(field)
+    if spec is None:
+        raise UsageError(f"unknown field {field!r}; writable fields: {', '.join(WRITABLE_FIELDS)}")
+    if spec.kind == "led_colour":
+        if _COLOUR_HEX.match(text):
+            r, g, b = bytes.fromhex(text[1:])
+            return (r, g, b)
+        if _COLOUR_RGB.match(text):
+            r, g, b = (int(part) for part in text.split(","))
+            return (r, g, b)
+        raise UsageError(f"led_colour takes #rrggbb or r,g,b (0–255 each), got {text!r}")
+    if spec.kind == "block_switch":
+        if text.lower() in ("on", "off"):
+            return text.lower() == "on"
+        raise UsageError(f"{field} takes on or off, got {text!r}")
+    entry = spec.entry
+    assert entry is not None
+    if _INTEGER.match(text):
+        return int(text)
+    raise UsageError(f"{field} takes an integer {entry.min}–{entry.max}, got {text!r}")
+
+
+def _render_write(
+    args: argparse.Namespace,
+    command: str,
+    plan: WritePlan,
+    result: WriteResult | None,
+    pedal: TankG,
+) -> str:
+    if args.json:
+        return render.dumps(
+            render.write_json(
+                command,
+                plan,
+                result,
+                dry_run=args.dry_run,
+                read_at=datetime.now(UTC),
+                device=pedal.device,
+                identity=pedal.identity,
+            )
+        )
+    if command == "set":
+        return render.human_set(plan, result, dry_run=args.dry_run)
+    return render.human_select(plan, result, dry_run=args.dry_run)
+
+
+async def _write(
+    args: argparse.Namespace,
+    factory: TransportFactory,
+    command: str,
+    plan_call: Callable[[TankG], Awaitable[WritePlan]],
+    write_call: Callable[[TankG], Awaitable[WriteResult]],
+) -> str:
+    async def source() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    async with TankG(source, timeout=args.timeout) as pedal:
+        if args.dry_run:
+            return _render_write(args, command, await plan_call(pedal), None, pedal)
+        try:
+            result = await write_call(pedal)
+        except WriteNotAppliedError as err:
+            if not args.json:  # 001 rule: with --json, stdout stays empty on failure
+                print(_render_write(args, command, err.result.plan, err.result, pedal))
+            raise
+        return _render_write(args, command, result.plan, result, pedal)
+
+
+async def _set(args: argparse.Namespace, factory: TransportFactory) -> str:
+    field, value, experimental = args.field, args.parsed_value, args.experimental
+    return await _write(
+        args,
+        factory,
+        "set",
+        lambda p: p.plan_set(field, value, experimental=experimental),
+        lambda p: p.set_field(field, value, experimental=experimental),
+    )
+
+
+async def _preset_select(args: argparse.Namespace, factory: TransportFactory) -> str:
+    index, discard, experimental = args.index, args.discard_edits, args.experimental
+    return await _write(
+        args,
+        factory,
+        "preset select",
+        lambda p: p.plan_select(index, discard_edits=discard, experimental=experimental),
+        lambda p: p.select_preset(index, discard_edits=discard, experimental=experimental),
+    )
+
+
 async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
     if args.action == "backup":
         return await _preset_backup(args, factory)
+    if args.action == "select":
+        return await _preset_select(args, factory)
     return await _preset_dump(args, factory)
 
 
@@ -224,7 +372,19 @@ COMMANDS: dict[
 ] = {
     "info": _info,
     "preset": _preset,
+    "set": _set,
 }
+
+
+def _prepare_write(args: argparse.Namespace) -> None:
+    """Parse the field value / position before any pedal I/O (usage errors exit 2)."""
+    if args.command == "set":
+        args.parsed_value = parse_field_value(args.field, args.value)
+    else:
+        try:
+            args.index = parse_position(args.position)
+        except ValueError as err:
+            raise UsageError(str(err)) from None
 
 
 def _prepare_backup(args: argparse.Namespace) -> None:
@@ -252,6 +412,12 @@ def _report(err: OpenvaveError) -> None:
             )
         else:
             print("hint: turn Bluetooth on and check this user may access it", file=sys.stderr)
+    elif isinstance(err, WriteNotAppliedError):
+        print(
+            "hint: the pedal acknowledged the write but the re-read does not show it; nothing "
+            "was retried. Leave edit mode without saving to restore the stored preset.",
+            file=sys.stderr,
+        )
     elif err.exit_code == 3:
         print(
             "hint: switch the pedal on and close the M-VAVE phone app (it holds the connection)",
@@ -290,6 +456,13 @@ def main(
             _prepare_backup(args)
         except files.TargetExistsError as err:
             print(f"openvave preset backup: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
+    if args.command == "set" or (args.command == "preset" and args.action == "select"):
+        try:
+            _prepare_write(args)
+        except UsageError as err:
+            name = "set" if args.command == "set" else "preset select"
+            print(f"openvave {name}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"

@@ -1,4 +1,4 @@
-"""``TankG``: one read-only session with a pedal (data-model.md, research R9).
+"""``TankG``: one session with a pedal (data-model.md, research R9; spec 003 research R5).
 
 Lifecycle: open transport → enable notifications → settle 200 ms → handshake (``0x11``, up to 3
 attempts) → reads (``0x23``) → close. Requests are strictly sequential. The transport is always
@@ -6,6 +6,12 @@ closed on exit, whatever happened.
 
 :meth:`TankG.watch` is the only polling API: :meth:`~TankG.read` and :meth:`~TankG.snapshot` read
 once, and nothing polls unless a caller iterates ``watch()`` (spec 002 FR-001/FR-003).
+
+Writes (spec 003) go through one guarded path: :meth:`~TankG.set_field` and
+:meth:`~TankG.select_preset` build the same :class:`~openvave.models.WritePlan` as
+:meth:`~TankG.plan_set` / :meth:`~TankG.plan_select` (reads only), refuse unless every check
+passes, send at most one allowlisted ``0x22`` frame, check the ACK and re-read to verify. A write
+is never retried.
 """
 
 from __future__ import annotations
@@ -22,6 +28,8 @@ from openvave.errors import (
     HandshakeError,
     ProtocolError,
     RequestTimeoutError,
+    WriteNotAppliedError,
+    WriteRefusedError,
 )
 from openvave.models import (
     Backup,
@@ -34,22 +42,35 @@ from openvave.models import (
     WatchChange,
     WatchEvent,
     WatchStart,
+    WritePlan,
+    WriteResult,
 )
 from openvave.protocol import (
     FrameAssembler,
     build_query,
     build_read,
     build_storage_read,
+    build_write,
     decode_frame,
     decode_region,
     diff,
     parse_identity,
     parse_read_reply,
     parse_storage_reply,
+    parse_write_reply,
 )
 from openvave.protocol.frame import QUERY
 from openvave.protocol.identity import TESTED_FIRMWARE
-from openvave.protocol.storage import EXPECTED_HEADER, PRESET_COUNT, StorageRead
+from openvave.protocol.storage import EXPECTED_HEADER, PRESET_COUNT, StorageRead, position
+from openvave.protocol.writes import (
+    LED_LENGTH,
+    WRITABLE_FIELDS,
+    WritableField,
+    WriteTarget,
+    message_for,
+    rebuild_knob_block,
+    sendable_by_default,
+)
 from openvave.trace import trace_rx, trace_rx_chunk, trace_rx_stray, trace_tx
 from openvave.transport import Transport
 
@@ -70,6 +91,21 @@ MIN_WATCH_INTERVAL = 0.2
 """Smallest :meth:`TankG.watch` interval in seconds (research R4)."""
 
 Sleep = Callable[[float], Awaitable[object]]
+
+EDIT_MODE = 0
+"""Global byte 3 value meaning edit mode (byte map ``mode``: 0 edit, 1 normal, 2 tuner)."""
+LOADING_SLOT = 0xFF
+"""Global byte 2 while a preset loads."""
+SELECT_WAIT = 0.1
+"""Seconds to wait after a select ACK, and between global re-reads (as the app, R9)."""
+SELECT_TRIES = 10
+"""Global reads after a select before giving up on slot ``ff``."""
+SELECT_SLEEP: Sleep = asyncio.sleep
+"""Default sleep of :meth:`TankG.select_preset` (patched by tests)."""
+
+FieldValue = int | bool | str | tuple[int, int, int]
+"""A value for :meth:`TankG.set_field`: int (knob/selector), bool or ``on``/``off`` (switch),
+``(r, g, b)`` / ``"#rrggbb"`` / ``"r,g,b"`` (``led_colour``)."""
 
 TransportSource = Callable[[], Awaitable[tuple[Transport, DeviceInfo | None]]]
 """Coroutine factory producing the transport to use and, if known, the device it reaches."""
@@ -202,6 +238,208 @@ class TankG:
 
     async def _storage_read(self, target: StorageRead) -> bytes:
         return parse_storage_reply(target, await self._request(build_storage_read(target)))
+
+    # -- writes (spec 003) ---------------------------------------------------------------------
+
+    async def plan_set(
+        self, field: str, value: FieldValue, *, experimental: bool = False
+    ) -> WritePlan:
+        """Plan a one-field change of the edit buffer: reads global and the edit buffer only.
+
+        ``plan.refusal`` names what :meth:`set_field` would refuse with the same arguments.
+        Raises :class:`WriteRefusedError` (``unknown_field``) for a field that cannot be written
+        and :class:`ValueError` for a value of the wrong type or syntax.
+        """
+        spec = WRITABLE_FIELDS.get(field)
+        if spec is None:
+            valid = ", ".join(WRITABLE_FIELDS)
+            raise WriteRefusedError(
+                "unknown_field", f"unknown field {field!r}; writable fields: {valid}"
+            )
+        wanted = _field_bytes(spec, value)
+        glob, glob_frame = await self._read_with_frame(Region.GLOBAL)
+        buffer, buffer_frame = await self._read_with_frame(Region.CURRENT_PRESET)
+        target = spec.target()
+        current = buffer.data[spec.offset : spec.offset + len(wanted)] if wanted else b""
+        data = b""
+        if wanted is not None:
+            if spec.kind == "knob_block":
+                data = rebuild_knob_block(buffer.data, spec.offset, wanted[0])
+            else:
+                data = wanted
+        refusal = None
+        if glob.data[3] != EDIT_MODE:
+            refusal = "not_edit_mode"
+        elif wanted is None:
+            refusal = "out_of_range"
+        else:
+            refusal = self._gate(target, experimental)
+        return WritePlan(
+            action=f"set {field}",
+            target=target,
+            data=data,
+            frame=build_write(target, data) if data else b"",
+            reads=(glob_frame, buffer_frame),
+            before=buffer,
+            global_before=glob,
+            no_change=wanted is not None and current == wanted,
+            refusal=refusal,
+            confidence=message_for(target.kind, target.argument).confidence,
+            field=field,
+        )
+
+    async def set_field(
+        self, field: str, value: FieldValue, *, experimental: bool = False
+    ) -> WriteResult:
+        """Change one field of the current preset in the edit buffer (never saved).
+
+        Builds :meth:`plan_set`'s plan, raises :class:`WriteRefusedError` if it is refused,
+        returns at once (``plan.no_change``, nothing sent) if the value is already set, else
+        sends the one write, checks the ACK (:class:`WriteNakError`, exit 7), re-reads the edit
+        buffer and global block, and raises :class:`WriteNotAppliedError` (exit 8, carrying the
+        result) unless the targeted bytes now equal the request. ``experimental=True`` allows
+        messages that are not ``confirmed`` and untested firmware (FR-014/015).
+        """
+        plan = await self.plan_set(field, value, experimental=experimental)
+        self._raise_refusal(plan)
+        if plan.no_change:
+            return WriteResult(plan, b"", plan.before, plan.global_before, (), applied=True)
+        reply = await self._send_once(plan)
+        after = await self.read(Region.CURRENT_PRESET)
+        glob = await self.read(Region.GLOBAL)
+        spec = WRITABLE_FIELDS[field]
+        wanted = plan.data
+        if spec.kind == "knob_block":
+            applied = after.data[4:18] == wanted
+        else:
+            applied = after.data[spec.offset : spec.offset + len(wanted)] == wanted
+        return self._finish(plan, reply, after, glob, applied)
+
+    async def plan_select(
+        self, index: int, *, discard_edits: bool = False, experimental: bool = False
+    ) -> WritePlan:
+        """Plan loading stored preset ``index`` (0–35): reads global and the edit buffer only.
+
+        Raises :class:`ValueError` for an index outside 0–35.
+        """
+        target = WriteTarget.preset_select(index)
+        glob, glob_frame = await self._read_with_frame(Region.GLOBAL)
+        buffer, buffer_frame = await self._read_with_frame(Region.CURRENT_PRESET)
+        refusal = None
+        if glob.data[3] == EDIT_MODE and not discard_edits:
+            refusal = "edits_would_be_discarded"
+        else:
+            refusal = self._gate(target, experimental)
+        data = b"\x01"
+        return WritePlan(
+            action=f"select {position(index)}",
+            target=target,
+            data=data,
+            frame=build_write(target, data),
+            reads=(glob_frame, buffer_frame),
+            before=buffer,
+            global_before=glob,
+            no_change=False,
+            refusal=refusal,
+            confidence=message_for(target.kind, target.argument).confidence,
+        )
+
+    async def select_preset(
+        self,
+        index: int,
+        *,
+        discard_edits: bool = False,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> WriteResult:
+        """Load stored preset ``index`` (0–35) with the preset-select write (spec 003 US3).
+
+        In edit mode the pedal's unsaved edits would be lost: refused unless
+        ``discard_edits=True``. After the ACK, waits 100 ms, reads global until the slot is not
+        ``ff`` (at most 10 reads, 100 ms apart), then reads the edit buffer and stored preset
+        ``index``. Applied iff bank/slot match ``index`` and the buffer equals the stored preset;
+        otherwise :class:`WriteNotAppliedError`. ``sleep`` is injectable for tests.
+        """
+        wait = sleep or SELECT_SLEEP
+        plan = await self.plan_select(index, discard_edits=discard_edits, experimental=experimental)
+        self._raise_refusal(plan)
+        reply = await self._send_once(plan)
+        glob = plan.global_before
+        for _ in range(SELECT_TRIES):
+            await wait(SELECT_WAIT)
+            glob = await self.read(Region.GLOBAL)
+            if glob.data[2] != LOADING_SLOT:
+                break
+        else:
+            buffer = await self.read(Region.CURRENT_PRESET)
+            raise WriteNotAppliedError(
+                self._result(plan, reply, buffer, glob, applied=False),
+                f"{plan.action}: the pedal still reports a loading slot (ff) after "
+                f"{SELECT_TRIES} reads",
+            )
+        after = await self.read(Region.CURRENT_PRESET)
+        stored = await self._storage_read(StorageRead.preset(index))
+        bank, slot = divmod(index, 4)
+        applied = glob.data[1] == bank and glob.data[2] == slot and after.data == stored
+        return self._finish(plan, reply, after, glob, applied)
+
+    def _gate(self, target: WriteTarget, experimental: bool) -> str | None:
+        """Firmware and confidence gate (FR-014/015, research R4)."""
+        if experimental:
+            return None
+        identity = self.identity
+        message = message_for(target.kind, target.argument)
+        if identity.firmware_untested or identity.firmware not in message.firmware:
+            return "untested_firmware"
+        if not sendable_by_default(target.kind, target.argument, identity.firmware):
+            return "experimental_required"
+        return None
+
+    def _raise_refusal(self, plan: WritePlan) -> None:
+        reason = plan.refusal
+        if reason is None:
+            return
+        messages = {
+            "not_edit_mode": "the pedal is not in edit mode; enter edit mode on the pedal first",
+            "out_of_range": f"{plan.action}: value out of range for this field",
+            "untested_firmware": (
+                f"firmware {self.identity.firmware} is not covered by a confirmed write gate; "
+                "pass --experimental (experimental=True) to send anyway"
+            ),
+            "experimental_required": (
+                f"{plan.target.kind} is '{plan.confidence}' in the protocol docs "
+                "(Write messages); pass --experimental (experimental=True) to send it"
+            ),
+            "edits_would_be_discarded": (
+                "the pedal is in edit mode and selecting a preset discards its unsaved edits; "
+                "pass --discard-edits (discard_edits=True) to select anyway"
+            ),
+        }
+        raise WriteRefusedError(reason, f"refused ({reason}): {messages.get(reason, reason)}")
+
+    async def _send_once(self, plan: WritePlan) -> bytes:
+        """Send the plan's one write frame and check the ACK. Never retried."""
+        reply = await self._request(plan.frame)
+        parse_write_reply(reply)
+        return reply
+
+    def _result(
+        self, plan: WritePlan, reply: bytes, after: RegionRead, glob: RegionRead, *, applied: bool
+    ) -> WriteResult:
+        changes = diff(plan.global_before, glob) + diff(plan.before, after)
+        return WriteResult(plan, reply, after, glob, changes, applied)
+
+    def _finish(
+        self, plan: WritePlan, reply: bytes, after: RegionRead, glob: RegionRead, applied: bool
+    ) -> WriteResult:
+        result = self._result(plan, reply, after, glob, applied=applied)
+        if not applied:
+            raise WriteNotAppliedError(result)
+        return result
+
+    async def _read_with_frame(self, region: Region) -> tuple[RegionRead, bytes]:
+        frame = build_read(region)
+        return parse_read_reply(region, await self._request(frame)), frame
 
     def watch(
         self,
@@ -368,3 +606,51 @@ class TankG:
         waiter = self._waiter
         if waiter is not None and not waiter.done():
             waiter.set_exception(ConnectionLostError("the pedal disconnected"))
+
+
+def _parse_colour(value: FieldValue) -> tuple[int, ...]:
+    if isinstance(value, tuple):
+        parts = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if len(text) == 7 and text.startswith("#"):
+            try:
+                return tuple(bytes.fromhex(text[1:]))
+            except ValueError:
+                pass
+        else:
+            pieces = text.split(",")
+            if len(pieces) == LED_LENGTH and all(p.strip().lstrip("-").isdigit() for p in pieces):
+                return tuple(int(p) for p in pieces)
+        raise ValueError(f"led_colour must be #rrggbb or r,g,b, got {value!r}")
+    else:
+        raise ValueError(f"led_colour must be (r, g, b), #rrggbb or r,g,b, got {value!r}")
+    if len(parts) != LED_LENGTH or not all(
+        isinstance(p, int) and not isinstance(p, bool) for p in parts
+    ):
+        raise ValueError(f"led_colour must be three integers, got {value!r}")
+    return tuple(parts)
+
+
+def _field_bytes(spec: WritableField, value: FieldValue) -> bytes | None:
+    """The bytes a field value writes at ``spec.offset``, or ``None`` if out of range.
+
+    Raises :class:`ValueError` for a value of the wrong type or syntax.
+    """
+    if spec.kind == "led_colour":
+        rgb = _parse_colour(value)
+        return bytes(rgb) if all(0 <= c <= 0xFF for c in rgb) else None
+    entry = spec.entry
+    assert entry is not None
+    if spec.kind == "block_switch":
+        if isinstance(value, str) and value.lower() in ("on", "off"):
+            value = value.lower() == "on"
+        if not isinstance(value, bool):
+            raise ValueError(f"{spec.name} takes on/off (True/False), got {value!r}")
+        raw = entry.on_value if value else entry.off_value
+        assert raw is not None
+        return bytes([raw])
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{spec.name} takes an integer, got {value!r}")
+    assert entry.min is not None and entry.max is not None
+    return bytes([value]) if entry.min <= value <= entry.max else None

@@ -85,7 +85,14 @@ Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
 
 Codes are part of the public contract; changing one is a breaking change (MAJOR).
 
+Spec 003 (0.3.0) adds code **8** (write acknowledged but not applied) and gives codes 1, 2 and 7
+additional write meanings; see
+[`specs/003-preset-backup-edit-writes/contracts/cli.md`](../../003-preset-backup-edit-writes/contracts/cli.md#exit-codes-additions).
+The 001 commands' behaviour and codes are unchanged.
+
 ## Explicitly absent
 
 No `write`, `set`, `load`, `erase`, `raw`, `send` or arbitrary-address command exists in this
-feature (FR-010, FR-011).
+feature (FR-010, FR-011). Spec 003 later adds the named, guarded `set` and `preset select`
+commands (edit buffer and preset selection only); erase, raw and arbitrary-address writes stay
+absent.

@@ -20,6 +20,9 @@ ERRORS = {
     "ProtocolError",
     "HandshakeError",
     "UnsafeCommandError",
+    "WriteRefusedError",
+    "WriteNakError",
+    "WriteNotAppliedError",
 }
 CONTRACT_EXPORTS = {
     "discover",
@@ -41,6 +44,8 @@ CONTRACT_EXPORTS = {
     "WatchChange",
     "Backup",
     "StoredPreset",
+    "WritePlan",
+    "WriteResult",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -54,6 +59,8 @@ PROTOCOL_EXPORTS = {
     "diff",
     "build_storage_read",
     "parse_storage_reply",
+    "build_write",
+    "parse_write_reply",
 }
 DATACLASSES = (
     "DeviceInfo",
@@ -68,8 +75,12 @@ DATACLASSES = (
     "WatchChange",
     "Backup",
     "StoredPreset",
+    "WritePlan",
+    "WriteResult",
 )
-FORBIDDEN = ("write", "erase", "address")
+FORBIDDEN = ("write", "erase", "address", "commit", "raw")
+"""No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""
+WRITE_ACTIONS = {"plan_set", "set_field", "plan_select", "select_preset"}
 
 
 def test_all_matches_contract() -> None:
@@ -169,6 +180,36 @@ def test_deprecated_known_fields_alias() -> None:
     assert all(isinstance(s, FieldSpec) for s in preset)
     assert KNOWN_FIELDS[openvave.Region.DEVICE_INFO] == ()
     assert KNOWN_FIELDS[openvave.Region.STATUS] == ()
+
+
+def test_tankg_write_actions_are_named() -> None:
+    public = {n for n in dir(openvave.TankG) if not n.startswith("_")}
+    assert WRITE_ACTIONS <= public
+    assert public - WRITE_ACTIONS == {
+        "backup",
+        "connect",
+        "device",
+        "identity",
+        "over",
+        "read",
+        "snapshot",
+        "watch",
+    }
+
+
+def test_protocol_module_exposes_write_allowlist() -> None:
+    assert {"WriteTarget", "WRITE_MESSAGES", "WriteMessage"} <= set(openvave.protocol.__all__)
+    target = openvave.protocol.WriteTarget.preset_select(6)
+    assert (target.type, target.address, target.length) == (4, 0xE0000006, 1)
+    assert isinstance(openvave.protocol.WRITE_MESSAGES, tuple)
+
+
+def test_write_errors_exit_codes() -> None:
+    assert issubclass(openvave.WriteRefusedError, openvave.UnsafeCommandError)
+    assert issubclass(openvave.WriteNakError, openvave.ProtocolError)
+    assert openvave.WriteRefusedError.exit_code == 1
+    assert openvave.WriteNakError.exit_code == 7
+    assert openvave.WriteNotAppliedError.exit_code == 8
 
 
 def test_tankg_has_no_write_erase_or_address_api() -> None:

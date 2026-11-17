@@ -17,15 +17,17 @@ openvave.Backup.from_document(document)           # round-trip, validates the in
 # Edit-buffer writes (explicit, named)
 async with openvave.TankG.connect() as pedal:
     plan = await pedal.plan_set("gain", 90)       # reads only; WritePlan (frame, refusal, no_change)
+    plan = await pedal.plan_set("gain", 90, experimental=True)  # refusal as set_field would see it
     result = await pedal.set_field("gain", 90, experimental=True)    # WriteResult
     result = await pedal.set_field("led_colour", (255, 0, 0), experimental=True)
-    plan = await pedal.plan_select(6)
-    result = await pedal.select_preset(6, discard_edits=False, experimental=True)
+    plan = await pedal.plan_select(6, discard_edits=False, experimental=False)
+    result = await pedal.select_preset(6, discard_edits=False, experimental=True)  # sleep= injectable
 
 # Pure protocol layer
 target = WriteTarget.knob_block()                 # also block_switch(k), led_colour(), preset_select(i)
 frame = build_write(target, data)                 # 0x22 frame; ValueError on wrong length
 parse_write_reply(reply)                          # None on ACK; raises WriteNakError otherwise
+encode_frame(0x22, body)                          # UnsafeCommandError unless body is allowlisted
 StorageRead.preset(6), StorageRead.header(), StorageRead.image()
 ```
 

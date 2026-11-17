@@ -1,4 +1,4 @@
-"""openvave: unofficial read-only client for the M-VAVE Tank-G pedal.
+"""openvave: unofficial client for the M-VAVE Tank-G pedal.
 
 Unofficial. Not affiliated with or endorsed by M-VAVE / Cuvave.
 
@@ -10,6 +10,9 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         print(pedal.identity)
         snap = await pedal.snapshot()
         backup = await pedal.backup()                    # all 36 stored presets, verified
+        plan = await pedal.plan_set("gain", 90)          # reads only: the exact write frame
+        result = await pedal.set_field("gain", 90, experimental=True)   # edit buffer, unsaved
+        result = await pedal.select_preset(6, experimental=True)        # load stored 2C
 
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
@@ -19,8 +22,10 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         async for event in pedal.watch(interval=0.5):    # WatchStart, then WatchChange
             ...
 
-Only the read-only commands ``0x11`` (query) and ``0x23`` (read) can ever be sent. The pure
-codec and the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``) live in
+Only ``0x11`` (query), ``0x23`` (read) and ``0x22`` (write) to a closed allowlist (knob block,
+block switches, LED colour, preset select: volatile edit buffer and preset selection only) can
+ever be sent; erase, the save commit and stored-area writes cannot be encoded. The pure codec and
+the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``, ``WRITE_MESSAGES``) live in
 :mod:`openvave.protocol`. Everything not exported here is internal.
 """
 
@@ -35,6 +40,9 @@ from openvave.errors import (
     ProtocolError,
     RequestTimeoutError,
     UnsafeCommandError,
+    WriteNakError,
+    WriteNotAppliedError,
+    WriteRefusedError,
 )
 from openvave.models import (
     Backup,
@@ -51,6 +59,8 @@ from openvave.models import (
     StoredPreset,
     WatchChange,
     WatchStart,
+    WritePlan,
+    WriteResult,
 )
 from openvave.protocol.identity import TESTED_FIRMWARE
 from openvave.session import TankG
@@ -88,5 +98,10 @@ __all__ = [
     "UnsafeCommandError",
     "WatchChange",
     "WatchStart",
+    "WriteNakError",
+    "WriteNotAppliedError",
+    "WritePlan",
+    "WriteRefusedError",
+    "WriteResult",
     "discover",
 ]

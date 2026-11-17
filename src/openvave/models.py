@@ -6,9 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from openvave.errors import ProtocolError
+
+if TYPE_CHECKING:
+    from openvave.protocol.writes import WriteTarget
 
 Confidence = Literal["confirmed", "observed", "hypothesis"]
 
@@ -304,6 +307,56 @@ class Backup:
         from openvave.backup import from_document
 
         return from_document(document)
+
+
+@dataclass(frozen=True)
+class WritePlan:
+    """What a write action would send, built from fresh reads (spec 003, research R5).
+
+    ``TankG.plan_set`` / ``plan_select`` return it without writing; ``set_field`` /
+    ``select_preset`` build the same plan and send :attr:`frame` (SC-003).
+    """
+
+    action: str
+    """``set <field>`` or ``select <position>``."""
+    target: WriteTarget
+    """The allowlisted write target."""
+    data: bytes
+    """Bytes to write (empty when the value is out of range)."""
+    frame: bytes
+    """The exact ``0x22`` frame (empty when the value is out of range)."""
+    reads: tuple[bytes, ...]
+    """The read frames sent to build the plan, in order."""
+    before: RegionRead
+    """Edit buffer (current preset) at plan time."""
+    global_before: RegionRead
+    """Global block (browsed bank, bank, slot, mode) at plan time."""
+    no_change: bool
+    """The requested value equals the current one: nothing would be sent."""
+    refusal: str | None
+    """Why the write would be refused (``WriteRefusedError.reason``), or ``None``."""
+    confidence: Confidence
+    """The write message's confidence in the "Write messages" table."""
+    field: str | None = None
+    """The field being set (``None`` for a preset select)."""
+
+
+@dataclass(frozen=True)
+class WriteResult:
+    """Outcome of a sent write: reply, re-reads and every byte that changed."""
+
+    plan: WritePlan
+    """The plan that was executed."""
+    reply: bytes
+    """The raw reply (the 8-byte ACK); empty if nothing was sent (no change)."""
+    after: RegionRead
+    """Edit buffer re-read after the write."""
+    global_after: RegionRead
+    """Global block re-read after the write."""
+    changes: tuple[ByteChange, ...]
+    """Every byte that differs from the plan's reads: global first, then the edit buffer."""
+    applied: bool
+    """The targeted bytes now equal the request (select: bank/slot and stored bytes match)."""
 
 
 @dataclass(frozen=True)

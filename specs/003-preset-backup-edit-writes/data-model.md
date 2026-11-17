@@ -90,6 +90,12 @@ row is ≥ `observed`, and firmware ∈ row firmware.
 | `global_before` | `RegionRead` | global block at plan time (mode, bank, slot) |
 | `no_change` | bool | requested value equals current; nothing will be sent |
 | `refusal` | str \| None | reason code if the write would be refused (dry-run shows it) |
+| `confidence` | str | the write message's confidence in "Write messages" |
+| `field` | str \| None | the field being set; `None` for a select |
+
+`plan_set` / `plan_select` take the same `experimental` (and `discard_edits`) flags as the
+writing call, so `refusal` is exactly what that call would raise. Out-of-range values leave
+`data` and `frame` empty.
 
 ## WriteResult
 
