@@ -347,7 +347,7 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0x20000000` | 4 | 4 | read (log, hardware) | global block (bank browsed, bank, slot, mode) | confirmed (read) |
 | `0xD0000000` | 5 | 32 | read (log, hardware) | device info block | confirmed (read) |
 | `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
-| `0xE1000000 + i` | 4 | 1 | write `01` (code) | BYPASS on for loaded preset `i`; off = select `i` again | hypothesis |
+| `0xE1000000 + i` | 4 | 1 | write `01` (code; check 2, 2026-11-17, i = 1) | BYPASS on for loaded preset `i`: buffer reads all `00`, global slot `ff`; off = select `i` again | observed (one session) |
 | `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
 | `0xF0000000` | 4 | 0 | write, empty data (code) | commit / save stored presets | hypothesis |
 
@@ -401,7 +401,9 @@ app's "Tank-B" product code.
 
 **Preset index.** The app computes the loaded preset as `global[1] · 4 + global[2]` (bank · 4 +
 slot, 0–35), and keeps its previous index while `global[2]` is `0xFF`. That matches the one-cycle
-loading state seen on hardware (global 2 = `ff`, see Watch session findings).
+loading state seen on hardware (global 2 = `ff`, see Watch session findings). Check 2
+(2026-11-17) showed the same reading, held, while the pedal is in BYPASS (all preset bytes `00`);
+see [app-features.md](app-features.md) "BYPASS on hardware".
 
 **Reading every stored preset (backup).** The app's "export all presets" reads the whole image
 with **one** read: type 4, address `0`, length 758 (the app takes the length from its factory

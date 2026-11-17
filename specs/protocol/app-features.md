@@ -100,8 +100,8 @@ names none of them. REV Mix (16) and MOD Speed / DLY Time are plain 0–127 knob
 |---|---|---|---|
 | Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | hypothesis | persistent |
 | Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis | persistent |
-| BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | hypothesis | volatile (meaning unknown: probably all blocks off) |
-| BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | hypothesis | volatile; reloads the stored preset, so unsaved edits are lost |
+| BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | observed (check 2) | volatile: all blocks off, clean sound; edit buffer reads all zero and global slot reads `ff` |
+| BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | observed (check 2) | volatile; reloads the stored preset, so unsaved edits are lost |
 | Loopback | read `0xD0000000` × 1 on connect; toggle writes `01` / `00` there (no commit) | read confirmed; write and meaning hypothesis | unknown persistence |
 
 ### More menu
@@ -146,11 +146,34 @@ after. Ordered by risk:
 
 1. ~~**Edit-buffer write in normal mode**~~ done 2026-11-17: applied, mode stays normal, select
    restores, backups identical (see "Edit mode from the computer").
-2. **BYPASS** (volatile, new register): `01` to `0xE1000000 + i`; read global and the buffer, listen;
-   then select `i` to undo.
+2. ~~**BYPASS**~~ done 2026-11-17, see "BYPASS on hardware" below.
 3. **Save as a no-op** (persistent, but writes the bytes already there): write 1B's own stored 21
    bytes back to `2 + 21·5` + commit + select. The backup after must equal the one before. Then a
    real save of a changed field, and a restore of the original bytes from the backup.
+
+## BYPASS on hardware (check 2, 2026-11-17, fw 96, observed)
+
+One session, owner at the pedal, 1B in normal mode, phone app disconnected:
+
+- `01` to `0xE1000001` got the ACK. Right after, and still 2 s later: global `00 00 ff 01` (slot
+  `ff`, mode still normal), edit buffer all 21 bytes `00`, status byte `01` unchanged. The owner
+  heard a clean (unprocessed) sound and saw every LED go off, as with the app's BYPASS button.
+- Select 1B (`0xE0000001`) got the ACK and restored global `00 00 01 01`, the stored 1B bytes and
+  the original sound. Backups before and after were identical: nothing stored changed.
+- So bypass is a pedal state, not a preset: the buffer of zeros (every block off, every knob 0,
+  LED black) and slot `ff` are how it reads. The one-cycle "slot `ff`, all preset bytes `00`"
+  seen while loading a preset on 2026-11-16 is most likely the pedal passing through the same
+  state (hypothesis). A host that sees slot `ff` for more than a moment should report "bypass",
+  not "loading"; the app likewise keeps its last preset index while slot reads `ff`.
+- Owner's comparison with the app (same day): the pedal's block LEDs follow the block switches
+  of the loaded buffer (preset bytes 0–3): bypass turns every LED off, switching AMP on lights
+  the amp LEDs, and selecting a preset shows that preset's switch states, exactly as when the app
+  does it. Disconnecting saves nothing (observed).
+- Not tried: `0xE1000000 + j` with `j` other than the loaded preset, `00` as data, edit-buffer
+  writes while bypassed, and how the pedal's footswitches leave bypass.
+
+Evidence: `captures/fw96/20261117-check2-bypass.jsonl` (not a `-gate-` excerpt: openvave cannot
+encode this write yet), checked by `tests/integration/test_bypass_capture.py`.
 
 ## Recommended scope for spec 004
 
