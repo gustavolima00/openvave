@@ -244,8 +244,28 @@ results move the "Write messages" rows to `observed` (or document a failure).
 
 ### Tests (write first, must fail until the evidence exists)
 
-- [ ] T047 [P] [US4] Extend `tests/integration/fixture_pairs.py` (or a new `tests/integration/gate_fixtures.py`) with entries for the expected gate excerpts `captures/fw96/20261117-gate-<step>.jsonl` (steps: `knob_gain`, `switch_mod`, `switch_amp`, `switch_delay`, `switch_reverb`, `led_colour`, `select`); each test replays its excerpt through `FakeTransport.from_capture` and asserts ACK, `applied`, and the exact write frame; tests are marked `xfail(strict=True)` until the excerpt exists, then the marker is removed in the evidence commit
-- [ ] T048 [P] [US4] Write `tests/unit/test_gate_excerpts.py`: every committed `captures/fw96/*-gate-*.jsonl` contains only allowlisted `0x22` frames, no device identifier/MAC, no stored-image read with more than the header + presets already public, and a meta line with firmware 96, date and step name
+- [X] T047 [P] [US4] Extend `tests/integration/fixture_pairs.py` (or a new `tests/integration/gate_fixtures.py`) with entries for the expected gate excerpts `captures/fw96/20261117-gate-<step>.jsonl` (steps: `knob_gain`, `switch_mod`, `switch_amp`, `switch_delay`, `switch_reverb`, `led_colour`, `select`); each test replays its excerpt through `FakeTransport.from_capture` and asserts ACK, `applied`, and the exact write frame; tests are marked `xfail(strict=True)` until the excerpt exists, then the marker is removed in the evidence commit
+  - Done (2026-11-17): `tests/integration/gate_fixtures.py` (steps, `RECORDED` step → file) and
+    `tests/integration/test_gate_replay.py`. Each excerpt's `meta.replay` names the library call
+    (`set_field`/`select_preset`, always `experimental=True`); the replay must send exactly the
+    recorded request sequence, its one write must equal an independent encoding
+    (`write_fixture.write_frame`), reply = ACK, `applied`. A step joins `RECORDED` in its evidence
+    commit; until then it is strict `xfail` (7 xfailed now). One write per excerpt: a step is
+    undone by leaving edit mode without saving, not by a second write.
+  - Tooling found missing while writing T047: `--trace` prints text (`TX`/`RX chunk`/`RX`) on
+    stderr, while `tests/support/excerpt.py` only cuts `watch` JSONL records. Added
+    `tests/support/gate_excerpt.py` (trace text → labelled JSONL, labels from frame bytes only)
+    and `tests/unit/test_gate_excerpt_tool.py`: a round trip runs the real write path on the fake
+    pedal with the trace logger on, converts the text, replays it with `from_capture` and gets the
+    same frames and result (set gain / mod_on / led_colour, select).
+- [X] T048 [P] [US4] Write `tests/unit/test_gate_excerpts.py`: every committed `captures/fw96/*-gate-*.jsonl` contains only allowlisted `0x22` frames, no device identifier/MAC, no stored-image read with more than the header + presets already public, and a meta line with firmware 96, date and step name
+  - Done (2026-11-17): `problems()` checks meta (fw 96, ISO date, step == file name), the
+    independent audit allowlist, no device-info/type-5 read, and stored reads limited to the
+    header and presets already in the committed non-gate fw96 captures (1B, 1A, 1C, 1D, 2A, 9D
+    as seen in the edit buffer). Exercised on synthetic excerpts (clean passes; non-public stored
+    read, commit write, identifier read and step mismatch are each rejected); the per-file test
+    is parametrized over `captures/fw96/*-gate-*.jsonl` (none yet → skipped). Consequence for
+    T053: select only between public presets (1B ↔ 1A).
 
 ### Evidence gathering (pedal owner, hardware, one approval per step)
 
@@ -258,7 +278,7 @@ results move the "Write messages" rows to `observed` (or document a failure).
 
 ### Recording findings
 
-- [ ] T055 [US4] Cut sanitized excerpts with `tests/support/excerpt.py` into `captures/fw96/20261117-gate-<step>.jsonl` (one per successful step), remove the `xfail` markers of T047 for those steps
+- [ ] T055 [US4] Cut sanitized excerpts with `tests/support/gate_excerpt.py` (from the step's `--trace` stderr) into `captures/fw96/20261117-gate-<step>.jsonl` (one per successful step), remove the `xfail` markers of T047 for those steps
 - [ ] T056 [US4] Update `specs/protocol/command-layer.md` "Write messages" rows (→ `observed`, evidence = excerpt path, Notes = date/session/result), the ACK row (→ `observed`), the Address map confidences, "Write acknowledgement" (actual ACK bytes seen), and — if T052 confirmed the LED — the preset 18–20 byte map Notes; mirror in `src/openvave/protocol/writes.py` `WRITE_MESSAGES` in the same commit
 - [ ] T057 [US4] Document any failed or surprising step (NAK bytes, not applied, side effects) in `command-layer.md` with its record path, and keep that message's confidence unchanged
 
