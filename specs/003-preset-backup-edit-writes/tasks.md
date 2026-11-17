@@ -519,9 +519,50 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
   - Evidence (2026-11-17): `uv run pytest` → 1120 passed, 5 skipped, 0 xfailed (M3: 1085);
     `ruff check .` all passed; `ruff format --check .` 110 files formatted; `mypy src` no issues in
     24 files; `uv run openvave --version` → `openvave 0.3.0`. Quickstart §1 (offline) passes.
-- [ ] T072 Owner, hardware: run [quickstart.md](quickstart.md) §1–§5 end to end (writes approved per step); review SC-001…SC-007 in the PR with evidence links
+- [X] T072 Owner, hardware: run [quickstart.md](quickstart.md) §1–§5 end to end (writes approved per step); review SC-001…SC-007 in the PR with evidence links
+  - Evidence (2026-11-17, fw 96, 0.3.0 at 18b2dec, a new connection per command, ~17:03–17:09Z;
+    raw files `captures/private/20261117-T072-*`):
+    - §1: `uv run pytest` 1120 passed, 5 skipped (T071).
+    - §2: backup A (17:03:58Z) and backup B (17:04:09Z, `--trace`): 36 presets, header `a5 5a`,
+      cross-check OK, exit 0; A = B apart from `created_at` (SC-002); B's trace: one `0x11`, 38
+      `0x23`, no write (SC-001). A also equals session B's `gate-B-post` apart from `created_at`
+      and `tool`: no stored change since M3.
+    - §3 (no `--experimental`): `set gain 90 --dry-run` on 1D, edit mode → `Set gain 100 → 90`,
+      frame `00 59 22 16 00 00 04 04 00 00 10 0e 00 00 40 05 5a 2b 58 53 40 14 29 0f 35 09 05 04
+      91`, no `refused:` line; `preset select 2C --dry-run --discard-edits` → frame `00 59 22 09 00
+      00 04 06 00 00 e0 01 00 00 01 13` (= the CLI contract example). Both traces: `0x11` + two
+      `0x23` only.
+    - Refusal on hardware (bonus): the first `set gain 90` ran in normal mode (global `00 00 03
+      01`) → `refused (not_edit_mode)`, exit 1, no `0x22` in the trace.
+    - §4 `set_gain` (1D, edit mode `00 00 03 00`, no `--experimental`): the dry-run frame, reply
+      `00 59 00 01 00 00 00 ff` ACK, re-read byte 6 `64` → `5a` only, global unchanged, applied.
+      Undo: a first `preset dump` still showed gain 90 (taken before the pedal had left edit
+      mode); after leaving edit mode without saving, the buffer = stored 1D (gain 100).
+    - §4 `select_2c` (1D → 2C, normal mode): one write (the dry-run frame), ACK, first global read
+      `01 01 02 01` (2C, no `ff` transient), buffer = stored-preset read at `0x80` = 2C in backup
+      A, applied.
+    - §4 `select_back` (2C → 1D): frame `00 59 22 09 00 00 04 03 00 00 e0 01 00 00 01 16` (= session
+      B's), ACK, global `00 00 03 01`, buffer = stored read at `0x41` = 1D, applied.
+    - Post backup (17:09:18Z): 36 presets, cross-check OK, equal to backup A apart from
+      `created_at` (SC-004). No pedal save was used.
+    - Process: none of the three writes had a written approval line in chat before it ran; each
+      was the exact command posted after a matching dry run and an approval request (the same
+      gap as sessions A and B). The owner's display readings (2C, then 1D) were asked for but not
+      recorded.
+  - SC review:
+    - SC-001 ✅ one command, zero write frames (B's trace); duration 8.8 s end to end measured in
+      M0 T019 (not re-timed here).
+    - SC-002 ✅ A = B (and = M3's B-post) apart from `created_at`.
+    - SC-003 ✅ offline: dry-run frames == sent frames for every write action (M1 tests); on
+      hardware all three T072 writes sent the dry-run frame byte for byte.
+    - SC-004 ✅ post = A here; A0 = A-post (M2 T054), B0 = B-post (M3 T061).
+    - SC-005 ✅ knob block, preset select, ACK `confirmed` (fw 96, sessions A and B); block
+      switches 0–3 and LED colour `observed`.
+    - SC-006 ✅ offline NAK/not-applied tests exit 7/8 with raw bytes; no NAK or not-applied
+      occurred on hardware in any session.
+    - SC-007 ✅ 1120 passed, 5 skipped, no hardware.
 
-**Checkpoint**: Milestone 4 DONE — 0.3.0 released
+**Checkpoint**: ✅ Milestone 4 DONE (2026-11-17) — 0.3.0 ready to release (quickstart passed on hardware; tag after the PR merges)
 
 ---
 
