@@ -33,9 +33,17 @@ not recorded).
 What this means for openvave:
 
 - To change a sound remotely, write the edit buffer in **normal** mode, like the app. There is
-  nothing to enter first. Not yet checked on hardware: that the pedal applies such a write in
-  normal mode, what `mode` reads afterwards, and what happens when someone then turns a knob on
-  the pedal. openvave 0.3.0 refuses `set` outside edit mode, so this is the first gate for spec 004.
+  nothing to enter first. **Confirmed on fw 96** (check 1, 2026-11-17, two connections, owner at
+  the pedal, preset 1B): the confirmed knob-block write (gain 60 → 90) sent in normal mode got
+  the ACK; the buffer re-read showed byte 6 = 90 and nothing else changed, also a moment later;
+  the owner heard more gain; global stayed `00 00 01 01` (mode **stays normal**, the pedal does not
+  switch to edit mode, and the display showed nothing); selecting 1B again restored the stored
+  bytes and the sound. Backups before and after were identical. Evidence:
+  `captures/fw96/20261117-gate-normal_knob_gain.jsonl`,
+  `captures/fw96/20261117-gate-normal_knob_gain_b.jsonl` (both connections used the same preset
+  and knob). Still open: what happens when someone turns a pedal knob after a remote write, and
+  whether the other edit-buffer writes (switches, LED colour) behave the same in normal mode
+  (very likely, same buffer, but not sent).
 - **Discard**: select the same preset again; the pedal reloads the stored copy. The app does
   exactly this to restore a preset after bypass (below). On hardware, leaving pedal-side edit mode
   without saving also restores the stored bytes (observed).
@@ -136,10 +144,8 @@ Notes:
 Each needs the owner's approval for that exact frame, with `openvave preset backup` before and
 after. Ordered by risk:
 
-1. **Edit-buffer write in normal mode** (volatile; same frame as the confirmed knob write, only the
-   mode differs). Normal mode, 1B: knob block with gain 60 → 90. Check the ACK, global 3 (does it
-   stay `1`?), the buffer, the sound; then select 1B again and check that the stored bytes come
-   back. Backups before and after must be equal.
+1. ~~**Edit-buffer write in normal mode**~~ done 2026-11-17: applied, mode stays normal, select
+   restores, backups identical (see "Edit mode from the computer").
 2. **BYPASS** (volatile, new register): `01` to `0xE1000000 + i`; read global and the buffer, listen;
    then select `i` to undo.
 3. **Save as a no-op** (persistent, but writes the bytes already there): write 1B's own stored 21
@@ -148,8 +154,8 @@ after. Ordered by risk:
 
 ## Recommended scope for spec 004
 
-1. **Remote editing without the pedal's edit mode**: lift the `set` refusal in normal mode once
-   check 1 passes; keep a fresh-read-then-write per field. Accept section input for the three
+1. **Remote editing without the pedal's edit mode**: lift the `set` refusal in normal mode (check 1
+   passed); keep a fresh-read-then-write per field. Accept section input for the three
    section knobs (`reverb_decay orange 10`, later `mod_fx` / `delay_mix` once observed).
 2. **Save** (`openvave preset save [--to POS]`): read the buffer, write the slot, commit, select,
    verify by reading the slot back. Behind an explicit `--unsafe` opt-in, with an automatic backup

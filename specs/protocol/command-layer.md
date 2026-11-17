@@ -481,6 +481,13 @@ write is sent without `--experimental` only when its row is `confirmed`, the `ac
 | `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | confirmed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl`, `captures/fw96/20261117-gate-select_b_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B; gate session B (normal mode, new connection): 1D → 1A and 1A → 1D. Each: ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
 | `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl` | the reply to all eight gate-session-A writes and all three gate-session-B writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
 
+Normal mode (spec 004 check 1, 2026-11-17, fw 96, confirmed over two connections): the
+`knob_block` write is also applied when global 3 = `1` (normal); the mode stays `1`, and selecting
+the preset again restores the stored bytes. The official app never enters edit mode before
+writing. Evidence: `captures/fw96/20261117-gate-normal_knob_gain.jsonl`,
+`captures/fw96/20261117-gate-normal_knob_gain_b.jsonl`; details in
+[app-features.md](app-features.md). openvave 0.3.0 still refuses writes outside edit mode.
+
 ### Preset LED colour (app code, 2026-11-17)
 
 The app's preset structure is: 4 one-byte block switches (amp, mod, delay, reverb), a 14-byte
@@ -521,8 +528,8 @@ Tank-G, probably routing USB playback back into the USB recording, is not known)
 - Answered from app code (hypothesis until replayed): `0xE0000000 + i` loads stored preset `i`;
   stored presets are at `2 + 21·i`; saving is an empty write to `0xF0000000`. Still open for the
   write spec: does writing the edit buffer move the stored value or only the sound while the
-  knobs keep their physical positions (see "Edit buffer vs knob position")? Does a host write
-  need edit mode (global 3 = `0`)?
+  knobs keep their physical positions (see "Edit buffer vs knob position")? ~~Does a host write
+  need edit mode (global 3 = `0`)?~~ No: applied in normal mode, mode stays `1` (2026-11-17).
 
 ### Host observations (from the 001 milestone gates)
 
