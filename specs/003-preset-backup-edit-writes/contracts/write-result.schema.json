@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:cli:write:v2",
+  "title": "openvave set / preset select --json (plan and result parts)",
+  "type": "object",
+  "required": ["schema_version", "command", "read_at", "device", "identity", "plan"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"const": 2},
+    "command": {"enum": ["set", "preset select"]},
+    "read_at": {"type": "string", "format": "date-time"},
+    "plan": {
+      "type": "object",
+      "required": ["action", "target", "data", "frame", "reads", "before", "global_before", "no_change", "refusal", "dry_run"],
+      "properties": {
+        "action": {"type": "string", "examples": ["set gain", "select 2C"]},
+        "target": {
+          "type": "object",
+          "required": ["kind", "type", "address", "length", "argument"],
+          "properties": {
+            "kind": {"enum": ["knob_block", "block_switch", "led_colour", "preset_select"]},
+            "type": {"const": 4},
+            "address": {"type": "string", "pattern": "^0x[0-9a-f]{8}$"},
+            "length": {"enum": [1, 3, 14]},
+            "argument": {"type": ["integer", "null"]}
+          }
+        },
+        "data": {"$ref": "#/$defs/hex"},
+        "frame": {"$ref": "#/$defs/hex"},
+        "reads": {"type": "array", "items": {"$ref": "#/$defs/hex"}},
+        "before": {"$ref": "#/$defs/hex", "description": "edit buffer, 21 bytes"},
+        "global_before": {"$ref": "#/$defs/hex", "description": "global block, 4 bytes"},
+        "no_change": {"type": "boolean"},
+        "refusal": {"enum": [null, "not_edit_mode", "out_of_range", "untested_firmware", "experimental_required", "edits_would_be_discarded"]},
+        "dry_run": {"type": "boolean"},
+        "confidence": {"enum": ["confirmed", "observed", "hypothesis"]}
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["reply", "ack", "after", "global_after", "changes", "applied"],
+      "properties": {
+        "reply": {"$ref": "#/$defs/hex"},
+        "ack": {"const": true},
+        "after": {"$ref": "#/$defs/hex"},
+        "global_after": {"$ref": "#/$defs/hex"},
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["region", "offset", "before", "after"],
+            "properties": {
+              "region": {"enum": ["global", "preset"]},
+              "offset": {"type": "integer"},
+              "before": {"type": "integer"},
+              "after": {"type": "integer"},
+              "name": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "applied": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^([0-9a-f]{2}( [0-9a-f]{2})*)?$"}
+  }
+}

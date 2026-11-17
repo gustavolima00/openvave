@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:backup:v1",
+  "title": "openvave preset backup file (format_version 1)",
+  "type": "object",
+  "required": ["kind", "format_version", "created_at", "tool", "identity", "layout", "header", "image", "presets", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {"const": "openvave.preset-backup"},
+    "format_version": {"const": 1},
+    "created_at": {"type": "string", "format": "date-time", "description": "UTC, after the last read"},
+    "tool": {"type": "string", "pattern": "^openvave [0-9]+\\.[0-9]+\\.[0-9]+"},
+    "identity": {
+      "type": "object",
+      "required": ["name", "firmware", "firmware_untested", "raw"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "firmware": {"type": "integer"},
+        "firmware_untested": {"type": "boolean"},
+        "raw": {"$ref": "#/$defs/hex"}
+      },
+      "description": "Handshake result only; no device identifier or MAC is stored"
+    },
+    "layout": {
+      "type": "object",
+      "required": ["type", "address", "store_offset", "preset_size", "preset_count"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"const": 4},
+        "address": {"const": "0x00000000"},
+        "store_offset": {"const": 2},
+        "preset_size": {"const": 21},
+        "preset_count": {"const": 36}
+      }
+    },
+    "header": {"$ref": "#/$defs/hex", "description": "2 bytes; expected a5 5a"},
+    "image": {"$ref": "#/$defs/hex", "description": "758 bytes = header + 36 presets, exactly as read"},
+    "presets": {
+      "type": "array",
+      "minItems": 36,
+      "maxItems": 36,
+      "items": {
+        "type": "object",
+        "required": ["index", "position", "bank", "slot", "raw", "fields", "unknown_offsets"],
+        "additionalProperties": false,
+        "properties": {
+          "index": {"type": "integer", "minimum": 0, "maximum": 35},
+          "position": {"type": "string", "pattern": "^[1-9][A-D]$"},
+          "bank": {"type": "integer", "minimum": 1, "maximum": 9},
+          "slot": {"enum": ["A", "B", "C", "D"]},
+          "raw": {"$ref": "#/$defs/hex", "description": "21 bytes"},
+          "fields": {
+            "type": "array",
+            "items": {"$ref": "../../002-preset-byte-map/contracts/decoded-field.schema.json"}
+          },
+          "unknown_offsets": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 20}}
+        }
+      }
+    },
+    "warnings": {"type": "array", "items": {"enum": ["unexpected_header", "untested_firmware"]}}
+  },
+  "$defs": {
+    "hex": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{2}( [0-9a-f]{2})*)?$",
+      "description": "lowercase, space-separated bytes (same format as captures/)"
+    }
+  }
+}
