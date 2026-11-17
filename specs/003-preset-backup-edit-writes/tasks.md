@@ -460,9 +460,18 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
     11/11, `test_gate_excerpts` clean for all eleven excerpts; `ruff check` passed; `ruff format
     --check` 107 files formatted; `mypy src` no issues in 24 files. Confirmed (fw 96):
     `knob_block`, `preset_select`, `ack`. Observed: `block_switch(0–3)`, `led_colour`.
-- [ ] T064 Owner, hardware (approval required, it is still a write): one `uv run openvave set gain <v>` **without** `--experimental` on fw 96 succeeds; leave edit mode without saving; record
+- [X] T064 Owner, hardware (approval required, it is still a write): one `uv run openvave set gain <v>` **without** `--experimental` on fw 96 succeeds; leave edit mode without saving; record
+  - Evidence (2026-11-17, fw 96, 1D, edit mode, global `00 00 03 00`, after commit 6e1e42c):
+    dry run without the flag `Set gain 100 → 70`, frame `00 59 22 16 00 00 04 04 00 00 10 0e 00 00
+    40 05 46 2b 58 53 40 14 29 0f 35 09 05 04 a5` (= independent encoding), **no refusal line**.
+    Approval: the owner ran the exact posted command without a written "approve T064". Run
+    `set gain 70 --trace` (no `--experimental`; raw trace
+    `captures/private/20261117-gate-T064.trace`): reply ACK, re-read byte 6 `64` → `46` only,
+    global unchanged, applied, exit 0.
+    Undo: left edit mode without saving; `preset dump` showed gain 100 and the buffer equal to
+    stored 1D. No pedal save was used at any point in session B.
 
-**Checkpoint**: Milestone 3 DONE — confirmed writes run by default; the rest stays behind `--experimental`
+**Checkpoint**: ✅ Milestone 3 DONE (2026-11-17) — confirmed writes run by default; the rest stays behind `--experimental`
 
 ---
 
