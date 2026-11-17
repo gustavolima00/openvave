@@ -15,7 +15,10 @@ from tests.support.captures import CAPTURES_DIR
 
 FW96 = CAPTURES_DIR / "fw96"
 SESSION_A_DATE = "20261117"
-"""Expected date of gate session A (the file name of a not-yet-recorded step)."""
+"""Date of gate session A."""
+SESSION_B_DATE = "20261118"
+"""Expected date of gate session B (the file name of a not-yet-recorded step); the evidence
+commit records the actual date in :data:`RECORDED`."""
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,8 @@ class GateStep:
     """Write kind: ``knob_block``, ``block_switch``, ``led_colour`` or ``preset_select``."""
     offset: int | None = None
     """Preset offset of the field (knob/switch/LED), ``None`` for preset select."""
+    session: str = "A"
+    """Gate session (``A`` or ``B``): a ``confirmed`` row cites excerpts of two sessions."""
 
 
 SESSION_A: tuple[GateStep, ...] = (
@@ -39,6 +44,17 @@ SESSION_A: tuple[GateStep, ...] = (
     GateStep("select_back", "preset_select"),
 )
 
+SESSION_B: tuple[GateStep, ...] = (
+    # spec 003 M3 (T060): a new connection, another stored preset, another knob than session A
+    GateStep("knob_treble", "knob_block", 7, "B"),
+    GateStep("select_b", "preset_select", session="B"),
+    GateStep("select_b_back", "preset_select", session="B"),
+)
+
+ALL_STEPS: tuple[GateStep, ...] = SESSION_A + SESSION_B
+
+SESSION_DATES = {"A": SESSION_A_DATE, "B": SESSION_B_DATE}
+
 RECORDED: dict[str, str] = {
     "knob_gain": "20261117-gate-knob_gain.jsonl",
     "switch_mod": "20261117-gate-switch_mod.jsonl",
@@ -49,11 +65,12 @@ RECORDED: dict[str, str] = {
     "select": "20261117-gate-select.jsonl",
     "select_back": "20261117-gate-select_back.jsonl",
 }
-"""Step → committed excerpt file name. Filled in the evidence commit (T055)."""
+"""Step → committed excerpt file name. Filled in each evidence commit (T055, T062)."""
 
 
 def excerpt_path(step: GateStep) -> Path:
-    return FW96 / RECORDED.get(step.step, f"{SESSION_A_DATE}-gate-{step.step}.jsonl")
+    default = f"{SESSION_DATES[step.session]}-gate-{step.step}.jsonl"
+    return FW96 / RECORDED.get(step.step, default)
 
 
 def committed_gate_excerpts() -> list[Path]:

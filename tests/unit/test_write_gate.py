@@ -6,7 +6,12 @@ import dataclasses
 
 import pytest
 
-from openvave.protocol.writes import WRITE_MESSAGES, WriteMessage, sendable_by_default
+from openvave.protocol.writes import (
+    WRITE_MESSAGES,
+    WriteMessage,
+    message_for,
+    sendable_by_default,
+)
 
 TARGETS = [
     ("knob_block", None),
@@ -24,6 +29,31 @@ def test_nothing_is_sendable_after_gate_session_a(kind: str, argument: int | Non
     # session A (2026-11-17) promoted every row to observed; confirmed needs session B
     assert all(m.confidence == "observed" for m in WRITE_MESSAGES)
     assert sendable_by_default(kind, argument, 96) is False
+
+
+SESSION_B_PENDING = pytest.mark.xfail(
+    strict=True, reason="gate session B not recorded yet (spec 003 M3, T061/T062)"
+)
+CONFIRMED_IN_B = [("knob_block", None), *(("preset_select", i) for i in (0, 6, 35))]
+
+
+@SESSION_B_PENDING
+@pytest.mark.parametrize(("kind", "argument"), CONFIRMED_IN_B)
+def test_session_b_rows_are_sendable_on_fw96(kind: str, argument: int | None) -> None:
+    # T059: knob block and preset select are confirmed by two sessions, the ACK row too
+    assert sendable_by_default(kind, argument, 96) is True
+
+
+@pytest.mark.parametrize(("kind", "argument"), CONFIRMED_IN_B)
+def test_session_b_rows_are_not_sendable_on_other_firmware(kind: str, argument: int | None) -> None:
+    assert sendable_by_default(kind, argument, 97) is False
+
+
+@pytest.mark.parametrize(("kind", "argument"), TARGETS)
+def test_rows_left_observed_need_the_opt_in(kind: str, argument: int | None) -> None:
+    row = message_for(kind, argument)
+    if row.confidence != "confirmed":
+        assert sendable_by_default(kind, argument, 96) is False
 
 
 def promoted(knob: str, ack: str, firmware: frozenset[int] = frozenset({96})) -> list[WriteMessage]:

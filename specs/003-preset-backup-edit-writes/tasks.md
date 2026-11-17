@@ -399,8 +399,15 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
 
 ### Tests (write first, must fail)
 
-- [ ] T059 [P] [US4] Extend `tests/unit/test_write_gate.py`: with the real `WRITE_MESSAGES`, `sendable_by_default("knob_block", None, 96)` and `sendable_by_default("preset_select", <any>, 96)` are true, firmware 97 false, rows left `observed` false (fails until T062)
-- [ ] T060 [P] [US4] Add session-B gate fixtures to `tests/integration/gate_fixtures.py` (`20261118-gate-knob_<field>.jsonl`, `20261118-gate-select.jsonl`, dates adjusted to the actual session), `xfail(strict=True)` until committed
+- [X] T059 [P] [US4] Extend `tests/unit/test_write_gate.py`: with the real `WRITE_MESSAGES`, `sendable_by_default("knob_block", None, 96)` and `sendable_by_default("preset_select", <any>, 96)` are true, firmware 97 false, rows left `observed` false (fails until T062)
+  - Done (2026-11-17): `test_session_b_rows_are_sendable_on_fw96` (knob block; select 0, 6, 35)
+    is strict `xfail` until T062; fw 97 refused and "a row not `confirmed` needs the opt-in"
+    pass now and must keep passing after the promotion.
+- [X] T060 [P] [US4] Add session-B gate fixtures to `tests/integration/gate_fixtures.py` (`20261118-gate-knob_<field>.jsonl`, `20261118-gate-select.jsonl`, dates adjusted to the actual session), `xfail(strict=True)` until committed
+  - Done (2026-11-17): `GateStep.session` (`A`/`B`), `SESSION_B` = `knob_treble` (offset 7),
+    `select_b`, `select_b_back`; `test_gate_replay.py` runs `ALL_STEPS` (3 new strict `xfail`).
+    Step names differ from session A's so both sessions' excerpts can share a date if session B
+    runs the same day. Suite: 1067 passed, 5 skipped, 7 xfailed.
 
 ### Evidence gathering and recording
 

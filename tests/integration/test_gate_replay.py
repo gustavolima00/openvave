@@ -16,7 +16,7 @@ import pytest
 
 from openvave import TankG, WriteResult
 from openvave.transport.fake import FakeTransport
-from tests.integration.gate_fixtures import RECORDED, SESSION_A, GateStep, excerpt_path
+from tests.integration.gate_fixtures import ALL_STEPS, RECORDED, GateStep, excerpt_path
 from tests.support.write_fixture import ACK, EDIT_BUFFER, write_frame, writes
 
 KNOB_ADDRESS = EDIT_BUFFER + 4
@@ -67,7 +67,7 @@ def _param(step: GateStep) -> Any:
     return pytest.param(step, id=step.step, marks=marks)
 
 
-@pytest.mark.parametrize("step", [_param(s) for s in SESSION_A])
+@pytest.mark.parametrize("step", [_param(s) for s in ALL_STEPS])
 async def test_gate_step_replays(step: GateStep) -> None:
     path = excerpt_path(step)
     records = _records(path)
