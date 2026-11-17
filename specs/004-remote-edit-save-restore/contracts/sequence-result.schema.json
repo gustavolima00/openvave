@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvave:cli:sequence:v2",
+  "title": "openvave preset save / preset restore --json (plan and result parts)",
+  "type": "object",
+  "required": ["schema_version", "command", "read_at", "device", "identity", "plan"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {"const": 2},
+    "command": {"enum": ["preset save", "preset restore"]},
+    "read_at": {"type": "string", "format": "date-time"},
+    "backup_saved_to": {"type": ["string", "null"], "description": "path of the automatic backup; null on dry run, no change or refusal"},
+    "plan": {
+      "type": "object",
+      "required": ["action", "pedal_state", "target_index", "return_index", "changed_slots", "diff", "steps", "reads", "no_change", "refusal", "dry_run"],
+      "properties": {
+        "action": {"enum": ["save", "restore_slot", "restore_all"]},
+        "pedal_state": {"enum": ["normal", "edit", "tuner", "bypass", "unrecognised"]},
+        "target_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 35},
+        "return_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 35},
+        "source": {"type": ["string", "null"], "description": "backup file path for restore"},
+        "changed_slots": {"type": "array", "items": {"type": "string", "pattern": "^[1-9][A-D]$"}},
+        "diff": {
+          "type": "array",
+          "description": "byte-level changes of the target slot (single-slot actions)",
+          "items": {
+            "type": "object",
+            "required": ["offset", "before", "after"],
+            "properties": {
+              "offset": {"type": "integer", "minimum": 0, "maximum": 20},
+              "before": {"type": "integer"},
+              "after": {"type": "integer"},
+              "name": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["kind", "target", "frame"],
+                "properties": {
+                  "kind": {"const": "write"},
+                  "target": {"enum": ["stored_slot", "stored_image", "commit", "preset_select"]},
+                  "frame": {"$ref": "#/$defs/hex"}
+                }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "seconds"],
+                "properties": {"kind": {"const": "wait"}, "seconds": {"type": "number"}}
+              }
+            ]
+          }
+        },
+        "reads": {"type": "array", "items": {"$ref": "#/$defs/hex"}},
+        "no_change": {"type": "boolean"},
+        "refusal": {"enum": [null, "unsafe_required", "experimental_required", "untested_firmware", "firmware_mismatch", "bypassed", "tuner_mode", "edit_mode", "unrecognised_state", "edits_would_be_discarded"]},
+        "dry_run": {"type": "boolean"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["steps", "stored_may_have_changed", "verified"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["target", "status"],
+            "properties": {
+              "target": {"enum": ["stored_slot", "stored_image", "commit", "preset_select", "wait"]},
+              "status": {"enum": ["acked", "nak", "no_reply", "not_sent", "waited"]},
+              "reply": {"$ref": "#/$defs/hex"}
+            }
+          }
+        },
+        "stored_may_have_changed": {"type": "boolean"},
+        "verified": {"type": "boolean"},
+        "read_back": {"$ref": "#/$defs/hex", "description": "slot (21 bytes) for single-slot actions; omitted for restore_all"},
+        "mismatched_slots": {"type": "array", "items": {"type": "string", "pattern": "^[1-9][A-D]$"}}
+      }
+    }
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^([0-9a-f]{2}( [0-9a-f]{2})*)?$"}
+  }
+}
