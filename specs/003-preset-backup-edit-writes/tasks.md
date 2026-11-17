@@ -196,7 +196,7 @@ milestone.
     shows exactly the refusal the real call would raise; `WritePlan` also carries `confidence`
     and `field`; `encode_frame(0x22, body)` itself refuses non-allowlisted bodies; with `--json`
     an exit-8 failure leaves stdout empty (001 rule), and human output prints the not-applied result.
-- [ ] T045 Owner, hardware (dry-run only, no write): in edit mode run `uv run openvave set gain 90 --dry-run --trace` and `uv run openvave preset select 2C --dry-run --discard-edits --trace`; confirm the printed frames, `dry run: nothing sent`, and that the trace contains only `0x11`/`0x23`; leave edit mode without saving; record in the PR
+- [X] T045 Owner, hardware (dry-run only, no write): in edit mode run `uv run openvave set gain 90 --dry-run --trace` and `uv run openvave preset select 2C --dry-run --discard-edits --trace`; confirm the printed frames, `dry run: nothing sent`, and that the trace contains only `0x11`/`0x23`; leave edit mode without saving; record in the PR
   - Evidence, `set gain 90` (2026-11-17, fw 96, owner's terminal): global `00 00 01 00` (1B, mode
     0 = edit); edit buffer `00 00 00 01 0f 00 7f 00 00 00 00 00 00 00 00 05 04 07 43 16 43` (the
     owner's unsaved pedal edits: amp off, amp type 0, gain 127, treble…delay time 0). Output
@@ -206,7 +206,16 @@ milestone.
     `refused: experimental_required`, `dry run: nothing sent`, stderr empty. Trace: one `0x11`,
     two `0x23`, no `0x22`. The refusal line read `… 'hypothesis' (--experimental))`; the wording
     is now `… is 'hypothesis'; needs --experimental`.
-  - `preset select 2C --dry-run --discard-edits --trace`: pending.
+  - Evidence, `preset select 2C --dry-run --discard-edits --trace` (same session, still in edit
+    mode, global `00 00 01 00`): `Select 2C (index 6)   from 1B`, frame `00 59 22 09 00 00 04 06
+    00 00 e0 01 00 00 01 13` (byte-identical to the M1 vector and the app's documented shape),
+    `refused: experimental_required (preset_select is 'hypothesis'; needs --experimental)`,
+    `dry run: nothing sent`, stderr empty. `--discard-edits` cleared the
+    `edits_would_be_discarded` refusal as designed. Trace: one `0x11`, two `0x23`, no `0x22`.
+  - Owner note (2026-11-17): the phone app edits the pedal without entering edit mode, so the
+    `not_edit_mode` refusal (FR-009) may be stricter than needed. Kept for M1; M2 adds one gate
+    step that sends an approved knob write in normal mode and records mode/buffer before and
+    after, so FR-009 can be relaxed on evidence.
 - [X] T046 Owner, hardware: outside edit mode run `uv run openvave set gain 90 --dry-run`; confirm it prints the `not_edit_mode` refusal and exits 0; record in the PR
   - Evidence (2026-11-17, fw 96, owner's terminal, run with `--trace`): global read `00 00 01 01`
     (1B, mode 1 = normal), edit buffer = public 1B preset. Output `Set gain 60 → 90   (current
@@ -216,7 +225,7 @@ milestone.
     empty. Trace: 3 TX frames, one `0x11` (handshake) and two `0x23` (global, edit buffer); no
     `0x22`. The exit status was not in the paste; the dry-run path returns 0.
 
-**Checkpoint**: Milestone 1 DONE — every write path exists and is tested, nothing has been written to the pedal
+**Checkpoint**: ✅ Milestone 1 DONE (2026-11-17) — every write path exists and is tested, nothing has been written to the pedal
 
 ---
 
