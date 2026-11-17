@@ -1,0 +1,37 @@
+{"event": "meta", "firmware": 96, "device": "TANK-Gv2", "date": "2026-11-17", "step": "real_save", "tool": "poc check4 log (gitignored) -> tests.support.gate_excerpt.records", "sanitized": [], "replay": {"call": "spec004_check4", "mode": "normal", "sequence": ["slot 1C write, gain 60->90", "commit 0xF0000000 x0", "preset_select 1C"]}, "owner": {"heard": "1C has more gain than 1B", "display": "preset LED moved 1B -> 1C; block LEDs unchanged (same blocks on)"}}
+{"event": "tx", "label": "query name/version", "hex": "00 59 11 00 00 00 ff"}
+{"event": "rx-chunk", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7"}
+{"event": "rx", "label": "query name/version", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7", "cmd": 17}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 01 d5"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 01 d5", "cmd": 35}
+{"event": "tx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 08 00 00 04 2c 00 00 00 15 00 00 ba"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 d7"}
+{"event": "rx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 d7", "cmd": 35}
+{"event": "tx", "label": "write t4 0x0000002C x21", "hex": "00 59 22 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9"}
+{"event": "rx-chunk", "hex": "00 59 00 01 00 00 00 ff"}
+{"event": "rx", "label": "write t4 0x0000002C x21", "hex": "00 59 00 01 00 00 00 ff", "cmd": 0}
+{"event": "tx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 08 00 00 04 2c 00 00 00 15 00 00 ba"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9"}
+{"event": "rx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9", "cmd": 35}
+{"event": "tx", "label": "write preset_select 67108865A t4 0xF0000000 x0", "hex": "00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b"}
+{"event": "rx-chunk", "hex": "00 59 00 01 00 00 00 ff"}
+{"event": "rx", "label": "write preset_select 67108865A t4 0xF0000000 x0", "hex": "00 59 00 01 00 00 00 ff", "cmd": 0}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 01 d5"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 01 d5", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f3"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f3", "cmd": 35}
+{"event": "tx", "label": "write preset_select 1C t4 0xE0000002 x1", "hex": "00 59 22 09 00 00 04 02 00 00 e0 01 00 00 01 17"}
+{"event": "rx-chunk", "hex": "00 59 00 01 00 00 00 ff"}
+{"event": "rx", "label": "write preset_select 1C t4 0xE0000002 x1", "hex": "00 59 00 01 00 00 00 ff", "cmd": 0}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 02 01 d4"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 02 01 d4", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 d5"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 d5", "cmd": 35}
+{"event": "tx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 08 00 00 04 2c 00 00 00 15 00 00 ba"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9"}
+{"event": "rx", "label": "stored preset 1C t4 0x0000002C x21", "hex": "00 59 23 1d 00 00 04 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9", "cmd": 35}

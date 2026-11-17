@@ -338,7 +338,7 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | Address | Type | Len | Op | Meaning | Confidence |
 |---|---|---|---|---|---|
 | `0x00000000` | 4 | 758 | read (code, hardware) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17) |
-| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code; check 3, i = 1) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write observed with unchanged bytes only (check 3) |
+| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code; checks 3 and 4, i = 1, 2) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write observed (check 3 unchanged bytes, check 4 a changed byte that persisted after commit + power cycle) |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
 | `0x10000000` | 4 | 21 | write (code) | whole edit buffer, after import all / factory restore | hypothesis |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1; openvave, 2026-11-17) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (write, all k; gate session A) |
@@ -349,7 +349,7 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
 | `0xE1000000 + i` | 4 | 1 | write `01` (code; check 2, 2026-11-17, i = 1) | BYPASS on for loaded preset `i`: buffer reads all `00`, global slot `ff`; off = select `i` again | observed (one session) |
 | `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
-| `0xF0000000` | 4 | 0 | write, empty data (code; check 3) | commit / save stored presets | ACK observed after an unchanged slot write (check 3); that it persists changes is hypothesis |
+| `0xF0000000` | 4 | 0 | write, empty data (code; checks 3 and 4) | commit / save stored presets | observed: after a changed slot write + commit the change survived a power cycle (check 4); whether the commit is required is not tested |
 
 Types 5 and 6 appear elsewhere in the app: type 5 for the device info read and for reading
 resource (model) names on other products; type 6 only together with the erase command (`0x21`,
@@ -429,7 +429,7 @@ all" / factory restore), wait (300 ms in the save path), then write **zero bytes
 `0xF0000000` (request `00 59 22 08 00 00 04 00 00 00 F0 00 00 00 0B`), wait 100 ms, then switch
 to the preset (`0xE0000000 + i`). The empty write to `0xF0000000` is the only commit-like
 command found, which suggests the stored area is a RAM copy that `0xF0000000` writes to flash.
-Whether a write to `2 + 21·i` without the commit survives a power cycle is unknown. The app's
+Whether a write to `2 + 21·i` without the commit survives a power cycle is unknown; with the commit it does (check 4, 2026-11-17, see [app-features.md](app-features.md)). The app's
 flows:
 
 | App action | Writes, in order |

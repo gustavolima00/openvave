@@ -98,7 +98,7 @@ names none of them. REV Mix (16) and MOD Speed / DLY Time are plain 0–127 knob
 
 | Control | Messages | Confidence | Risk |
 |---|---|---|---|
-| Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | sequence observed as a no-op (check 3); a changed save not yet sent | persistent |
+| Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | observed (checks 3 and 4): a changed save persists across a power cycle | persistent |
 | Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis | persistent |
 | BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | observed (check 2) | volatile: all blocks off, clean sound; edit buffer reads all zero and global slot reads `ff` |
 | BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | observed (check 2) | volatile; reloads the stored preset, so unsaved edits are lost |
@@ -147,9 +147,8 @@ after. Ordered by risk:
 1. ~~**Edit-buffer write in normal mode**~~ done 2026-11-17: applied, mode stays normal, select
    restores, backups identical (see "Edit mode from the computer").
 2. ~~**BYPASS**~~ done 2026-11-17, see "BYPASS on hardware" below.
-3. ~~**Save as a no-op**~~ done 2026-11-17, see "Save on hardware" below. Next: a real save of
-   one changed field into a slot, a power cycle to check it persists, then a restore of the
-   original bytes from the backup.
+3. ~~**Save as a no-op**~~ done 2026-11-17, see "Save on hardware" below.
+4. ~~**Real save, power cycle, restore**~~ done 2026-11-17, see "Save on hardware" below.
 
 ## Save on hardware (check 3, 2026-11-17, fw 96, observed as a no-op)
 
@@ -173,6 +172,30 @@ makes it survive a power cycle.
 
 Evidence: `captures/fw96/20261117-check3-noop_save.jsonl` (not a `-gate-` excerpt: openvave cannot
 encode these writes yet), checked by `tests/integration/test_noop_save_capture.py`.
+
+### Check 4: a real save persists (2026-11-17, fw 96, observed)
+
+Slot 1C, which on this pedal holds the same bytes as 1B (the public preset), so the original is
+known. Two runs, owner at the pedal, normal mode:
+
+- Run 1: 1C written with gain 60 → 90 (`0x2C` × 21), ACK, read back changed; commit, ACK; select
+  1C, ACK. The preset LED moved from 1B to 1C, the block LEDs stayed as they were (both presets
+  use the same blocks), and 1C had audibly more gain than 1B.
+- The owner switched the pedal off and on.
+- A full backup after the power cycle differed from the one before run 1 in **exactly one byte**:
+  1C byte 6, `3c` → `5a`. The pedal also came back on 1C (global `00 00 02 01`): it remembers the
+  last selected preset across a power cycle.
+- Run 2 read stored 1C = gain 90, wrote the original bytes back, committed, selected 1C (gain 60)
+  and then 1B. The final backup equals the backup from before check 1.
+
+So host saving works like the app's: slot write, commit, select, and only the written slot
+changes. Still open: whether a slot write **without** the commit also survives a power cycle
+(that would tell whether the commit is what writes flash), and the short mute's source.
+
+Evidence: `captures/fw96/20261117-check4-real_save.jsonl`,
+`captures/fw96/20261117-check4-verify_restore.jsonl`, checked by
+`tests/integration/test_real_save_capture.py`. The backups themselves hold the factory presets
+and stay in `captures/private/`.
 
 ## BYPASS on hardware (check 2, 2026-11-17, fw 96, observed)
 
