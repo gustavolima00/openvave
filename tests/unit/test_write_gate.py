@@ -20,8 +20,9 @@ TARGETS = [
 
 
 @pytest.mark.parametrize(("kind", "argument"), TARGETS)
-def test_nothing_is_sendable_as_initially_documented(kind: str, argument: int | None) -> None:
-    assert all(m.confidence == "hypothesis" for m in WRITE_MESSAGES)
+def test_nothing_is_sendable_after_gate_session_a(kind: str, argument: int | None) -> None:
+    # session A (2026-11-17) promoted every row to observed; confirmed needs session B
+    assert all(m.confidence == "observed" for m in WRITE_MESSAGES)
     assert sendable_by_default(kind, argument, 96) is False
 
 

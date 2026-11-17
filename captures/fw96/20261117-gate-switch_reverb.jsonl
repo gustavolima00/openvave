@@ -1,0 +1,19 @@
+{"event": "meta", "firmware": 96, "device": "TANK-Gv2", "date": "2026-11-17", "step": "switch_reverb", "tool": "tests/support/gate_excerpt.py", "sanitized": [], "replay": {"call": "set_field", "field": "reverb_on", "value": false, "experimental": true}}
+{"event": "tx", "label": "query name/version", "hex": "00 59 11 00 00 00 ff"}
+{"event": "rx-chunk", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7"}
+{"event": "rx", "label": "query name/version", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7", "cmd": 17}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 00 d6"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 00 d6", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f3"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f3", "cmd": 35}
+{"event": "tx", "label": "write block_switch 3 t4 0x10000003 x1", "hex": "00 59 22 09 00 00 04 03 00 00 10 01 00 00 00 e7"}
+{"event": "rx-chunk", "hex": "00 59 00 01 00 00 00 ff"}
+{"event": "rx", "label": "write block_switch 3 t4 0x10000003 x1", "hex": "00 59 00 01 00 00 00 ff", "cmd": 0}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f4"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 f4", "cmd": 35}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 00 d6"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 01 00 d6", "cmd": 35}

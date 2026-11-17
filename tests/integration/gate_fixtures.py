@@ -36,9 +36,19 @@ SESSION_A: tuple[GateStep, ...] = (
     GateStep("switch_reverb", "block_switch", 3),
     GateStep("led_colour", "led_colour", 18),
     GateStep("select", "preset_select"),
+    GateStep("select_back", "preset_select"),
 )
 
-RECORDED: dict[str, str] = {}
+RECORDED: dict[str, str] = {
+    "knob_gain": "20261117-gate-knob_gain.jsonl",
+    "switch_mod": "20261117-gate-switch_mod.jsonl",
+    "switch_amp": "20261117-gate-switch_amp.jsonl",
+    "switch_delay": "20261117-gate-switch_delay.jsonl",
+    "switch_reverb": "20261117-gate-switch_reverb.jsonl",
+    "led_colour": "20261117-gate-led_colour.jsonl",
+    "select": "20261117-gate-select.jsonl",
+    "select_back": "20261117-gate-select_back.jsonl",
+}
 """Step → committed excerpt file name. Filled in the evidence commit (T055)."""
 
 

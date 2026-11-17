@@ -153,17 +153,17 @@ async def test_unknown_field(field: str) -> None:
     assert writes(fake) == []
 
 
-async def test_experimental_required_for_hypothesis_messages() -> None:
+async def test_experimental_required_until_confirmed() -> None:
     fake = make_fake()
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_set("gain", 90)
         with pytest.raises(WriteRefusedError) as exc:
             await pedal.set_field("gain", 90)
     assert plan.refusal == "experimental_required"
-    assert plan.confidence == "hypothesis"
+    assert plan.confidence == "observed"
     assert exc.value.reason == "experimental_required"
     assert "--experimental" in str(exc.value)
-    assert "hypothesis" in str(exc.value)
+    assert "observed" in str(exc.value)
     assert writes(fake) == []
 
 

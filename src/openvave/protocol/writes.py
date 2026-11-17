@@ -206,8 +206,12 @@ class WriteMessage:
 _FW96 = frozenset({96})
 
 
-def _hypothesis(
-    kind: MessageKind, argument: int | None, address: int | None, length: int | None
+def _observed(
+    kind: MessageKind,
+    argument: int | None,
+    address: int | None,
+    length: int | None,
+    *evidence: str,
 ) -> WriteMessage:
     return WriteMessage(
         kind=kind,
@@ -215,19 +219,25 @@ def _hypothesis(
         type=None if address is None else WRITE_TYPE,
         address=address,
         length=length,
-        confidence="hypothesis",
+        confidence="observed",
         firmware=_FW96,
+        evidence=tuple(f"captures/fw96/20261117-gate-{e}.jsonl" for e in evidence),
     )
 
 
+_SWITCH_STEPS = ("switch_amp", "switch_mod", "switch_delay", "switch_reverb")
+
 WRITE_MESSAGES: tuple[WriteMessage, ...] = (
-    _hypothesis("knob_block", None, KNOB_BLOCK_ADDRESS, KNOB_COUNT),
-    *(_hypothesis("block_switch", k, EDIT_BUFFER + k, 1) for k in range(SWITCH_COUNT)),
-    _hypothesis("led_colour", None, LED_ADDRESS, LED_LENGTH),
-    _hypothesis("preset_select", None, SELECT_BASE, 1),
-    _hypothesis("ack", None, None, None),
+    _observed("knob_block", None, KNOB_BLOCK_ADDRESS, KNOB_COUNT, "knob_gain"),
+    *(
+        _observed("block_switch", k, EDIT_BUFFER + k, 1, _SWITCH_STEPS[k])
+        for k in range(SWITCH_COUNT)
+    ),
+    _observed("led_colour", None, LED_ADDRESS, LED_LENGTH, "led_colour"),
+    _observed("preset_select", None, SELECT_BASE, 1, "select", "select_back"),
+    _observed("ack", None, None, None, "knob_gain", "select"),
 )
-"""Every write message and the ACK, as documented. All ``hypothesis`` until gate session A."""
+"""Every write message and the ACK, as documented: ``observed`` after gate session A (fw 96)."""
 
 _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 

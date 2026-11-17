@@ -121,7 +121,7 @@ def test_json_result(capsys: pytest.CaptureFixture[str]) -> None:
     }
     assert plan["frame"] == GAIN_90
     assert plan["dry_run"] is False
-    assert plan["confidence"] == "hypothesis"
+    assert plan["confidence"] == "observed"
     assert plan["before"] == sf.PUBLIC_PRESET.hex(" ")
     assert plan["global_before"] == "00 00 01 00"
     result = doc["result"]
@@ -154,7 +154,7 @@ def test_experimental_required_message(capsys: pytest.CaptureFixture[str]) -> No
     code, _, err, fake = run(capsys, ["set", "gain", "90"])
     assert code == 1
     assert "--experimental" in err
-    assert "hypothesis" in err
+    assert "observed" in err
     assert writes(fake) == []
 
 

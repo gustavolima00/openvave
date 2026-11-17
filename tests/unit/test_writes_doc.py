@@ -31,7 +31,7 @@ def test_an_altered_doc_is_detected() -> None:
     text = COMMAND_LAYER.read_text(encoding="utf-8")
     start = text.index(HEADING)
     section = text[start:]
-    altered = text[:start] + section.replace("| hypothesis |", "| observed |", 1)
+    altered = text[:start] + section.replace("| observed |", "| confirmed |", 1)
     assert altered != text
     rows = [row.key() for row in parse_table(altered)]
     assert rows != [code_key(m) for m in WRITE_MESSAGES]

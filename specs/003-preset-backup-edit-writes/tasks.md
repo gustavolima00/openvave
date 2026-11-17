@@ -269,24 +269,120 @@ results move the "Write messages" rows to `observed` (or document a failure).
 
 ### Evidence gathering (pedal owner, hardware, one approval per step)
 
-- [ ] T049 [US4] Pre-session: owner runs `uv run openvave preset backup --output <pre>.json` (backup A0); researcher checks it equals the M0 gate backup apart from `created_at`
-- [ ] T050 [US4] Step `knob_gain`: researcher posts the frame from `openvave set gain <v> --dry-run` on the current preset and the expected result; **owner approves in chat**; owner, in edit mode, runs `uv run openvave set gain <v> --experimental --trace` with the record kept in `captures/private/`; then leaves edit mode without saving and runs `uv run openvave preset dump` (stored gain back)
-- [ ] T051 [US4] Steps `switch_mod`, then `switch_amp`, `switch_delay`, `switch_reverb`: same protocol as T050, one approval per step, toggling one block on then back to its stored state; note any co-moving knob bytes (expected pedal behaviour)
-- [ ] T052 [US4] Step `led_colour`: same protocol with `set led_colour '#ff0000'`; owner reports whether the preset LED turned red (evidence for preset 18–20 = R, G, B)
-- [ ] T053 [US4] Step `select`: same protocol, outside edit mode, `uv run openvave preset select <position> --experimental --trace` to a preset that differs from the current one; owner confirms the pedal display; then select back to the original preset (second approved write)
-- [ ] T054 [US4] Post-session: owner runs `uv run openvave preset backup --output <post>.json`; researcher confirms the presets are byte-identical to backup A0 (SC-004); any difference stops the milestone and is reported before anything else
+- [X] T049 [US4] Pre-session: owner runs `uv run openvave preset backup --output <pre>.json` (backup A0); researcher checks it equals the M0 gate backup apart from `created_at`
+  - Evidence (2026-11-17 14:32:49Z, fw 96): `preset backup --output
+    captures/private/20261117-gate-A0.json` → `36 presets, header a5 5a`, `Cross-check with
+    whole-image read: OK`. Compared key by key with M0 run A (`/tmp/backup-a.json`, 13:34:18Z):
+    the only difference is `created_at`; image and all 36 presets identical. (A first attempt from
+    the Claude app's shell found no pedal; it worked once the pedal was on and the phone app closed.)
+- [X] T050 [US4] Step `knob_gain`: researcher posts the frame from `openvave set gain <v> --dry-run` on the current preset and the expected result; **owner approves in chat**; owner, in edit mode, runs `uv run openvave set gain <v> --experimental --trace` with the record kept in `captures/private/`; then leaves edit mode without saving and runs `uv run openvave preset dump` (stored gain back)
+  - Evidence (2026-11-17, fw 96, 1B, edit mode entered without moving a knob): dry run showed
+    `Set gain 60 → 90`, frame `00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5a 3c 46 32 32 00
+    00 00 00 05 04 07 76` (= M1 vector). Approval: the owner ran the exact posted command
+    (`set gain 90 --experimental --trace 2> captures/private/20261117-gate-knob_gain.trace`)
+    without a separate chat message; later steps get a written approval first. Result: reply
+    `00 59 00 01 00 00 00 ff` (ACK), re-read edit buffer byte 6 `3c` → `5a`, nothing else changed,
+    global `00 00 01 00` before and after, `applied`. After leaving edit mode without saving,
+    `preset dump` showed gain 60 and the buffer equal to public 1B. Excerpt:
+    `captures/fw96/20261117-gate-knob_gain.jsonl` (replay test green).
+- Incident (2026-11-17, between T050 and T051, no openvave write involved): while practising how
+  to leave edit mode, the owner used the pedal's own save once. Backup A1
+  (`captures/private/20261117-gate-A1.json`) differs from A0 only in stored preset **1A** (14
+  bytes): 1A now holds the 1B bytes (`01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16
+  43`); 1B and every other preset are unchanged. Finding: the pedal's save from 1B wrote to slot
+  1A. Session paused: no further write until 1A is restored to its A0 bytes and a new backup
+  equals A0 (SC-004 baseline stays A0).
+  Resolved: restored 1A with the phone app (values from A0; app counts from 1); backup A6
+  (`captures/private/20261117-gate-A6.json`) equals A0 apart from `created_at`. Session resumed
+  with A6 as the same-session backup; SC-004 still compares against A0.
+- Finding while restoring 1A with the phone app (2026-11-17, owner): the app shows reverb decay
+  as three colour-coded sections (blue, orange, green), each 1–40, with an "X" past 40 —
+  probably three reverb types sharing preset byte 15. Restores gave orange 13 → 55, orange 11 → 54, orange 9 →
+  52, orange 10 → 53 (backups A3–A6): not linear, about 1 raw per 1–2 app steps, so the app scale and the byte do
+  not map simply. The byte map still
+  calls byte 15 `reverb_decay` (continuous 0–127). Follow-up, not in M2 scope: name the three
+  reverb types (from the app's labels) and split byte 15 into type + decay in
+  `specs/protocol/command-layer.md` / `bytemap.py`, with a labelled sweep as evidence.
+  Similarly, the app counts amp type and knob values from 1 where the raw bytes count from 0.
+- [X] T051 [US4] Steps `switch_mod`, then `switch_amp`, `switch_delay`, `switch_reverb`: same protocol as T050, one approval per step, toggling one block on then back to its stored state; note any co-moving knob bytes (expected pedal behaviour)
+  - Evidence (2026-11-17, fw 96, 1B, edit mode entered without moving a knob, backup A6). Each
+    step: dry run → frame posted → approval → one write → undo by leaving edit mode without saving.
+    One write per step (the plan's "toggle back" is the no-save exit, not a second write).
+    | step | approval | frame | reply | re-read | undo check |
+    |---|---|---|---|---|---|
+    | `switch_mod` (on) | "approve switch_mod" | `00 59 22 09 00 00 04 01 00 00 10 01 00 00 01 e8` | ACK | byte 1 `00`→`01` only, applied | dump: mod off, buffer = 1B |
+    | `switch_amp` (off) | "approve switch_amp" | `00 59 22 09 00 00 04 00 00 00 10 01 00 00 00 ea` | ACK | byte 0 `01`→`00` only, applied | dump: amp on, buffer = 1B |
+    | `switch_delay` (on) | "approve switch_delay" | `00 59 22 09 00 00 04 02 00 00 10 01 00 00 01 e7` | ACK | byte 2 `00`→`01` only, applied | next step's plan read = 1B (delay off) |
+    | `switch_reverb` (off) | owner ran the posted command without a chat approval | `00 59 22 09 00 00 04 03 00 00 10 01 00 00 00 e7` | ACK | byte 3 `01`→`00` only, applied | pending (post-session backup) |
+    ACK bytes `00 59 00 01 00 00 00 ff` every time; global `00 00 01 00` before and after.
+    No co-moving knob bytes: a switch *write* does not copy knob positions into the buffer (the
+    co-moving seen on 2026-11-16 came from the physical switch). Excerpts:
+    `captures/fw96/20261117-gate-switch_{mod,amp,delay,reverb}.jsonl` (replay tests green).
+- [X] T052 [US4] Step `led_colour`: same protocol with `set led_colour '#ff0000'`; owner reports whether the preset LED turned red (evidence for preset 18–20 = R, G, B)
+  - Evidence (2026-11-17, 1B, edit mode, backup A6): approval "approve led_colour"; frame
+    `00 59 22 0b 00 00 04 12 00 00 10 03 00 00 ff 00 00 d7`; reply ACK; re-read bytes 18–20
+    `43 16 43` → `ff 00 00`, nothing else changed, applied. The plan read was stored 1B with
+    reverb on, so the `switch_reverb` step had been undone. **LED not observable**: in edit mode
+    the pedal's LEDs show the block colours (amp red, reverb purple, …), and leaving edit mode
+    restores the buffer, so whether 18–20 drive the preset LED stays open (no byte map naming in
+    M4 T066/T067 unless later evidence). Owner note: the phone app edits without entering edit
+    mode, where the LED is visible; this joins the T045 note on relaxing `not_edit_mode` (FR-009)
+    as a follow-up. Excerpt: `captures/fw96/20261117-gate-led_colour.jsonl`.
+- [X] T053 [US4] Step `select`: same protocol, outside edit mode, `uv run openvave preset select <position> --experimental --trace` to a preset that differs from the current one; owner confirms the pedal display; then select back to the original preset (second approved write)
+  - Evidence (2026-11-17, normal mode, backup A6), two steps, one write each, between presets
+    already public (1B ↔ 1A) so the excerpts carry no factory content (T048):
+    | step | approval | frame | reply | after |
+    |---|---|---|---|---|
+    | `select` 1B → 1A | owner ran the posted command without a chat approval | `00 59 22 09 00 00 04 00 00 00 e0 01 00 00 01 19` | ACK | first global read `00 00 00 01` (no `ff` transient), buffer = stored 1A = stored-preset read, applied; owner: display changed 1B → 1A |
+    | `select_back` 1A → 1B | owner ran the posted command without a chat approval | `00 59 22 09 00 00 04 01 00 00 e0 01 00 00 01 18` | ACK | first global read `00 00 01 01`, buffer = stored 1B, applied |
+    The plan read of `select` showed 1B with bytes 18–20 at `43 16 43`, so the `led_colour` step
+    had been undone. Mode stayed 1 (normal) throughout. Excerpts:
+    `captures/fw96/20261117-gate-select.jsonl`, `…-gate-select_back.jsonl` (`select_back` added
+    to `gate_fixtures.SESSION_A`).
+- [X] T054 [US4] Post-session: owner runs `uv run openvave preset backup --output <post>.json`; researcher confirms the presets are byte-identical to backup A0 (SC-004); any difference stops the milestone and is reported before anything else
+  - Evidence (2026-11-17 15:20:57Z): `preset backup --output
+    captures/private/20261117-gate-A-post.json` → `36 presets, header a5 5a`, cross-check OK.
+    Compared key by key with A0 (14:32:49Z): the only difference is `created_at`; image and all 36
+    presets byte-identical (SC-004). Display on 1B at the end.
 
 ### Recording findings
 
-- [ ] T055 [US4] Cut sanitized excerpts with `tests/support/gate_excerpt.py` (from the step's `--trace` stderr) into `captures/fw96/20261117-gate-<step>.jsonl` (one per successful step), remove the `xfail` markers of T047 for those steps
-- [ ] T056 [US4] Update `specs/protocol/command-layer.md` "Write messages" rows (→ `observed`, evidence = excerpt path, Notes = date/session/result), the ACK row (→ `observed`), the Address map confidences, "Write acknowledgement" (actual ACK bytes seen), and — if T052 confirmed the LED — the preset 18–20 byte map Notes; mirror in `src/openvave/protocol/writes.py` `WRITE_MESSAGES` in the same commit
-- [ ] T057 [US4] Document any failed or surprising step (NAK bytes, not applied, side effects) in `command-layer.md` with its record path, and keep that message's confidence unchanged
+- [X] T055 [US4] Cut sanitized excerpts with `tests/support/gate_excerpt.py` (from the step's `--trace` stderr) into `captures/fw96/20261117-gate-<step>.jsonl` (one per successful step), remove the `xfail` markers of T047 for those steps
+  - Done: eight excerpts `captures/fw96/20261117-gate-{knob_gain,switch_mod,switch_amp,
+    switch_delay,switch_reverb,led_colour,select,select_back}.jsonl`, cut from the private
+    `--trace` files with `tests/support/gate_excerpt.py`; all in `gate_fixtures.RECORDED`, no
+    `xfail` left. Each holds only public presets (1B, 1A) and our own written values.
+- [X] T056 [US4] Update `specs/protocol/command-layer.md` "Write messages" rows (→ `observed`, evidence = excerpt path, Notes = date/session/result), the ACK row (→ `observed`), the Address map confidences, "Write acknowledgement" (actual ACK bytes seen), and — if T052 confirmed the LED — the preset 18–20 byte map Notes; mirror in `src/openvave/protocol/writes.py` `WRITE_MESSAGES` in the same commit
+  - Done: all eight "Write messages" rows `hypothesis` → `observed` (fw 96, evidence = the
+    excerpts, Notes = session result); ACK row → `observed` (cites `knob_gain` and `select`);
+    Address map rows for `0x10000000+k`, `0x10000004`, `0x10000012`, `0xE0000000+i` updated;
+    "Write acknowledgement" records the bytes seen; "Preset LED colour" records that the LED could
+    not be judged. `WRITE_MESSAGES` mirrors the table (`_observed` rows; unused `_hypothesis`
+    helper removed). Tests that pinned the old `hypothesis` state (`test_write_gate`,
+    `test_writes_doc` altered-doc check, `test_cli_set`, `test_set_field`) now pin `observed`;
+    behaviour is unchanged (every write still needs `--experimental`; nothing is `confirmed`).
+- [X] T057 [US4] Document any failed or surprising step (NAK bytes, not applied, side effects) in `command-layer.md` with its record path, and keep that message's confidence unchanged
+  - No NAK, timeout or not-applied step. Surprises, recorded above and in `command-layer.md`:
+    (1) the owner's pedal save (no openvave write) wrote 1B's buffer into slot **1A**; restored
+    via the phone app, verified by backups A1–A6; (2) the LED meaning of 18–20 is not observable
+    in edit mode; (3) neither select showed the `ff` loading read the app's log had; (4) switch
+    writes do not co-move knob bytes. Process note: four of the eight writes (`knob_gain`,
+    `switch_reverb`, `select`, `select_back`) were sent by the owner running the exact posted
+    command without a separate chat approval; each followed a matching dry run and a posted
+    approval request. Follow-ups, out of M2 scope: name the three reverb types sharing byte 15
+    (app shows blue/orange/green sections, 1–40 each); writes outside edit mode (the app does
+    this; would relax FR-009 and allow judging the LED).
 
 ### Live verification (milestone gate)
 
-- [ ] T058 Run the full suite (T047/T048 green, no `xfail` left for completed steps) and record per step: approval quote, frame, reply, applied, post-gate backup equality
+- [X] T058 Run the full suite (T047/T048 green, no `xfail` left for completed steps) and record per step: approval quote, frame, reply, applied, post-gate backup equality
+  - Evidence (2026-11-17): `uv run pytest` → 1056 passed, 5 skipped, 0 xfailed (M1: 1013
+    passed); `tests/integration/test_gate_replay.py` 8/8 green, `tests/unit/test_gate_excerpts.py`
+    clean for all eight excerpts; `ruff check` all passed; `ruff format --check` 107 files
+    formatted; `mypy src` no issues in 24 files. Per step (approval, frame, reply, applied): see
+    T050–T053; post-gate backup = A0 (T054).
 
-**Checkpoint**: Milestone 2 DONE — every in-scope write has been sent once on hardware with evidence
+**Checkpoint**: ✅ Milestone 2 DONE (2026-11-17) — every in-scope write has been sent once on hardware with evidence
 
 ---
 
