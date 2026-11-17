@@ -197,7 +197,14 @@ milestone.
     and `field`; `encode_frame(0x22, body)` itself refuses non-allowlisted bodies; with `--json`
     an exit-8 failure leaves stdout empty (001 rule), and human output prints the not-applied result.
 - [ ] T045 Owner, hardware (dry-run only, no write): in edit mode run `uv run openvave set gain 90 --dry-run --trace` and `uv run openvave preset select 2C --dry-run --discard-edits --trace`; confirm the printed frames, `dry run: nothing sent`, and that the trace contains only `0x11`/`0x23`; leave edit mode without saving; record in the PR
-- [ ] T046 Owner, hardware: outside edit mode run `uv run openvave set gain 90 --dry-run`; confirm it prints the `not_edit_mode` refusal and exits 0; record in the PR
+- [X] T046 Owner, hardware: outside edit mode run `uv run openvave set gain 90 --dry-run`; confirm it prints the `not_edit_mode` refusal and exits 0; record in the PR
+  - Evidence (2026-11-17, fw 96, owner's terminal, run with `--trace`): global read `00 00 01 01`
+    (1B, mode 1 = normal), edit buffer = public 1B preset. Output `Set gain 60 → 90   (current
+    preset 1B, normal mode)`, the planned frame `00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04
+    5a 3c 46 32 32 00 00 00 00 05 04 07 76` (byte-identical to the M1 test vector),
+    `refused: not_edit_mode (the pedal is not in edit mode)`, `dry run: nothing sent`, stderr
+    empty. Trace: 3 TX frames, one `0x11` (handshake) and two `0x23` (global, edit buffer); no
+    `0x22`. The exit status was not in the paste; the dry-run path returns 0.
 
 **Checkpoint**: Milestone 1 DONE — every write path exists and is tested, nothing has been written to the pedal
 
