@@ -547,8 +547,8 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
       `created_at` (SC-004). No pedal save was used.
     - Process: none of the three writes had a written approval line in chat before it ran; each
       was the exact command posted after a matching dry run and an approval request (the same
-      gap as sessions A and B). The owner's display readings (2C, then 1D) were asked for but not
-      recorded.
+      gap as sessions A and B). Display: the owner confirmed in chat that the pedal showed 2C after
+      `select_2c` and 1D after `select_back`.
   - SC review:
     - SC-001 ✅ one command, zero write frames (B's trace); duration 8.8 s end to end measured in
       M0 T019 (not re-timed here).
