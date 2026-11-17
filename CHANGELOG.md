@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `openvave.protocol.reverb_decay_parts(raw)` and `REVERB_SECTIONS`: preset byte 15
+  (`reverb_decay`) read the way the phone app shows it, as a colour section (blue, orange or green,
+  44 raw values each; most likely the reverb type) and a position 1–40, or `X` past 40. JSON is
+  unchanged (`schema_version` 2): `reverb_decay` still reports the raw 0–127 value.
+
 ## [0.2.0]
 
 Every byte of the current preset, global settings and status regions is mapped or explicitly

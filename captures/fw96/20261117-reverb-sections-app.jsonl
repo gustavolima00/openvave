@@ -1,0 +1,36 @@
+{"event": "meta", "firmware": 96, "device": "TANK-Gv2", "platform": "transcribed", "att_mtu": 185, "date": "2026-11-17", "tool": "tests/support/reverb_fixture.py", "sanitized": [], "note": "byte 15 transcribed from the owner's `openvave preset dump` reads of the 1B edit buffer after setting each app Decay position; frames rebuilt, other bytes = 1B from 20261116-probe-connect"}
+{"t": 0.05, "event": "tx", "label": "query name/version", "hex": "00 59 11 00 00 00 ff"}
+{"t": 0.06, "event": "rx-chunk", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7"}
+{"t": 0.06, "event": "rx", "label": "query name/version", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7", "cmd": 17}
+{"t": 1.06, "event": "label", "text": "app decay blue 1"}
+{"t": 1.11, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 1.12, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 00 04 07 43 16 43 f8"}
+{"t": 1.12, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 00 04 07 43 16 43 f8", "cmd": 35}
+{"t": 2.12, "event": "label", "text": "app decay blue 40"}
+{"t": 2.17, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 2.18, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 27 04 07 43 16 43 d1"}
+{"t": 2.18, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 27 04 07 43 16 43 d1", "cmd": 35}
+{"t": 3.18, "event": "label", "text": "app decay blue X"}
+{"t": 3.23, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 3.24, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 2b 04 07 43 16 43 cd"}
+{"t": 3.24, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 2b 04 07 43 16 43 cd", "cmd": 35}
+{"t": 4.24, "event": "label", "text": "app decay orange 1"}
+{"t": 4.29, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 4.3, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 2c 04 07 43 16 43 cc"}
+{"t": 4.3, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 2c 04 07 43 16 43 cc", "cmd": 35}
+{"t": 5.3, "event": "label", "text": "app decay orange 40"}
+{"t": 5.35, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 5.36, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 53 04 07 43 16 43 a5"}
+{"t": 5.36, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 53 04 07 43 16 43 a5", "cmd": 35}
+{"t": 6.36, "event": "label", "text": "app decay orange X"}
+{"t": 6.41, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 6.42, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 56 04 07 43 16 43 a2"}
+{"t": 6.42, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 56 04 07 43 16 43 a2", "cmd": 35}
+{"t": 7.42, "event": "label", "text": "app decay green 1"}
+{"t": 7.47, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 7.48, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 58 04 07 43 16 43 a0"}
+{"t": 7.48, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 58 04 07 43 16 43 a0", "cmd": 35}
+{"t": 8.48, "event": "label", "text": "app decay green 40"}
+{"t": 8.53, "event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"t": 8.54, "event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 7f 04 07 43 16 43 79"}
+{"t": 8.54, "event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 7f 04 07 43 16 43 79", "cmd": 35}
