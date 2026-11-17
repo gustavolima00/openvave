@@ -15,9 +15,10 @@ import traceback
 from collections.abc import Awaitable, Callable, Coroutine, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 from openvave import __version__
-from openvave.cli import render, watch
+from openvave.cli import files, render, watch
 from openvave.errors import BluetoothUnavailableError, MultipleDevicesError, OpenvaveError
 from openvave.models import DeviceInfo, Region
 from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, TankG
@@ -90,9 +91,21 @@ def _parser() -> argparse.ArgumentParser:
     _global_options(common, suppress=True)
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.add_parser("info", parents=[common], help="identify the pedal and read its state regions")
-    preset = sub.add_parser("preset", parents=[common], help="read the current preset")
+    preset = sub.add_parser("preset", parents=[common], help="read the current or stored presets")
     preset_sub = preset.add_subparsers(dest="action", metavar="ACTION", required=True)
     preset_sub.add_parser("dump", parents=[common], help="print the 21-byte current preset buffer")
+    backup = preset_sub.add_parser(
+        "backup",
+        parents=[common],
+        help="save all 36 stored presets to a verified JSON backup file (read-only)",
+    )
+    backup.add_argument(
+        "--output",
+        metavar="PATH",
+        default=None,
+        help="backup file (default ./tankg-backup-<YYYYmmdd-HHMMSS>.json)",
+    )
+    backup.add_argument("--force", action="store_true", help="overwrite an existing file")
     watch_parser = sub.add_parser(
         "watch",
         parents=[common],
@@ -180,12 +193,47 @@ async def _preset_dump(args: argparse.Namespace, factory: TransportFactory) -> s
     return render.human_preset(read, identity)
 
 
+async def _preset_backup(args: argparse.Namespace, factory: TransportFactory) -> str:
+    async def source() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    async with TankG(source, timeout=args.timeout) as pedal:
+        backup = await pedal.backup()
+        device = pedal.device
+    if "unexpected_header" in backup.warnings:
+        print(
+            f"warning: unexpected stored-image header {backup.header.hex(' ')} "
+            "(expected a5 5a); the backup is saved, but the layout may differ",
+            file=sys.stderr,
+        )
+    document = backup.to_document()
+    files.write_json_atomic(args.output, document, force=args.force)
+    if args.json:
+        return render.dumps(render.backup_json(backup, document, device, str(args.output)))
+    return render.human_backup(backup, str(args.output))
+
+
+async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
+    if args.action == "backup":
+        return await _preset_backup(args, factory)
+    return await _preset_dump(args, factory)
+
+
 COMMANDS: dict[
     str, Callable[[argparse.Namespace, TransportFactory], Coroutine[None, None, str]]
 ] = {
     "info": _info,
-    "preset": _preset_dump,
+    "preset": _preset,
 }
+
+
+def _prepare_backup(args: argparse.Namespace) -> None:
+    """Resolve the backup target and refuse an existing one before any pedal I/O."""
+    if args.output is None:
+        args.output = Path(f"tankg-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json")
+    else:
+        args.output = Path(args.output)
+    files.check_target(args.output, force=args.force)
 
 
 def _report(err: OpenvaveError) -> None:
@@ -237,6 +285,12 @@ def main(
         except watch.UsageError as err:
             print(f"openvave watch: error: {err}", file=sys.stderr)
             return EXIT_USAGE
+    if args.command == "preset" and args.action == "backup":
+        try:
+            _prepare_backup(args)
+        except files.TargetExistsError as err:
+            print(f"openvave preset backup: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
@@ -246,6 +300,9 @@ def main(
                     watch.run(args, factory, stdin or sys.stdin, clock or watch.SystemClock())
                 )
             output = asyncio.run(COMMANDS[args.command](args, factory))
+        except files.TargetExistsError as err:
+            print(f"openvave preset backup: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
         except OpenvaveError as err:
             if debug:
                 traceback.print_exc()

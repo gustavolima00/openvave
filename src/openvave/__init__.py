@@ -9,6 +9,7 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
     async with openvave.TankG.connect() as pedal:        # BLE
         print(pedal.identity)
         snap = await pedal.snapshot()
+        backup = await pedal.backup()                    # all 36 stored presets, verified
 
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
@@ -36,6 +37,7 @@ from openvave.errors import (
     UnsafeCommandError,
 )
 from openvave.models import (
+    Backup,
     ByteChange,
     ByteMapEntry,
     DecodedField,
@@ -46,6 +48,7 @@ from openvave.models import (
     Encoding,
     Region,
     RegionRead,
+    StoredPreset,
     WatchChange,
     WatchStart,
 )
@@ -58,6 +61,7 @@ from openvave.transport.fake import FakeTransport
 __version__ = "0.2.0"
 
 __all__ = [
+    "Backup",
     "BluetoothUnavailableError",
     "ByteChange",
     "ByteMapEntry",
@@ -77,6 +81,7 @@ __all__ = [
     "Region",
     "RegionRead",
     "RequestTimeoutError",
+    "StoredPreset",
     "TESTED_FIRMWARE",
     "TankG",
     "Transport",

@@ -11,6 +11,7 @@ from openvave.models import Region
 from openvave.protocol import FrameAssembler, build_query, build_read, encode_frame
 from openvave.transport import Transport
 from openvave.transport.fake import FakeTransport
+from tests.support import storage_fixture as sf
 from tests.support.captures import FW96_CONNECT, GLOBAL, LABELS, QUERY, load_capture
 
 CAP = load_capture(FW96_CONNECT)
@@ -128,3 +129,94 @@ async def test_close_is_idempotent() -> None:
 def test_unknown_option_label_rejected() -> None:
     with pytest.raises(KeyError):
         FakeTransport.from_capture(FW96_CONNECT, drop={"no such label": 1})
+
+
+# -- memory and chunk_size (spec 003, T004) -------------------------------------------------------
+
+
+def _memory_fake(**options: object) -> FakeTransport:
+    script = {QUERY: (CAP.tx(QUERY), CAP.rx(QUERY))}
+    return FakeTransport(script, memory={0: sf.synthetic_image()}, **options)  # type: ignore[arg-type]
+
+
+async def test_memory_answers_reads_inside_a_block() -> None:
+    fake = _memory_fake()
+    got = await _open(fake)
+    for label, (tx, rx) in sf.storage_replies(sf.synthetic_image()).items():
+        got.chunks.clear()
+        await fake.write(tx)
+        await _settle()
+        assert b"".join(got.chunks) == rx, label
+
+
+async def test_memory_sub_block_read() -> None:
+    fake = _memory_fake()
+    got = await _open(fake)
+    image = sf.synthetic_image()
+    await fake.write(sf.read_request(100, 5))
+    await _settle()
+    assert b"".join(got.chunks) == sf.read_reply(100, image[100:105])
+
+
+async def test_memory_outside_block_is_unanswered() -> None:
+    fake = _memory_fake()
+    got = await _open(fake)
+    for tx in (sf.read_request(757, 2), sf.read_request(0x10000000, 21)):
+        await fake.write(tx)
+    await _settle()
+    assert got.chunks == []
+    assert len(fake.sent) == 2
+
+
+async def test_memory_ignores_other_types() -> None:
+    fake = _memory_fake()
+    got = await _open(fake)
+    tx = sf.frame(0x23, bytes([5]) + (0).to_bytes(4, "little") + (2).to_bytes(3, "little"))
+    await fake.write(tx)
+    await _settle()
+    assert got.chunks == []
+
+
+async def test_script_takes_precedence_over_memory() -> None:
+    image = sf.synthetic_image()
+    tx = sf.read_request(0, 2)
+    other = sf.read_reply(0, b"\x00\x00")
+    script = {QUERY: (CAP.tx(QUERY), CAP.rx(QUERY)), "header": (tx, other)}
+    fake = FakeTransport(script, memory={0: image})
+    got = await _open(fake)
+    await fake.write(tx)
+    await _settle()
+    assert b"".join(got.chunks) == other
+
+
+async def test_unknown_request_without_memory_still_asserts() -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    await _open(fake)
+    with pytest.raises(AssertionError):
+        await fake.write(sf.read_request(0, 2))
+
+
+async def test_chunk_size_splits_image_reply() -> None:
+    fake = _memory_fake(chunk_size=182)
+    got = await _open(fake)
+    await fake.write(sf.read_request(0, 758))
+    await _settle()
+    assert [len(c) for c in got.chunks] == [182, 182, 182, 182, 45]
+    assert len(b"".join(got.chunks)) == 773
+
+
+async def test_chunk_size_and_split_exclusive() -> None:
+    with pytest.raises(ValueError):
+        _memory_fake(chunk_size=182, split=2)
+    with pytest.raises(ValueError):
+        _memory_fake(chunk_size=0)
+
+
+async def test_from_capture_accepts_memory_and_chunk_size() -> None:
+    fake = FakeTransport.from_capture(
+        FW96_CONNECT, memory={0: sf.synthetic_image()}, chunk_size=182
+    )
+    got = await _open(fake)
+    await fake.write(sf.read_request(0, 758))
+    await _settle()
+    assert len(got.chunks) == 5

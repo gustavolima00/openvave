@@ -6,7 +6,9 @@ import json
 from datetime import datetime
 from typing import Any
 
+from openvave._jsonform import field_json, hex_bytes, identity_json
 from openvave.models import (
+    Backup,
     ByteChange,
     DecodedField,
     DecodedRegion,
@@ -20,6 +22,7 @@ from openvave.models import (
     WatchStart,
 )
 from openvave.protocol.decode import decode_field, decode_region
+from openvave.protocol.storage import EXPECTED_HEADER
 
 SCHEMA_VERSION = 2
 """JSON contract version; 2 since 0.2.0 (field renames, CHANGELOG)."""
@@ -41,11 +44,6 @@ REGION_TITLES = {
 }
 INFO_HUMAN_REGIONS = (Region.DEVICE_INFO, Region.GLOBAL, Region.STATUS)
 """Regions ``info`` prints for humans; the current preset is shown only by ``preset dump``."""
-
-
-def hex_bytes(data: bytes) -> str:
-    """Lowercase, space-separated hex (same format as ``captures/``)."""
-    return data.hex(" ")
 
 
 def _device_line(device: DeviceInfo) -> str:
@@ -159,15 +157,6 @@ def device_json(device: DeviceInfo | None) -> dict[str, Any] | None:
     return {"identifier": device.identifier, "name": device.name, "rssi": device.rssi}
 
 
-def identity_json(identity: DeviceIdentity) -> dict[str, Any]:
-    return {
-        "name": identity.name,
-        "firmware": identity.firmware,
-        "firmware_untested": identity.firmware_untested,
-        "raw": hex_bytes(identity.raw),
-    }
-
-
 def envelope(
     command: str, read_at: datetime, device: DeviceInfo | None, identity: DeviceIdentity
 ) -> dict[str, Any]:
@@ -178,26 +167,6 @@ def envelope(
         "read_at": read_at.isoformat(),
         "device": device_json(device),
         "identity": identity_json(identity),
-    }
-
-
-def field_json(field: DecodedField) -> dict[str, Any]:
-    """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema)."""
-    entry = field.entry
-    ranged = entry.min is not None and entry.max is not None
-    return {
-        "offset": entry.offset,
-        "size": 1,
-        "name": entry.name,
-        "value": field.value,
-        "confidence": entry.confidence,
-        "raw": field.raw,
-        "mask": entry.mask,
-        "encoding": entry.encoding.value,
-        "range": {"min": entry.min, "max": entry.max} if ranged else None,
-        "display": field.display,
-        "interpreted": field.interpreted,
-        "out_of_range": field.out_of_range,
     }
 
 
@@ -232,6 +201,32 @@ def preset_json(
     document = envelope("preset dump", read_at, device, identity)
     document["preset"] = region_json(read, identity.firmware)
     return document
+
+
+def human_backup(backup: Backup, saved_to: str) -> str:
+    """Summary line, one ``  2C  <21 bytes>`` line per stored preset, cross-check, saved path."""
+    identity = backup.identity
+    header = (
+        f"Backup of {identity.name} (firmware {identity.firmware})   "
+        f"{len(backup.presets)} presets, header {hex_bytes(backup.header)}"
+    )
+    if "unexpected_header" in backup.warnings:
+        header += f"  UNEXPECTED (expected {hex_bytes(EXPECTED_HEADER)})"
+    lines = [header]
+    lines += [f"  {p.position}  {hex_bytes(p.data)}" for p in backup.presets]
+    lines.append("Cross-check with whole-image read: OK")
+    lines.append(f"Saved {saved_to}")
+    return "\n".join(lines)
+
+
+def backup_json(
+    backup: Backup, document: dict[str, Any], device: DeviceInfo | None, saved_to: str
+) -> dict[str, Any]:
+    """The ``openvave preset backup --json`` document: envelope + backup file + saved path."""
+    result = envelope("preset backup", backup.created_at, device, backup.identity)
+    result["backup"] = document
+    result["saved_to"] = saved_to
+    return result
 
 
 def dumps(document: dict[str, Any]) -> str:

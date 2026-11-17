@@ -11,7 +11,11 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
-from openvave.errors import ConnectionLostError
+from openvave.errors import ConnectionLostError, ProtocolError
+from openvave.protocol.frame import READ, decode_frame, encode_frame
+
+ECHO_LEN = 8
+MEMORY_TYPE = 4
 
 
 def _label(text: str) -> str:
@@ -46,9 +50,16 @@ class FakeTransport:
       :class:`ConnectionLostError`.
     - ``replies``: ``{label: reply}`` — reply with this frame (or sequence of frames) instead of
       the scripted one.
+    - ``memory``: ``{address: bytes}`` — type-4 memory blocks. A read (``0x23``) of type 4 that
+      lies entirely inside one block and is not in the script is answered with a correct read
+      reply built from the block (e.g. the stored-preset image at address 0). Other unscripted
+      requests are then left unanswered (the session times out) instead of failing the test.
+    - ``chunk_size``: deliver every reply as notification chunks of at most this many bytes
+      (182 = what the pedal sends at ATT MTU 185). Exclusive with ``split``.
 
-    Every frame written is recorded in :attr:`sent`. A request that is not in the script raises
-    ``AssertionError`` (the test is wrong, not the pedal).
+    Every frame written is recorded in :attr:`sent`. Without ``memory``, a request that is not in
+    the script raises ``AssertionError`` (the test is wrong, not the pedal). Scripted labels
+    always take precedence over ``memory``.
     """
 
     def __init__(
@@ -59,7 +70,11 @@ class FakeTransport:
         drop: Mapping[str, int] | None = None,
         disconnect_after: int | None = None,
         replies: Mapping[str, Replies] | None = None,
+        memory: Mapping[int, bytes] | None = None,
+        chunk_size: int | None = None,
     ) -> None:
+        if chunk_size is not None and (chunk_size < 1 or split is not None):
+            raise ValueError("chunk_size must be >= 1 and cannot be combined with split")
         self._replies = {label: _reply_list(label, rx) for label, (_, rx) in script.items()}
         self._labels = {bytes(tx): label for label, (tx, _) in script.items()}
         for option in (drop or {}, replies or {}):
@@ -71,6 +86,10 @@ class FakeTransport:
         self._served: dict[str, int] = {}
         self._drop = dict(drop or {})
         self._split = split
+        self._chunk_size = chunk_size
+        self._memory = (
+            None if memory is None else {addr: bytes(block) for addr, block in memory.items()}
+        )
         self._disconnect_after = disconnect_after
         self._callback: Callable[[bytes], None] | None = None
         self.sent: list[bytes] = []
@@ -87,6 +106,8 @@ class FakeTransport:
         drop: Mapping[str, int] | None = None,
         disconnect_after: int | None = None,
         replies: Mapping[str, Replies] | None = None,
+        memory: Mapping[int, bytes] | None = None,
+        chunk_size: int | None = None,
     ) -> FakeTransport:
         """Build a fake from a capture file (labels are whitespace-normalised).
 
@@ -113,7 +134,13 @@ class FakeTransport:
                     rx.setdefault(label, []).append(bytes.fromhex(record["hex"]))
         script: dict[str, tuple[bytes, Replies]] = {label: (tx[label], rx[label]) for label in rx}
         return cls(
-            script, split=split, drop=drop, disconnect_after=disconnect_after, replies=replies
+            script,
+            split=split,
+            drop=drop,
+            disconnect_after=disconnect_after,
+            replies=replies,
+            memory=memory,
+            chunk_size=chunk_size,
         )
 
     async def open(self) -> None:
@@ -137,6 +164,11 @@ class FakeTransport:
             raise ConnectionLostError("simulated disconnect")
         self.sent.append(frame)
         label = self._labels.get(frame)
+        if label is None and self._memory is not None:
+            reply = self._memory_reply(frame)
+            if reply is not None:
+                self._deliver(reply)
+            return
         if label is None:
             raise AssertionError(f"FakeTransport: unexpected request {frame.hex(' ')}")
         if self._drop.get(label, 0) > 0:
@@ -147,13 +179,35 @@ class FakeTransport:
         self._served[label] = served + 1
         self._deliver(frames[min(served, len(frames) - 1)])
 
+    def _memory_reply(self, frame: bytes) -> bytes | None:
+        """A read reply built from :attr:`_memory`, or ``None`` if the request is not covered."""
+        assert self._memory is not None
+        try:
+            decoded = decode_frame(frame)
+        except ProtocolError:  # malformed requests are simply not answered
+            return None
+        body = decoded.body
+        if decoded.command != READ or len(body) != ECHO_LEN or body[0] != MEMORY_TYPE:
+            return None
+        address = int.from_bytes(body[1:5], "little")
+        length = int.from_bytes(body[5:8], "little")
+        for start, block in self._memory.items():
+            if start <= address and address + length <= start + len(block):
+                data = block[address - start : address - start + length]
+                return encode_frame(READ, body + data)
+        return None
+
     def _deliver(self, reply: bytes) -> None:
         callback = self._callback
         if callback is None:
             return
+        loop = asyncio.get_running_loop()
+        if self._chunk_size is not None:
+            for start in range(0, len(reply), self._chunk_size):
+                loop.call_soon(callback, reply[start : start + self._chunk_size])
+            return
         n = self._split or 1
         size, extra = divmod(len(reply), n)
-        loop = asyncio.get_running_loop()
         pos = 0
         for i in range(n):
             step = size + (1 if i < extra else 0)

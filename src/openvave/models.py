@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
+
+from openvave.errors import ProtocolError
 
 Confidence = Literal["confirmed", "observed", "hypothesis"]
 
@@ -224,6 +226,84 @@ class WatchChange:
 
 WatchEvent = WatchStart | WatchChange
 """What :meth:`TankG.watch` yields."""
+
+
+@dataclass(frozen=True)
+class StoredPreset:
+    """One of the 36 stored presets read by :meth:`TankG.backup`."""
+
+    index: int
+    """0–35 (``bank·4 + slot``)."""
+    position: str
+    """``"1A"`` … ``"9D"``."""
+    data: bytes
+    """The 21 stored bytes."""
+    decoded: DecodedRegion
+    """``data`` decoded with the current-preset byte map."""
+
+
+@dataclass(frozen=True)
+class Backup:
+    """A verified copy of the stored-preset image (spec 003, US1).
+
+    Construction checks the invariant ``image == header + presets[0].data + … + presets[35].data``
+    and raises :class:`~openvave.errors.ProtocolError` (``backup_mismatch``, detail naming the
+    differing positions) when it does not hold.
+    """
+
+    identity: DeviceIdentity
+    """Handshake result of the session that read it."""
+    created_at: datetime
+    """Timezone-aware UTC time taken after the last read."""
+    header: bytes
+    """The 2 header bytes (``a5 5a`` expected)."""
+    image: bytes
+    """The 758-byte whole-image read, exactly as received."""
+    presets: tuple[StoredPreset, ...]
+    """The 36 single preset reads, in index order."""
+    warnings: tuple[str, ...] = ()
+    """``unexpected_header`` and/or ``untested_firmware``."""
+
+    def __post_init__(self) -> None:
+        from openvave.protocol.storage import (
+            IMAGE_SIZE,
+            PRESET_COUNT,
+            PRESET_SIZE,
+            STORE_OFFSET,
+            position,
+        )
+
+        if len(self.header) != STORE_OFFSET or len(self.image) != IMAGE_SIZE:
+            raise ValueError(f"header must be {STORE_OFFSET} and image {IMAGE_SIZE} bytes")
+        if [p.index for p in self.presets] != list(range(PRESET_COUNT)):
+            raise ValueError(f"presets must be the {PRESET_COUNT} stored presets in index order")
+        differing = [] if self.image[:STORE_OFFSET] == self.header else ["header"]
+        for preset in self.presets:
+            start = STORE_OFFSET + PRESET_SIZE * preset.index
+            if preset.position != position(preset.index):
+                raise ValueError(f"preset {preset.index} has position {preset.position!r}")
+            if self.image[start : start + PRESET_SIZE] != preset.data:
+                differing.append(preset.position)
+        if differing:
+            raise ProtocolError(
+                "backup_mismatch",
+                ", ".join(differing),
+                "whole-image read differs from the single reads at " + ", ".join(differing),
+            )
+
+    def to_document(self) -> dict[str, Any]:
+        """The backup file document (``specs/003-preset-backup-edit-writes/contracts/``)."""
+        from openvave import __version__
+        from openvave.backup import to_document
+
+        return to_document(self, __version__)
+
+    @classmethod
+    def from_document(cls, document: Mapping[str, Any]) -> Backup:
+        """Rebuild a backup from its document; checks kind, format version and invariants."""
+        from openvave.backup import from_document
+
+        return from_document(document)
 
 
 @dataclass(frozen=True)

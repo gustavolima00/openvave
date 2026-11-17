@@ -6,8 +6,16 @@ import pytest
 
 from openvave.errors import ProtocolError
 from openvave.models import Region, RegionRead
-from openvave.protocol.commands import build_query, build_read, parse_read_reply
+from openvave.protocol.commands import (
+    build_query,
+    build_read,
+    build_storage_read,
+    parse_read_reply,
+    parse_storage_reply,
+)
+from openvave.protocol.storage import StorageRead
 from tests.support import mutations as m
+from tests.support import storage_fixture as sf
 from tests.support.captures import (
     DEVICE_INFO,
     FW96_CONNECT,
@@ -109,3 +117,60 @@ def test_body_shorter_than_echo() -> None:
 
 def test_corrupt_frame_propagates_decode_reason() -> None:
     assert _reason(Region.GLOBAL, m.flip_checksum(CAP.rx(GLOBAL)))[0] == "bad_checksum"
+
+
+# -- storage reads (spec 003, T002) ---------------------------------------------------------------
+
+STORAGE_IMAGE_READ = "00 59 23 08 00 00 04 00 00 00 00 f6 02 00 03"
+
+
+def test_build_storage_read_image() -> None:
+    assert build_storage_read(StorageRead.image()).hex(" ") == STORAGE_IMAGE_READ
+
+
+def test_build_storage_read_preset_address() -> None:
+    frame = build_storage_read(StorageRead.preset(2))
+    assert frame[6:14] == bytes([4, 0x2C, 0, 0, 0, 21, 0, 0])
+    assert frame == sf.read_request(0x2C, 21)
+
+
+def test_build_storage_read_header() -> None:
+    assert build_storage_read(StorageRead.header()) == sf.read_request(0, 2)
+
+
+def test_build_storage_read_rejects_region_and_raw() -> None:
+    with pytest.raises(TypeError):
+        build_storage_read(Region.CURRENT_PRESET)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        build_storage_read((4, 0, 2))  # type: ignore[arg-type]
+
+
+def test_parse_storage_reply() -> None:
+    image = sf.synthetic_image()
+    pairs = sf.storage_replies(image)
+    assert parse_storage_reply(StorageRead.image(), pairs[sf.IMAGE_LABEL][1]) == image
+    assert parse_storage_reply(StorageRead.header(), pairs[sf.HEADER_LABEL][1]) == image[:2]
+    reply = pairs[sf.preset_label(2)][1]
+    assert parse_storage_reply(StorageRead.preset(2), reply) == image[2 + 42 : 2 + 63]
+
+
+def _storage_reason(target: StorageRead, frame: bytes) -> tuple[str, str | None]:
+    with pytest.raises(ProtocolError) as exc:
+        parse_storage_reply(target, frame)
+    return exc.value.reason, exc.value.detail
+
+
+def test_parse_storage_reply_errors() -> None:
+    reply = sf.storage_replies(sf.synthetic_image())[sf.preset_label(2)][1]
+    target = StorageRead.preset(2)
+    assert _storage_reason(target, m.set_command(reply, 0x11))[0] == "wrong_command"
+    assert _storage_reason(StorageRead.preset(3), reply) == ("echo_mismatch", "address")
+    assert _storage_reason(target, m.set_echo(reply, type=5)) == ("echo_mismatch", "type")
+    assert _storage_reason(target, m.set_echo(reply, length=20)) == ("echo_mismatch", "length")
+    assert _storage_reason(target, m.with_payload(reply, b"\x00" * 20))[0] == "short_data"
+    assert _storage_reason(target, m.flip_checksum(reply))[0] == "bad_checksum"
+
+
+def test_build_read_unchanged_for_regions() -> None:
+    for region in Region:
+        assert build_read(region) == CAP.tx(REGION_LABELS[region])

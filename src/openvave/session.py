@@ -24,6 +24,7 @@ from openvave.errors import (
     RequestTimeoutError,
 )
 from openvave.models import (
+    Backup,
     DecodedRegion,
     DeviceIdentity,
     DeviceInfo,
@@ -38,14 +39,17 @@ from openvave.protocol import (
     FrameAssembler,
     build_query,
     build_read,
+    build_storage_read,
     decode_frame,
     decode_region,
     diff,
     parse_identity,
     parse_read_reply,
+    parse_storage_reply,
 )
 from openvave.protocol.frame import QUERY
 from openvave.protocol.identity import TESTED_FIRMWARE
+from openvave.protocol.storage import EXPECTED_HEADER, PRESET_COUNT, StorageRead
 from openvave.trace import trace_rx, trace_rx_chunk, trace_rx_stray, trace_tx
 from openvave.transport import Transport
 
@@ -158,6 +162,46 @@ class TankG:
             regions=regions,
             read_at=datetime.now(UTC),
         )
+
+    async def backup(self) -> Backup:
+        """Read every stored preset and cross-check it (read-only, spec 003 research R1).
+
+        Reads the image header, the 36 stored presets one by one, then the whole 758-byte image
+        in one request, and checks that the image equals header + presets. Sends only ``0x23``
+        reads, one at a time, nothing else and no polling. ``created_at`` is taken after the last
+        read. ``warnings`` gets ``unexpected_header`` when the header is not ``a5 5a`` and
+        ``untested_firmware`` when the firmware is not in ``TESTED_FIRMWARE``.
+
+        Raises :class:`ProtocolError` with reason ``backup_mismatch`` (detail: the differing
+        positions) when the two copies disagree; other read errors propagate unchanged.
+        """
+        from openvave.backup import stored_preset
+
+        identity = self.identity
+        header = await self._storage_read(StorageRead.header())
+        presets = tuple(
+            [
+                stored_preset(i, await self._storage_read(StorageRead.preset(i)), identity.firmware)
+                for i in range(PRESET_COUNT)
+            ]
+        )
+        image = await self._storage_read(StorageRead.image())
+        warnings: list[str] = []
+        if header != EXPECTED_HEADER:
+            warnings.append("unexpected_header")
+        if identity.firmware_untested:
+            warnings.append("untested_firmware")
+        return Backup(
+            identity=identity,
+            created_at=datetime.now(UTC),
+            header=header,
+            image=image,
+            presets=presets,
+            warnings=tuple(warnings),
+        )
+
+    async def _storage_read(self, target: StorageRead) -> bytes:
+        return parse_storage_reply(target, await self._request(build_storage_read(target)))
 
     def watch(
         self,

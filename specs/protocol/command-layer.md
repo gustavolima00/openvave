@@ -334,8 +334,16 @@ macOS, MTU 185, `captures/private/20261117-100138-storage.jsonl`):
 - 34 of the 36 presets differ (1B = 1C and 1A = 2A, as seen before).
 
 The capture is not committed: the 36 presets are most likely the factory content, which
-Constitution VI keeps out of the repo. A committed fixture for spec 003 should carry only the
-header plus presets already public in `captures/fw96/` (e.g. 1B), or synthetic preset bytes.
+Constitution VI keeps out of the repo. The committed fixture for the frame shapes is
+`captures/fw96/20261117-storage-synthetic.jsonl`: the same requests (header, 36 single reads,
+image read) with replies built from a **synthetic** image (header `a5 5a`, preset 1B from
+`20261116-probe-connect.jsonl`, every other preset a documented pattern from
+`tests/support/storage_fixture.py`) and the image reply split into 182-byte notifications as on
+hardware. It proves frame shapes and reassembly only; the hardware evidence for the layout stays
+the private 2026-11-17 probe.
+
+`openvave preset backup` (spec 003, 0.3.0) implements this read: header, the 36 single reads, then
+the image read, and refuses the backup (exit 7) unless the image equals header + presets.
 
 ### Stored presets, switching and saving (app code, 2026-11-17)
 

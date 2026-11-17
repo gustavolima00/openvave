@@ -39,6 +39,8 @@ CONTRACT_EXPORTS = {
     "ByteChange",
     "WatchStart",
     "WatchChange",
+    "Backup",
+    "StoredPreset",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -50,6 +52,8 @@ PROTOCOL_EXPORTS = {
     "parse_identity",
     "decode_region",
     "diff",
+    "build_storage_read",
+    "parse_storage_reply",
 }
 DATACLASSES = (
     "DeviceInfo",
@@ -62,6 +66,8 @@ DATACLASSES = (
     "ByteChange",
     "WatchStart",
     "WatchChange",
+    "Backup",
+    "StoredPreset",
 )
 FORBIDDEN = ("write", "erase", "address")
 
@@ -116,6 +122,22 @@ def test_protocol_module_exposes_byte_map() -> None:
     assert isinstance(openvave.protocol.BYTE_MAP, tuple)
     assert all(isinstance(e, openvave.ByteMapEntry) for e in openvave.protocol.BYTE_MAP)
     assert {"BYTE_MAP", "MAP_FIRMWARE"} <= set(openvave.protocol.__all__)
+
+
+def test_protocol_module_exposes_storage_read() -> None:
+    assert "StorageRead" in openvave.protocol.__all__
+    target = openvave.protocol.StorageRead.preset(6)
+    assert (target.type, target.address, target.length) == (4, 128, 21)
+
+
+async def test_backup_sends_reads_only() -> None:
+    from tests.support import storage_fixture as sf
+
+    fake = openvave.FakeTransport.from_capture(sf.SYNTHETIC_CAPTURE)
+    async with openvave.TankG.over(fake) as pedal:
+        backup = await pedal.backup()
+    assert isinstance(backup, openvave.Backup)
+    assert {frame[2] for frame in fake.sent} == {0x11, 0x23}
 
 
 def test_encoding_closed_enum() -> None:
