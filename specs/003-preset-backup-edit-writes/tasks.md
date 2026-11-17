@@ -411,12 +411,55 @@ approved write) to `confirmed`, which lifts the `--experimental` requirement for
 
 ### Evidence gathering and recording
 
-- [ ] T061 [US4] Owner, hardware, with per-step approval as in T050: pre-backup → knob block write on another knob (e.g. `treble`) on another preset → select to another preset and back → post-backup equality; optionally repeat switch and LED steps the owner approves
-- [ ] T062 [US4] Cut excerpts, promote rows with two sessions to `confirmed` in `specs/protocol/command-layer.md` "Write messages" and `WRITE_MESSAGES`, remove `xfail` markers; record fw 96 as the covered firmware
+- [X] T061 [US4] Owner, hardware, with per-step approval as in T050: pre-backup → knob block write on another knob (e.g. `treble`) on another preset → select to another preset and back → post-backup equality; optionally repeat switch and LED steps the owner approves
+  - Evidence (2026-11-17, fw 96, a new connection per command, ~16:36–16:42Z):
+    - Backup B0 (`captures/private/20261117-gate-B0.json`, 16:36:22Z): 36 presets, cross-check
+      OK, equal to A0 apart from `created_at`.
+    - Starting preset: 1C was proposed, but stored 1C is byte-identical to 1B (session A's
+      preset), so session B moved to **1D** (public, different content: all blocks on, treble 43).
+      A first attempt to run the write with a literal `<v>` placeholder failed in zsh before
+      openvave started (no frame sent, no trace file).
+    - `knob_treble` (1D, edit mode, global `00 00 03 00`): dry run `Set treble 43 → 90`, frame
+      `00 59 22 16 00 00 04 04 00 00 10 0e 00 00 40 05 64 5a 58 53 40 14 29 0f 35 09 05 04 58`
+      (= independent encoding from stored 1D in B0). Approval: the owner ran the exact posted
+      command without a written "approve knob_treble" (same process gap as in session A). Reply
+      `00 59 00 01 00 00 00 ff` (ACK); re-read: byte 7 `2b` → `5a` only; global unchanged; applied.
+      Undo: left edit mode without saving; `preset dump` showed treble 43 and the buffer equal to
+      stored 1D (`01 01 01 01 40 05 64 2b 58 53 40 14 29 0f 35 09 05 04 77 b3 b3`).
+    - `select_b` (1D → 1A, normal mode, global `00 00 03 01`): dry run frame
+      `00 59 22 09 00 00 04 00 00 00 e0 01 00 00 01 19` (same frame as session A's select to 1A;
+      only the starting preset differs). Approval: the owner ran the exact posted command without
+      a written "approve select_b". Reply ACK; first global read `00 00 00 01` (no `ff`
+      transient), buffer = stored 1A = stored-preset read of 1A, applied.
+    - `select_b_back` (1A → 1D, normal mode): dry run frame
+      `00 59 22 09 00 00 04 03 00 00 e0 01 00 00 01 16` (= independent encoding, index 3).
+      Approval: the owner ran the exact posted command without a written "approve select_b_back".
+      Reply ACK; global `00 00 00 01` → `00 00 03 01`, buffer = stored 1D = stored-preset read,
+      applied. The owner's display readings (1A, then 1D) were asked for but not recorded.
+    - Backup B-post (`captures/private/20261117-gate-B-post.json`, 16:42:12Z): 36 presets,
+      cross-check OK, equal to B0 **and** A0 apart from `created_at` (SC-004).
+    - Switch and LED steps were not repeated: those rows stay `observed`.
+    - Process: none of the three writes had a written approval line in chat before it ran; each
+      was the exact command posted after a matching dry run and a posted approval request.
+- [X] T062 [US4] Cut excerpts, promote rows with two sessions to `confirmed` in `specs/protocol/command-layer.md` "Write messages" and `WRITE_MESSAGES`, remove `xfail` markers; record fw 96 as the covered firmware
+  - Done: excerpts `captures/fw96/20261117-gate-{knob_treble,select_b,select_b_back}.jsonl` (cut
+    with `tests/support/gate_excerpt.py`; only presets 1D and 1A, both public, and our own value);
+    `SESSION_B_DATE` = 20261117, all in `RECORDED`, no `xfail` left. Promoted to `confirmed`
+    (fw 96): `knob_block` (knob_gain + knob_treble), `preset_select` (select, select_back,
+    select_b, select_b_back), `ack`; Address map rows `0x10000004` and `0xE0000000 + i` and
+    "Write acknowledgement" updated. Block switches and LED colour stay `observed`.
+    New guard `test_confirmed_rows_cite_two_gate_sessions` (`test_writes_doc.py`): a confirmed row
+    must cite excerpts from sessions A **and** B, not just two files. Tests that pinned
+    "everything needs `--experimental`" now use an `observed` field (`mod_on`, `led_colour`) for
+    the refusal and assert that gain / select run without the flag.
 
 ### Live verification (milestone gate)
 
-- [ ] T063 Run the full suite; record which rows are `confirmed` / `observed` (SC-005)
+- [X] T063 Run the full suite; record which rows are `confirmed` / `observed` (SC-005)
+  - Evidence (2026-11-17): `uv run pytest` → 1085 passed, 5 skipped, 0 xfailed; gate replay
+    11/11, `test_gate_excerpts` clean for all eleven excerpts; `ruff check` passed; `ruff format
+    --check` 107 files formatted; `mypy src` no issues in 24 files. Confirmed (fw 96):
+    `knob_block`, `preset_select`, `ack`. Observed: `block_switch(0–3)`, `led_colour`.
 - [ ] T064 Owner, hardware (approval required, it is still a write): one `uv run openvave set gain <v>` **without** `--experimental` on fw 96 succeeds; leave edit mode without saving; record
 
 **Checkpoint**: Milestone 3 DONE — confirmed writes run by default; the rest stays behind `--experimental`

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from openvave.protocol.writes import WRITE_MESSAGES, WriteMessage
+from tests.integration.gate_fixtures import ALL_STEPS, RECORDED
 from tests.support.bytemap_doc import COMMAND_LAYER
 from tests.support.captures import REPO_ROOT
 from tests.support.writes_doc import HEADING, WriteRow, load_write_rows, parse_table
@@ -78,3 +79,18 @@ def test_evidence_rules() -> None:
 def test_evidence_rule_catches_unbacked_promotion() -> None:
     row = WriteRow("knob_block", None, 4, 0x10000004, 14, "confirmed", frozenset({96}), (), "")
     assert _evidence_rule(row)
+
+
+def _sessions(row: WriteRow) -> set[str]:
+    """Gate sessions (``A``/``B``) of the excerpts a row cites."""
+    by_file = {path: step for step, path in RECORDED.items()}
+    session = {s.step: s.session for s in ALL_STEPS}
+    return {session[by_file[p.rsplit("/", 1)[-1]]] for p in row.evidence}
+
+
+def test_confirmed_rows_cite_two_gate_sessions() -> None:
+    # spec 003 M3 (T062): two captures of one session are not "two independent sessions"
+    confirmed = [row for row in load_write_rows() if row.confidence == "confirmed"]
+    assert confirmed
+    for row in confirmed:
+        assert _sessions(row) >= {"A", "B"}, row.kind

@@ -153,12 +153,24 @@ async def test_unknown_field(field: str) -> None:
     assert writes(fake) == []
 
 
-async def test_experimental_required_until_confirmed() -> None:
+async def test_confirmed_knob_block_needs_no_opt_in() -> None:
+    # spec 003 M3: knob block confirmed by gate sessions A and B on fw 96 (SC-005)
     fake = make_fake()
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_set("gain", 90)
+        result = await pedal.set_field("gain", 90)
+    assert plan.refusal is None
+    assert plan.confidence == "confirmed"
+    assert result.applied is True
+    assert len(writes(fake)) == 1
+
+
+async def test_experimental_required_until_confirmed() -> None:
+    fake = make_fake()
+    async with TankG.over(fake) as pedal:
+        plan = await pedal.plan_set("mod_on", True)
         with pytest.raises(WriteRefusedError) as exc:
-            await pedal.set_field("gain", 90)
+            await pedal.set_field("mod_on", True)
     assert plan.refusal == "experimental_required"
     assert plan.confidence == "observed"
     assert exc.value.reason == "experimental_required"

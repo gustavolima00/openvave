@@ -67,7 +67,7 @@ def test_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
     lines = out.splitlines()
     assert lines[0] == "Select 2C (index 6)   from 1B"
     assert lines[1] == f"  write  {SELECT_6}"
-    assert "refused: experimental_required" in out
+    assert "refused" not in out  # preset select is confirmed on fw 96 (gate session B)
     assert lines[-1] == "  dry run: nothing sent"
     assert writes(fake) == []
 

@@ -16,9 +16,8 @@ from tests.support.captures import CAPTURES_DIR
 FW96 = CAPTURES_DIR / "fw96"
 SESSION_A_DATE = "20261117"
 """Date of gate session A."""
-SESSION_B_DATE = "20261118"
-"""Expected date of gate session B (the file name of a not-yet-recorded step); the evidence
-commit records the actual date in :data:`RECORDED`."""
+SESSION_B_DATE = "20261117"
+"""Date of gate session B (same day as A, a new connection per command, another preset)."""
 
 
 @dataclass(frozen=True)
@@ -64,6 +63,9 @@ RECORDED: dict[str, str] = {
     "led_colour": "20261117-gate-led_colour.jsonl",
     "select": "20261117-gate-select.jsonl",
     "select_back": "20261117-gate-select_back.jsonl",
+    "knob_treble": "20261117-gate-knob_treble.jsonl",
+    "select_b": "20261117-gate-select_b.jsonl",
+    "select_b_back": "20261117-gate-select_b_back.jsonl",
 }
 """Step → committed excerpt file name. Filled in each evidence commit (T055, T062)."""
 

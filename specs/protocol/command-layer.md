@@ -333,12 +333,12 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write hypothesis |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1; openvave, 2026-11-17) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (write, all k; gate session A) |
-| `0x10000004` | 4 | 14 | write (log; openvave, 2026-11-17) | the 14 knob bytes (preset 4–17) in one write | observed (write; gate session A) |
+| `0x10000004` | 4 | 14 | write (log; openvave, 2026-11-17) | the 14 knob bytes (preset 4–17) in one write | confirmed (write; gate sessions A and B) |
 | `0x10000012` | 4 | 3 | write (code; openvave, 2026-11-17) | preset bytes 18–20 (LED colour R, G, B per app code) | write observed (gate session A); LED meaning hypothesis |
 | `0x20000000` | 4 | 4 | read (log, hardware) | global block (bank browsed, bank, slot, mode) | confirmed (read) |
 | `0xD0000000` | 5 | 32 | read (log, hardware) | device info block | confirmed (read) |
 | `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
-| `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 2026-11-17) | load stored preset `i` | observed (write and meaning; gate session A) |
+| `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
 | `0xF0000000` | 4 | 0 | write, empty data (code) | commit / save stored presets | hypothesis |
 
 Types 5 and 6 appear elsewhere in the app: type 5 for the device info read and for reading
@@ -441,8 +441,9 @@ checksum `FF`). Anything else is a NAK: the app logs the reply and flushes its c
 retries a send up to 3 times only when no reply arrives. No other status value is named in the
 app, so non-zero status codes are unknown. Observed (gate session A, 2026-11-17, fw 96): all eight
 openvave writes — knob block, the four block switches, LED colour, two preset selects — were
-answered with exactly `00 59 00 01 00 00 00 ff`, in one notification each. No NAK has been seen,
-so non-zero status codes remain unknown.
+answered with exactly `00 59 00 01 00 00 00 ff`, in one notification each. Confirmed (gate
+session B, same day, new connection per command, starting from 1D): the knob block and two preset
+selects got the same bytes. No NAK has been seen, so non-zero status codes remain unknown.
 
 ### Write messages
 
@@ -461,14 +462,14 @@ write is sent without `--experimental` only when its row is `confirmed`, the `ac
 
 | Target | Type | Address | Len | Data | Reply | Confidence | Firmware | Evidence | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| `knob_block` | 4 | `0x10000004` | 14 | preset bytes 4–17, rebuilt from a fresh edit-buffer read with one byte changed | ACK | observed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl` | gate session A (2026-11-17, 1B, edit mode): gain 60 → 90, ACK, only byte 6 changed, applied; leaving edit mode without saving restored 60. Also in the app's log (2026-11-16) |
+| `knob_block` | 4 | `0x10000004` | 14 | preset bytes 4–17, rebuilt from a fresh edit-buffer read with one byte changed | ACK | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl` | gate session A (2026-11-17, 1B, edit mode): gain 60 → 90, ACK, only byte 6 changed, applied; leaving edit mode without saving restored 60. Gate session B (2026-11-17, new connection, 1D, edit mode): treble 43 → 90, ACK, only byte 7 changed, applied; leaving edit mode without saving restored 43. Also in the app's log (2026-11-16) |
 | `block_switch(0)` | 4 | `0x10000000` | 1 | amp on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_amp.jsonl` | gate session A: amp off on 1B, ACK, only byte 0 changed, applied |
 | `block_switch(1)` | 4 | `0x10000001` | 1 | mod on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_mod.jsonl` | gate session A: mod on on 1B, ACK, only byte 1 changed (a write does not copy physical knob positions), applied; also in the app's log |
 | `block_switch(2)` | 4 | `0x10000002` | 1 | delay on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_delay.jsonl` | gate session A: delay on on 1B, ACK, only byte 2 changed, applied |
 | `block_switch(3)` | 4 | `0x10000003` | 1 | reverb on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_reverb.jsonl` | gate session A: reverb off on 1B, ACK, only byte 3 changed, applied |
 | `led_colour` | 4 | `0x10000012` | 3 | R, G, B, 0–255 each (preset 18–20) | ACK | observed | 96 | `captures/fw96/20261117-gate-led_colour.jsonl` | gate session A: `ff 00 00` on 1B, ACK, bytes 18–20 changed, applied. The write is observed; that 18–20 drive the preset LED is not (in edit mode the LEDs show block colours) |
-| `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | observed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B, ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient this time), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
-| `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | observed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl` | the reply to all eight gate-session-A writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
+| `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | confirmed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl`, `captures/fw96/20261117-gate-select_b_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B; gate session B (normal mode, new connection): 1D → 1A and 1A → 1D. Each: ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
+| `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl` | the reply to all eight gate-session-A writes and all three gate-session-B writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
 
 ### Preset LED colour (app code, 2026-11-17)
 

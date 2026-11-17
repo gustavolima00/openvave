@@ -90,13 +90,16 @@ async def test_edit_mode_with_discard_edits_is_sent() -> None:
     assert result.applied is True
 
 
-async def test_experimental_required() -> None:
-    fake = make_fake(NORMAL)
+async def test_confirmed_select_needs_no_opt_in() -> None:
+    # spec 003 M3: preset select confirmed by gate sessions A and B on fw 96 (SC-005)
+    fake = make_fake(NORMAL, select_transient=1)
     async with TankG.over(fake) as pedal:
-        with pytest.raises(WriteRefusedError) as exc:
-            await pedal.select_preset(6, sleep=Sleeps())
-    assert exc.value.reason == "experimental_required"
-    assert writes(fake) == []
+        plan = await pedal.plan_select(6)
+        result = await pedal.select_preset(6, sleep=Sleeps())
+    assert plan.refusal is None
+    assert plan.confidence == "confirmed"
+    assert writes(fake) == [SELECT_6]
+    assert result.applied is True
 
 
 async def test_slot_stuck_at_ff_is_not_applied() -> None:

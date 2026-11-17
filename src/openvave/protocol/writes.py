@@ -206,7 +206,8 @@ class WriteMessage:
 _FW96 = frozenset({96})
 
 
-def _observed(
+def _row(
+    confidence: Confidence,
     kind: MessageKind,
     argument: int | None,
     address: int | None,
@@ -219,7 +220,7 @@ def _observed(
         type=None if address is None else WRITE_TYPE,
         address=address,
         length=length,
-        confidence="observed",
+        confidence=confidence,
         firmware=_FW96,
         evidence=tuple(f"captures/fw96/20261117-gate-{e}.jsonl" for e in evidence),
     )
@@ -228,16 +229,30 @@ def _observed(
 _SWITCH_STEPS = ("switch_amp", "switch_mod", "switch_delay", "switch_reverb")
 
 WRITE_MESSAGES: tuple[WriteMessage, ...] = (
-    _observed("knob_block", None, KNOB_BLOCK_ADDRESS, KNOB_COUNT, "knob_gain"),
+    _row(
+        "confirmed", "knob_block", None, KNOB_BLOCK_ADDRESS, KNOB_COUNT, "knob_gain", "knob_treble"
+    ),
     *(
-        _observed("block_switch", k, EDIT_BUFFER + k, 1, _SWITCH_STEPS[k])
+        _row("observed", "block_switch", k, EDIT_BUFFER + k, 1, _SWITCH_STEPS[k])
         for k in range(SWITCH_COUNT)
     ),
-    _observed("led_colour", None, LED_ADDRESS, LED_LENGTH, "led_colour"),
-    _observed("preset_select", None, SELECT_BASE, 1, "select", "select_back"),
-    _observed("ack", None, None, None, "knob_gain", "select"),
+    _row("observed", "led_colour", None, LED_ADDRESS, LED_LENGTH, "led_colour"),
+    _row(
+        "confirmed",
+        "preset_select",
+        None,
+        SELECT_BASE,
+        1,
+        "select",
+        "select_back",
+        "select_b",
+        "select_b_back",
+    ),
+    _row("confirmed", "ack", None, None, None, "knob_gain", "select", "knob_treble", "select_b"),
 )
-"""Every write message and the ACK, as documented: ``observed`` after gate session A (fw 96)."""
+"""Every write message and the ACK, as documented (fw 96). Gate sessions A and B confirm the
+knob block, preset select and the ACK; the block switches and LED colour stay ``observed``
+(session A only), so they still need ``--experimental``."""
 
 _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 
