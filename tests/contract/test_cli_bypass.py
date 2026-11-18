@@ -70,26 +70,24 @@ def test_on_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
     assert writes(fake) == []
 
 
-def test_on_dry_run_without_experimental_prints_the_refusal(
+def test_on_dry_run_without_experimental_has_no_refusal(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # spec 004 T090: bypass is confirmed (gate sessions A and B), so no opt-in is needed
     fake = make_fake(NORMAL)
     code, out, err = run(capsys, ["on", "--dry-run"], fake)
     assert code == 0, err
-    assert "  refused: experimental_required (bypass is 'observed'; needs --experimental)" in (
-        out.splitlines()
-    )
+    assert not any("refused" in line for line in out.splitlines())
+    assert any(BYPASS_1B in line for line in out.splitlines())
     assert writes(fake) == []
 
 
-def test_on_without_experimental_exit_1(capsys: pytest.CaptureFixture[str]) -> None:
+def test_on_without_experimental_runs(capsys: pytest.CaptureFixture[str]) -> None:
     fake = make_fake(NORMAL)
     code, out, err = run(capsys, ["on"], fake)
-    assert code == 1
-    assert "experimental_required" in err
-    assert "--experimental" in err
-    assert out == ""
-    assert writes(fake) == []
+    assert code == 0, err
+    assert "applied" in out
+    assert [f.hex(" ") for f in writes(fake)] == [BYPASS_1B]
 
 
 def test_on_with_edits_needs_discard_edits(capsys: pytest.CaptureFixture[str]) -> None:
@@ -150,7 +148,7 @@ def test_on_json(capsys: pytest.CaptureFixture[str]) -> None:
         "argument": 1,
     }
     assert doc["plan"]["frame"] == BYPASS_1B
-    assert doc["plan"]["confidence"] == "observed"
+    assert doc["plan"]["confidence"] == "confirmed"
     assert doc["result"]["applied"] is True
     assert doc["result"]["return_index"] == 1
     assert doc["result"]["return_position"] == "1B"

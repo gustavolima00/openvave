@@ -34,8 +34,7 @@ NOT_SAVED = (
     "(or leave edit mode on the pedal without saving)"
 )
 NOT_SAVED_NORMAL = (
-    "Not saved. Discard: openvave preset reload   "
-    "Keep: openvave preset save --unsafe --experimental"
+    "Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe"
 )
 
 Factory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]

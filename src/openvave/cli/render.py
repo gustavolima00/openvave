@@ -455,11 +455,10 @@ def json_line(document: dict[str, Any]) -> str:
 
 # -- writes (contracts/cli.md "openvave set" / "openvave preset select") ------------------------
 
-NOT_SAVED = (
-    "Not saved. Discard: openvave preset reload   "
-    "Keep: openvave preset save --unsafe --experimental"
-)
-"""After a write in normal mode. ``--experimental`` goes once the save messages are confirmed."""
+NOT_SAVED = "Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe"
+"""After a write in normal mode. ``stored_slot`` and ``commit`` are confirmed on fw 96 (spec 004
+gate session B), so the hint needs only ``--unsafe``; on another firmware ``preset save`` itself
+says it needs ``--experimental``."""
 NOT_SAVED_EDIT = (
     "Not saved. Discard: openvave preset reload --discard-edits "
     "(or leave edit mode on the pedal without saving)"

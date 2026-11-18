@@ -196,3 +196,38 @@ async def test_bad_arguments(kwargs: dict[str, object]) -> None:
         with pytest.raises(ValueError):
             await pedal.plan_restore(rf.backup(), **kwargs)  # type: ignore[arg-type]
     assert writes(fake) == []  # type: ignore[arg-type]
+
+
+# -- spec 004 M4 (T085): after gate session B confirms the rows -----------------------------------
+
+
+def _confirmed(*kinds: str) -> bool:
+    from openvave.protocol.writes import message_for
+
+    return all(message_for(k, None).confidence == "confirmed" for k in kinds)
+
+
+@pytest.mark.xfail(
+    not _confirmed("stored_slot", "commit"),
+    strict=True,
+    reason="stored_slot and commit are confirmed by gate session B (T090)",
+)
+async def test_restore_slot_runs_with_unsafe_alone_once_confirmed() -> None:
+    pedal_image = rf.image_with(s2=GAIN_90)
+    fake = make_fake(NORMAL, glob=bytes([0, 0, 2, NORMAL]), buffer=GAIN_90, image=pedal_image)
+    backup = rf.backup(rf.image_with(s2=P))
+    async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
+        plan = await pedal.plan_restore(backup, slot=2, unsafe=True)
+        result = await pedal.restore(backup, slot=2, unsafe=True, on_backup=keep, sleep=no_sleep)
+    assert plan.refusal is None
+    assert writes(fake) == [RESTORE_1C, COMMIT, SELECT_1C]  # type: ignore[arg-type]
+    assert result.verified is True
+
+
+async def test_restore_without_unsafe_is_refused_even_once_confirmed() -> None:
+    fake = make_fake(NORMAL, image=rf.image_with(s2=GAIN_90))
+    async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
+        with pytest.raises(WriteRefusedError) as err:
+            await pedal.restore(rf.backup(), slot=2, on_backup=keep, sleep=no_sleep)
+    assert err.value.reason == "unsafe_required"
+    assert writes(fake) == []  # type: ignore[arg-type]

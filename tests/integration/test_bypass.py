@@ -7,6 +7,8 @@ write, the bypass state on the re-reads, then select 1B. The other tests use the
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from openvave import TankG, WriteNakError, WriteNotAppliedError, WriteRefusedError, WriteResult
@@ -74,8 +76,8 @@ async def test_bypass_on_plan_reads_and_result() -> None:
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_bypass_on()
         result = await pedal.bypass_on(experimental=True, sleep=_no_sleep)
-    assert plan.refusal == "experimental_required"
-    assert plan.confidence == "observed"
+    assert plan.refusal is None  # spec 004 T090: confirmed by gate sessions A and B
+    assert plan.confidence == "confirmed"
     assert plan.action == "bypass on 1B"
     assert plan.frame == BYPASS_1B
     assert list(plan.reads) == [
@@ -91,13 +93,13 @@ async def test_bypass_on_plan_reads_and_result() -> None:
     assert [(c.region, c.offset, c.new) for c in result.changes][:1] == [(Region.GLOBAL, 2, 0xFF)]
 
 
-async def test_bypass_on_needs_experimental() -> None:
+async def test_bypass_on_untested_firmware_needs_experimental() -> None:
     fake = make_fake(NORMAL)
     async with TankG.over(fake) as pedal:
+        pedal._identity = dataclasses.replace(pedal.identity, firmware=97, firmware_untested=True)
         with pytest.raises(WriteRefusedError) as exc:
             await pedal.bypass_on(sleep=_no_sleep)
-    assert exc.value.reason == "experimental_required"
-    assert "observed" in str(exc.value)
+    assert exc.value.reason == "untested_firmware"
     assert writes(fake) == []
 
 
@@ -233,3 +235,27 @@ async def test_reload_refusal_in_bypass_points_to_bypass_off() -> None:
             await pedal.reload_preset(sleep=_no_sleep)
     assert exc.value.reason == "bypassed"
     assert "bypass off <position>" in str(exc.value)
+
+
+# -- spec 004 M4 (T085): after gate session B confirms the bypass row ----------------------------
+
+
+def _bypass_confirmed() -> bool:
+    from openvave.protocol.writes import message_for
+
+    return message_for("bypass", None).confidence == "confirmed"
+
+
+@pytest.mark.xfail(
+    not _bypass_confirmed(), strict=True, reason="bypass is confirmed by gate session B (T090)"
+)
+async def test_bypass_on_and_off_without_experimental_once_confirmed() -> None:
+    fake = make_fake(NORMAL)
+    async with TankG.over(fake) as pedal:
+        plan = await pedal.plan_bypass_on()
+        on = await pedal.bypass_on(sleep=_no_sleep)
+        off = await pedal.bypass_off(1, sleep=_no_sleep)
+    assert plan.refusal is None
+    assert plan.confidence == "confirmed"
+    assert on.applied is True and off.applied is True
+    assert writes(fake) == [BYPASS_1B, SELECT_1B]

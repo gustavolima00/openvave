@@ -1,4 +1,4 @@
-"""Index of the gate-session excerpts (spec 003 M2/M3, T047; spec 004 M3, T068).
+"""Index of the gate-session excerpts (spec 003 M2/M3, T047; spec 004 M3/M4, T068, T085).
 
 Spec 003 steps send one volatile write each. Spec 004 steps run one CLI command each (``openvave
 --trace``), or the no-op image helper (``tests/hardware/test_hw_persistent.py``): bypass,
@@ -25,6 +25,9 @@ SESSION_B_DATE = "20261117"
 """Date of gate session B (same day as A, a new connection per command, another preset)."""
 SPEC004_SESSION_A_DATE = "20261118"
 """Expected date of spec 004 gate session A; :data:`RECORDED` names the real files."""
+SPEC004_SESSION_B_DATE = "20261118"
+"""Expected date of spec 004 gate session B (after a power cycle, a new connection per command,
+another loaded preset and another target slot than session A)."""
 
 
 @dataclass(frozen=True)
@@ -85,7 +88,16 @@ SPEC004_SESSION_A: tuple[GateStep, ...] = (
     GateStep("restore_all", "restore_all", spec="004"),
 )
 
-SPEC004_STEPS: tuple[GateStep, ...] = SPEC004_SESSION_A
+SPEC004_SESSION_B: tuple[GateStep, ...] = (
+    # spec 004 M4 (T086-T089): the second, independent session that confirms the rows
+    GateStep("bypass_b", "bypass", session="B", spec="004"),
+    GateStep("bypass_off_b", "bypass_off", session="B", spec="004"),
+    GateStep("save_b", "save", session="B", spec="004"),
+    GateStep("restore_slot_b", "restore_slot", session="B", spec="004"),
+    GateStep("restore_all_b", "restore_all", session="B", spec="004"),
+)
+
+SPEC004_STEPS: tuple[GateStep, ...] = SPEC004_SESSION_A + SPEC004_SESSION_B
 
 ALL_STEPS: tuple[GateStep, ...] = SPEC003_STEPS + SPEC004_STEPS
 
@@ -93,14 +105,25 @@ SESSION_DATES = {
     ("003", "A"): SESSION_A_DATE,
     ("003", "B"): SESSION_B_DATE,
     ("004", "A"): SPEC004_SESSION_A_DATE,
+    ("004", "B"): SPEC004_SESSION_B_DATE,
 }
 
 ROW_STEPS: dict[str, frozenset[str]] = {
-    "bypass": frozenset({"bypass"}),
+    "bypass": frozenset({"bypass", "bypass_b"}),
     "loopback": frozenset({"loopback_off", "loopback_on"}),
-    "stored_slot": frozenset({"save", "restore_slot"}),
-    "commit": frozenset({"save", "restore_slot", "image_noop", "restore_all"}),
-    "stored_image": frozenset({"image_noop", "restore_all"}),
+    "stored_slot": frozenset({"save", "restore_slot", "save_b", "restore_slot_b"}),
+    "commit": frozenset(
+        {
+            "save",
+            "restore_slot",
+            "image_noop",
+            "restore_all",
+            "save_b",
+            "restore_slot_b",
+            "restore_all_b",
+        }
+    ),
+    "stored_image": frozenset({"image_noop", "restore_all", "restore_all_b"}),
 }
 """Spec 004 write rows → the gate steps whose excerpts may back their promotion (T070)."""
 
@@ -127,6 +150,12 @@ RECORDED: dict[str, str] = {
     "restore_slot": "20261118-gate-restore_slot.jsonl",
     "image_noop": "20261118-gate-image_noop.jsonl",
     "restore_all": "20261118-gate-restore_all.jsonl",
+    # spec 004 M4, session B (T090)
+    "bypass_b": "20261118-gate-bypass_b.jsonl",
+    "bypass_off_b": "20261118-gate-bypass_off_b.jsonl",
+    "save_b": "20261118-gate-save_b.jsonl",
+    "restore_slot_b": "20261118-gate-restore_slot_b.jsonl",
+    "restore_all_b": "20261118-gate-restore_all_b.jsonl",
 }
 """Step → committed excerpt file name. Filled in each evidence commit (T055, T062, T082)."""
 

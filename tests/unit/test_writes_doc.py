@@ -66,15 +66,15 @@ def test_targets_match_the_allowlist() -> None:
     assert (loopback.type, loopback.address, loopback.length) == (4, 0xD0000000, 1)
 
 
-def test_bypass_and_loopback_are_observed_by_gate_session_a() -> None:
-    # spec 004 T083: promoted by openvave's own sends in gate session A (check 2 stays in Notes)
+def test_bypass_is_confirmed_and_loopback_observed() -> None:
+    # spec 004 T083/T090: bypass confirmed by sessions A and B; loopback sent in session A only
     rows = {(row.kind, row.argument): row for row in load_write_rows()}
-    for key, steps in (
-        (("bypass", None), ("bypass",)),
-        (("loopback", None), ("loopback_off", "loopback_on")),
+    for key, confidence, steps in (
+        (("bypass", None), "confirmed", ("bypass", "bypass_b")),
+        (("loopback", None), "observed", ("loopback_off", "loopback_on")),
     ):
         row = rows[key]
-        assert (row.confidence, row.firmware) == ("observed", frozenset({96}))
+        assert (row.confidence, row.firmware) == (confidence, frozenset({96}))
         assert row.evidence == tuple(f"captures/fw96/20261118-gate-{s}.jsonl" for s in steps)
 
 
@@ -86,16 +86,20 @@ def test_persistent_rows_match_the_allowlist() -> None:
     assert (image.type, image.address, image.length) == (4, 0x0, 758)
 
 
-def test_persistent_rows_are_observed_by_gate_session_a() -> None:
-    # spec 004 T083: checks 3 and 4 (poc sends) stay in Notes; Evidence is openvave's gate
+def test_persistent_rows_are_confirmed_by_gate_sessions_a_and_b() -> None:
+    # spec 004 T090: checks 3 and 4 (poc sends) stay in Notes; Evidence is openvave's gates
     rows = {(row.kind, row.argument): row for row in load_write_rows()}
     for kind, steps in (
-        ("stored_slot", ("save", "restore_slot")),
-        ("commit", ("save", "restore_slot", "image_noop", "restore_all")),
-        ("stored_image", ("image_noop", "restore_all")),
+        ("stored_slot", ("save", "restore_slot", "save_b", "restore_slot_b")),
+        (
+            "commit",
+            ("save", "restore_slot", "image_noop", "restore_all", "save_b", "restore_slot_b")
+            + ("restore_all_b",),
+        ),
+        ("stored_image", ("image_noop", "restore_all", "restore_all_b")),
     ):
         row = rows[(kind, None)]
-        assert (row.confidence, row.firmware) == ("observed", frozenset({96}))
+        assert (row.confidence, row.firmware) == ("confirmed", frozenset({96}))
         assert row.evidence == tuple(f"captures/fw96/20261118-gate-{s}.jsonl" for s in steps)
         assert "persistent" in row.notes.lower()
 

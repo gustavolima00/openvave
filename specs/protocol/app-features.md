@@ -261,6 +261,39 @@ Open questions, answered or still open:
   connected. Every persistent step re-reads the state first, so no write went to the wrong slot.
   Cause unknown.
 
+## Spec 004 gate session B (2026-11-18, fw 96, confirmations)
+
+Same pedal and owner, after a power cycle, one CLI connection per command, **another loaded preset
+(1A) and another target slot (1D)** than session A. Each step's frames were encoded independently,
+posted and approved in chat before the send, and compared with the command's dry run; every step
+matched. Evidence: `captures/fw96/20261118-gate-{bypass_b,bypass_off_b,save_b,restore_slot_b,restore_all_b}.jsonl`;
+full record in `specs/004-remote-edit-save-restore/tasks.md` T086–T089.
+
+Reference state: backup **B0**, not A0. Between the sessions the owner saved two sounds of their own
+to 2C and 2D; B0 differs from A0 only in those two slots, and every check of this session is
+against B0.
+
+| Feature | Result |
+|---|---|
+| Bypass on / off | on 1A: ACK, slot `ff`, buffer zeros, `info` reported bypass; `bypass off 1A` restored 1A; backup equal to B0 |
+| Save to a slot | 1A + treble 70 saved to 1D (ACK ×3, read back equal), **kept across a power cycle**; backup differed from B0 only in 1D |
+| Restore one slot | 1D restored from B0 (ACK ×3); backup equal to B0 |
+| Stored-image write | after saving 1D gain 90, `restore --all` from B0: one ACK after the 5 chunks, 36 of 36 equal; after a power cycle the backup equals B0 key by key |
+
+Result: `bypass`, `stored_slot`, `commit` and `stored_image` are `confirmed` (two independent
+sessions each) and run without `--experimental`; save and restore still need `--unsafe`. Loopback,
+the block switches and the LED colour were not repeated and stay `observed`.
+
+Observations:
+
+- **Unexplained preset change, again**: `info` read 2D at the B0 backup; about two minutes later
+  `preset select 1A` reported "from 1B". No command in between wrote anything. As in session A,
+  every step re-read the state first, so nothing went to the wrong slot.
+- After each power cycle the pedal booted on **1B** (session A: on 1A), not on the preset it was
+  switched off on.
+- The automatic backup still lands in the current directory (the repo root) when `--backup-dir`
+  is not given; each one was moved to `captures/private/`.
+
 ## Recommended scope for spec 004
 
 1. **Remote editing without the pedal's edit mode**: lift the `set` refusal in normal mode (check 1

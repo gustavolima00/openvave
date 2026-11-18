@@ -349,7 +349,7 @@ def _row(
 
 _SWITCH_STEPS = ("switch_amp", "switch_mod", "switch_delay", "switch_reverb")
 _SPEC004_A = "20261118"
-"""Date of spec 004 gate session A (its excerpts are ``captures/fw96/20261118-gate-<step>``)."""
+"""Date of spec 004 gate sessions A and B (excerpts ``captures/fw96/20261118-gate-<step>``)."""
 
 WRITE_MESSAGES: tuple[WriteMessage, ...] = (
     _row(
@@ -371,7 +371,7 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
         "select_b",
         "select_b_back",
     ),
-    _row("observed", "bypass", None, BYPASS_BASE, 1, "bypass", date=_SPEC004_A),
+    _row("confirmed", "bypass", None, BYPASS_BASE, 1, "bypass", "bypass_b", date=_SPEC004_A),
     _row(
         "observed",
         "loopback",
@@ -383,17 +383,19 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
         date=_SPEC004_A,
     ),
     _row(
-        "observed",
+        "confirmed",
         "stored_slot",
         None,
         STORE_OFFSET,
         PRESET_SIZE,
         "save",
         "restore_slot",
+        "save_b",
+        "restore_slot_b",
         date=_SPEC004_A,
     ),
     _row(
-        "observed",
+        "confirmed",
         "commit",
         None,
         COMMIT_ADDRESS,
@@ -402,25 +404,30 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
         "restore_slot",
         "image_noop",
         "restore_all",
+        "save_b",
+        "restore_slot_b",
+        "restore_all_b",
         date=_SPEC004_A,
     ),
     _row(
-        "observed",
+        "confirmed",
         "stored_image",
         None,
         IMAGE_ADDRESS,
         IMAGE_SIZE,
         "image_noop",
         "restore_all",
+        "restore_all_b",
         date=_SPEC004_A,
     ),
     _row("confirmed", "ack", None, None, None, "knob_gain", "select", "knob_treble", "select_b"),
 )
 """Every write message and the ACK, as documented (fw 96). Gate sessions A and B confirm the
 knob block, preset select and the ACK; the block switches and LED colour stay ``observed``
-(session A only), so they still need ``--experimental``. Bypass, loopback and the three persistent
-kinds are ``observed`` since spec 004 gate session A (2026-11-18) sent them from openvave; they
-need ``--experimental`` until gate session B confirms them (spec 004 R7)."""
+(session A only), so they still need ``--experimental``. Spec 004 gate sessions A and B
+(2026-11-18) confirm bypass and the three persistent kinds, which therefore run without
+``--experimental`` (the persistent ones still need ``--unsafe``); loopback stays ``observed``
+(session A only) and needs ``--experimental`` (spec 004 R7)."""
 
 _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 

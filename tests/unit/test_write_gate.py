@@ -35,28 +35,27 @@ def test_confidence_after_gate_session_b() -> None:
         ("block_switch", 3): "observed",
         ("led_colour", None): "observed",
         ("preset_select", None): "confirmed",
-        ("bypass", None): "observed",  # spec 004 gate session A; confirmed after session B
-        ("loopback", None): "observed",
-        ("stored_slot", None): "observed",  # persistent
-        ("commit", None): "observed",
-        ("stored_image", None): "observed",
+        ("bypass", None): "confirmed",  # spec 004 gate sessions A and B (T090)
+        ("loopback", None): "observed",  # spec 004 session A only
+        ("stored_slot", None): "confirmed",  # persistent: still needs --unsafe
+        ("commit", None): "confirmed",
+        ("stored_image", None): "confirmed",
         ("ack", None): "confirmed",
     }
 
 
 @pytest.mark.parametrize(
     ("kind", "argument"),
-    [
-        ("bypass", 1),
-        ("bypass", 35),
-        ("loopback", None),
-        ("stored_slot", 2),
-        ("commit", None),
-        ("stored_image", None),
-    ],
+    [("bypass", 1), ("bypass", 35), ("stored_slot", 2), ("commit", None), ("stored_image", None)],
 )
-def test_spec004_observed_rows_need_the_opt_in(kind: str, argument: int | None) -> None:
-    assert sendable_by_default(kind, argument, 96) is False
+def test_spec004_confirmed_rows_are_sendable_on_fw96(kind: str, argument: int | None) -> None:
+    # spec 004 T090: confirmed by gate sessions A and B; persistence is gated by --unsafe elsewhere
+    assert sendable_by_default(kind, argument, 96) is True
+    assert sendable_by_default(kind, argument, 97) is False
+
+
+def test_loopback_still_needs_the_opt_in() -> None:
+    assert sendable_by_default("loopback", None, 96) is False
 
 
 @pytest.mark.parametrize(

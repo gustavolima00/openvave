@@ -244,24 +244,14 @@ async def test_unsafe_required() -> None:
     assert {f[2] for f in fake.sent} <= {0x11, 0x23}  # type: ignore[attr-defined]
 
 
-async def test_both_opt_ins_missing_names_both() -> None:
+async def test_without_opt_ins_names_only_unsafe_once_confirmed() -> None:
     fake = make_fake(NORMAL, buffer=GAIN_90)
     async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
         with pytest.raises(WriteRefusedError) as err:
             await pedal.save_preset(to=2, on_backup=lambda b: None, sleep=no_sleep)
     assert err.value.reason == "unsafe_required"
-    assert "--unsafe" in str(err.value) and "--experimental" in str(err.value)
-    assert writes(fake) == []  # type: ignore[arg-type]
-
-
-async def test_experimental_required_until_rows_are_confirmed() -> None:
-    fake = make_fake(NORMAL, buffer=GAIN_90)
-    async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
-        plan = await pedal.plan_save(to=2, unsafe=True)
-        with pytest.raises(WriteRefusedError) as err:
-            await pedal.save_preset(to=2, unsafe=True, on_backup=lambda b: None, sleep=no_sleep)
-    assert plan.refusal == err.value.reason == "experimental_required"
-    assert "--experimental" in str(err.value)
+    assert "--unsafe" in str(err.value)
+    assert "--experimental" not in str(err.value)  # spec 004 T090: rows confirmed
     assert writes(fake) == []  # type: ignore[arg-type]
 
 
@@ -316,3 +306,44 @@ def test_on_backup_is_required() -> None:
         parameter = inspect.signature(getattr(TankG, name)).parameters["on_backup"]
         assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
         assert parameter.default is inspect.Parameter.empty
+
+
+# -- spec 004 M4 (T085): after gate session B confirms the rows -----------------------------------
+
+
+def _confirmed(*kinds: str) -> bool:
+    from openvave.protocol.writes import message_for
+
+    return all(message_for(k, None).confidence == "confirmed" for k in kinds)
+
+
+_UNTIL_SESSION_B = pytest.mark.xfail(
+    not _confirmed("stored_slot", "commit"),
+    strict=True,
+    reason="stored_slot and commit are confirmed by gate session B (T090)",
+)
+
+
+@_UNTIL_SESSION_B
+async def test_save_runs_with_unsafe_alone_once_confirmed() -> None:
+    fake = make_fake(NORMAL, buffer=GAIN_90)
+    backups = Backups(fake)
+    async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
+        plan = await pedal.plan_save(to=2, unsafe=True)
+        result = await pedal.save_preset(to=2, unsafe=True, on_backup=backups, sleep=no_sleep)
+    assert plan.refusal is None
+    assert result.verified is True
+    assert stored(fake, 2) == GAIN_90
+    assert len(backups.calls) == 1
+
+
+async def test_save_without_unsafe_is_refused_even_once_confirmed() -> None:
+    # holds before and after T090: the confirmation never lifts the --unsafe opt-in (FR-013)
+    fake = make_fake(NORMAL, buffer=GAIN_90)
+    async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
+        plan = await pedal.plan_save(to=2)
+        with pytest.raises(WriteRefusedError) as err:
+            await pedal.save_preset(to=2, on_backup=lambda b: None, sleep=no_sleep)
+    assert plan.refusal == err.value.reason == "unsafe_required"
+    assert "--unsafe" in str(err.value)
+    assert writes(fake) == []  # type: ignore[arg-type]

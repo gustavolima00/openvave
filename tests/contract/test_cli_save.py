@@ -142,7 +142,8 @@ def test_dry_run_without_opt_ins_prints_the_refusal(
     refusal = [line for line in out.splitlines() if "refused" in line]
     assert len(refusal) == 1
     assert "unsafe_required" in refusal[0]
-    assert "--unsafe" in refusal[0] and "--experimental" in refusal[0]
+    assert "--unsafe" in refusal[0]
+    assert "--experimental" not in refusal[0]  # spec 004 T090: stored_slot/commit confirmed
     assert writes(fake) == []
 
 
@@ -159,12 +160,14 @@ def test_without_unsafe_exit_1_and_reads_only(
     assert list(tmp_path.iterdir()) == []
 
 
-def test_without_experimental_exit_1(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+def test_without_experimental_saves(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    # spec 004 T090: confirmed by gate sessions A and B, so --unsafe alone is enough
     fake = edited_fake()
-    code, _, err = run(capsys, ["--to", "1C", "--unsafe"], fake, tmp_path)
-    assert code == 1
-    assert "experimental_required" in err
-    assert writes(fake) == []
+    code, out, err = run(capsys, ["--to", "1C", "--unsafe"], fake, tmp_path)
+    assert code == 0, err
+    assert "saved" in out
+    assert len(writes(fake)) == 3
+    assert len(backups(tmp_path)) == 1
 
 
 def test_refused_in_edit_mode(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
@@ -238,7 +241,7 @@ def test_failure_report_on_lost_link(capsys: pytest.CaptureFixture[str], tmp_pat
         "  select 1C       not sent",
         "Stored presets may have changed. Nothing was retried.",
         "Check:   openvave preset backup",
-        f"Undo:    openvave preset restore {saved} --all --unsafe --experimental",
+        f"Undo:    openvave preset restore {saved} --all --unsafe",
     ]
     assert "Backup saved" in out  # printed before the first write
 

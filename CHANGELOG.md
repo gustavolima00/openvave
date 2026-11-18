@@ -36,14 +36,15 @@ All notable changes to this project are documented here. The format follows
   `set mod_fx 20 --type phaser`, `set delay_mix 30 --type tape`; `preset dump` / `watch` show
   `type: chorus 1`. Their split was checked against the phone app on the pedal (15 readings, all
   fit). `openvave.protocol.MOD_FX_TYPES`, `DELAY_MIX_TYPES`.
-- **Bypass** (experimental): `openvave bypass on [--discard-edits]` sends `01` to
+- **Bypass**: `openvave bypass on [--discard-edits]` sends `01` to
   `0xE1000000 + i` for the loaded preset (normal mode only) and reports `applied` when the pedal
   reads slot `ff` with an all-zero buffer, then prints `Leave bypass: openvave bypass off 1B`.
   `openvave bypass off <position>` leaves bypass with the confirmed preset select, only when the
   pedal is bypassed (refusal `not_bypassed` otherwise); without a position it exits 2 and names
   the bank the pedal reports. Library: `TankG.plan_bypass_on()` / `bypass_on()` (result
   `return_index`), `plan_bypass_off(i)` / `bypass_off(i)`, `WriteTarget.bypass(i)`. The message is
-  `observed` (spec 004 gate session A), so `bypass on` still needs `--experimental`.
+  `confirmed` on fw 96 (spec 004 gate sessions A and B), so `bypass on` runs without
+  `--experimental`.
 - **Loopback** (experimental): `openvave loopback on|off` reads the status byte (`0xD0000000`),
   writes `01`/`00`, and reads it back; never followed by a commit; an equal value sends nothing.
   Library: `TankG.plan_loopback(on)` / `set_loopback(on)`, `WriteTarget.loopback()`. Message
@@ -52,13 +53,13 @@ All notable changes to this project are documented here. The format follows
 - `WriteTarget.persistent` and refusal reasons `edit_mode` and `not_bypassed`. The write
   allowlist grows by the two volatile kinds above; bypass data other than `01`, an index above 35,
   loopback data other than `00`/`01` or any other length stay unencodable.
-- **Save** (UNSAFE, experimental): `openvave preset save [--to POSITION] --unsafe` stores the edit
+- **Save** (UNSAFE): `openvave preset save [--to POSITION] --unsafe` stores the edit
   buffer in the loaded slot (or `--to`), normal mode only, with the phone app's sequence: slot
   write to `2 + 21·i` (21 bytes), read back (a mismatch stops before the commit), 300 ms, the
   empty commit write to `0xF0000000`, 100 ms, select, then verifies stored slot, position and
   buffer. Nothing to save: `1C already holds this sound; nothing sent`. Library:
   `TankG.plan_save(to)` / `save_preset(to, unsafe=True, on_backup=…)`.
-- **Restore** (UNSAFE, experimental): `openvave preset restore FILE (--slot POSITION | --all)
+- **Restore** (UNSAFE): `openvave preset restore FILE (--slot POSITION | --all)
   --unsafe` writes back an openvave backup file, checked before connecting
   (`openvave.backup.restore_problems`). `--slot` uses the save sequence with the file's bytes;
   `--all` writes the whole 758-byte image to `0x0` in one message (split over several Bluetooth
@@ -75,8 +76,9 @@ All notable changes to this project are documented here. The format follows
 - New opt-in `--unsafe` (`unsafe=True`), required by every command that changes stored presets and
   never implied by `--experimental`; refusal reasons `unsafe_required` and `firmware_mismatch`.
 - Three **persistent** write targets, `WriteTarget.stored_slot(i)`, `.commit()` and
-  `.stored_image()` (`persistent` is true for them), rows in "Write messages" at `observed`
-  (spec 004 gate session A). Only `save_preset` / `restore` send them, only with
+  `.stored_image()` (`persistent` is true for them), rows in "Write messages" at `confirmed`
+  on fw 96 (spec 004 gate sessions A and B), so save and restore run without `--experimental`;
+  `--unsafe` is still required. Only `save_preset` / `restore` send them, only with
   `unsafe=True`, after the backup. Library types `SequencePlan`, `SequenceStep`,
   `SequenceResult`, `StepOutcome`; errors raised mid-sequence carry `.sequence`.
 - The BLE transport splits a request longer than one Bluetooth write (`ATT MTU − 3`) into
@@ -126,6 +128,12 @@ All notable changes to this project are documented here. The format follows
   off/on (persists across a power cycle; on = Bluetooth audio in the USB recording), save to 1C (persists across a power cycle), restore of
   one slot, the stored-image write as a no-op and as restore all (persists across a power cycle).
   The pedal ended equal to its pre-session backup. Excerpts: `captures/fw96/20261118-gate-*.jsonl`.
+- Spec 004 gate session B on the same pedal (2026-11-18, after a power cycle, a new connection per
+  command, loaded preset 1A, target slot 1D): bypass on/off, save to 1D (persists across a power
+  cycle), restore of 1D, and restore all (persists across a power cycle). The pedal ended equal to
+  its pre-session backup B0. Bypass, stored slot, commit and stored image are now `confirmed`;
+  loopback, the block switches and the LED colour stay `observed`. Excerpts:
+  `captures/fw96/20261118-gate-*_b.jsonl`.
 
 ### Documentation
 

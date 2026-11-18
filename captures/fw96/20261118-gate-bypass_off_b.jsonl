@@ -1,0 +1,28 @@
+{"event": "meta", "firmware": 96, "device": "TANK-Gv2", "date": "2026-11-18", "step": "bypass_off_b", "tool": "tests/support/gate_excerpt.py", "sanitized": [], "replay": {"call": "bypass_off", "index": 0, "experimental": true}}
+{"event": "tx", "label": "query name/version", "hex": "00 59 11 00 00 00 ff"}
+{"event": "rx-chunk", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7"}
+{"event": "rx", "label": "query name/version", "hex": "00 59 11 1b 00 00 54 41 4e 4b 2d 47 76 32 5f 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 b7", "cmd": 17}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 ff 01 d7"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 ff 01 d7", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 d6"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 d6", "cmd": 35}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 ff 01 d7"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 ff 01 d7", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 d6"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 d6", "cmd": 35}
+{"event": "tx", "label": "write preset_select 1A t4 0xE0000000 x1", "hex": "00 59 22 09 00 00 04 00 00 00 e0 01 00 00 01 19"}
+{"event": "rx-chunk", "hex": "00 59 00 01 00 00 00 ff"}
+{"event": "rx", "label": "write preset_select 1A t4 0xE0000000 x1", "hex": "00 59 00 01 00 00 00 ff", "cmd": 0}
+{"event": "tx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7"}
+{"event": "rx-chunk", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 00 01 d6"}
+{"event": "rx", "label": "global t4 0x20000000 x4", "hex": "00 59 23 0c 00 00 04 00 00 00 20 04 00 00 00 00 00 01 d6", "cmd": 35}
+{"event": "tx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25"}
+{"event": "rx", "label": "preset t4 0x10000000 x21", "hex": "00 59 23 1d 00 00 04 00 00 00 10 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 25", "cmd": 35}
+{"event": "tx", "label": "stored preset 1A t4 0x00000002 x21", "hex": "00 59 23 08 00 00 04 02 00 00 00 15 00 00 e4"}
+{"event": "rx-chunk", "hex": "00 59 23 1d 00 00 04 02 00 00 00 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 33"}
+{"event": "rx", "label": "stored preset 1A t4 0x00000002 x21", "hex": "00 59 23 1d 00 00 04 02 00 00 00 15 00 00 01 00 01 01 12 05 41 37 41 37 32 00 00 0c 28 35 0f 07 ff f7 00 33", "cmd": 35}
