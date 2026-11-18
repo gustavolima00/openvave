@@ -173,26 +173,60 @@ kept unless you add `--force`. If the two reads disagree, no file is written and
 7. Two backups with no write in between are identical apart from `created_at`. openvave cannot
 restore a backup yet: the file is your record of every stored preset.
 
-### Writing to the pedal: `openvave set` and `openvave preset select`
+### Writing to the pedal: `openvave set`, `openvave preset reload`, `openvave preset select`
 
 Backup first, then:
 
-1. Put the pedal in **edit mode**.
+1. Leave the pedal in **normal mode** (as the phone app does) or put it in edit mode; both work.
+   Writes are refused in tuner mode, while the pedal is bypassed, and in any state openvave does
+   not recognise.
 2. Check the write with `--dry-run`: it reads the pedal, prints the exact frame, and sends nothing.
 3. Run the same command without `--dry-run`.
-4. To undo, **leave edit mode on the pedal without saving**. Nothing openvave does is saved; only
-   saving on the pedal (or in the phone app) stores the edit.
+4. To undo, run **`openvave preset reload`**: it loads the current preset again from its stored
+   copy. Nothing openvave does is saved; only saving on the pedal (or in the phone app) stores the
+   edit.
 
 ```text
 $ openvave set gain 90
-Set gain 60 → 90   (current preset 1B, edit mode)
+Set gain 60 → 90   (current preset 1B, normal mode)
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 76
   reply  00 59 00 01 00 00 00 ff   ACK
   after  [6] gain 90   applied
-Not saved: leave edit mode on the pedal without saving to restore the stored preset.
+Not saved. Discard: openvave preset reload
 ```
 
-`set <field> <value>` changes one field of the current preset, and only in edit mode:
+The reverb decay knob runs through three reverb types, **room**, **spring** and **cloud** (as the
+Tank-G manual names them; between two types the reverb is off). Give a position 1–40 inside a
+type:
+
+```text
+$ openvave set reverb_decay 10 --type spring
+Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode)
+  write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 35 04 07 64
+  reply  00 59 00 01 00 00 00 ff   ACK
+  after  [15] reverb_decay 53 (spring 10)   applied
+Not saved. Discard: openvave preset reload
+```
+
+Without `--type` the preset keeps its current type (`set reverb_decay 20` on a room preset is
+room 20); `--raw 53` writes the raw byte 0–127. `preset dump` and `watch` show the same reading
+(`type: room 6`, `5 (room 6) → 64 (spring 21)`, `off` between types).
+
+MOD FX and DLY MIX work the same way, with the manual's names: `set mod_fx 20 --type phaser`
+(chorus, phaser, tremolo) and `set delay_mix 30 --type tape` (analog, tape, dual).
+
+```text
+$ openvave preset reload
+Reload 1B (index 1)   discards unsaved edits
+  write  00 59 22 09 00 00 04 01 00 00 e0 01 00 00 01 18
+  reply  00 59 00 01 00 00 00 ff   ACK
+  now    bank 1, slot B   buffer = stored 1B   applied
+```
+
+`preset reload` sends nothing when there is nothing to discard. In edit mode it needs
+`--discard-edits` (the pedal's own unsaved edits are lost too).
+
+`set <field> <value>` changes one field of the current preset:
 
 | Field | Value |
 |---|---|
@@ -225,7 +259,8 @@ a hypothesis.
 
 ### Options
 
-`--json`, `--device ID`, `--scan-timeout SECONDS` (default 5), `--timeout SECONDS` (default 2)
+`--json`, `--device ID`, `--scan-timeout SECONDS` (default 5: the most a scan waits; it stops 1 s
+after the pedal is seen, or at once with `--device`), `--timeout SECONDS` (default 2)
 and `--trace` (hex of every frame on stderr) work on every command, before or after it. The full
 list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md) and its
 [0.2.0](specs/002-preset-byte-map/contracts/cli.md) and
@@ -239,7 +274,9 @@ Schemas: [`info`](specs/001-readonly-ble-connection/contracts/info.schema.json),
 [`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), each
 decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json),
 [`preset backup`](specs/003-preset-backup-edit-writes/contracts/backup.schema.json) and the
-[`set` / `preset select` result](specs/003-preset-backup-edit-writes/contracts/write-result.schema.json). Bytes
+[`set` / `preset select` / `preset reload` result](specs/004-remote-edit-save-restore/contracts/write-result.schema.json).
+`info` and `preset dump` add a top-level `pedal_state` (`normal`, `edit`, `tuner`, `bypass`,
+`loading`, `unrecognised`), and so do `watch --json` start and change events. Bytes
 are lowercase, space-separated hex.
 
 Every document has `"schema_version": 2` (0.2.0 renamed two fields; see the
@@ -249,8 +286,8 @@ bumps `schema_version`.
 
 ### Exit codes
 
-`0` success · `1` internal error, or a write refused (not in edit mode, out of range, untested
-firmware, `--experimental` needed, edits would be discarded) · `2` usage error · `3` no pedal
+`0` success · `1` internal error, or a write refused (tuner mode, bypassed or unrecognised pedal
+state, out of range, untested firmware, `--experimental` needed, edits would be discarded) · `2` usage error · `3` no pedal
 found · `4` more than one pedal (use `--device`) · `5` Bluetooth unavailable or permission denied ·
 `6` connection lost or timed out · `7` protocol error, NAK or backup cross-check mismatch · `8`
 write acknowledged but not applied. Details in the

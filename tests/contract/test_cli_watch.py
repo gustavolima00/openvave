@@ -117,24 +117,26 @@ def test_human_walkthrough(
     )
     assert run.code == 0, run.err
     lines = run.out.splitlines()
-    assert lines[:4] == [
+    assert lines[:5] == [
         "Watching TANK-Gv2 (firmware 96), every 0.5 s. "
         "Type a label and Enter before each step; q to quit.",
         "  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal",
         "  preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43",
         "  status  01",
+        "  state   normal, preset 1B",  # spec 004 R13
     ]
-    body = lines[4:-1]
+    body = lines[5:-1]
     assert body[0] == "── label: edit mode on ──"
     assert strip_time(body[1]) == "  global[3]   mode              normal → edit"
     assert re.match(r"^ *\+\d+\.\d\ds  ", body[1])
-    assert body[2] == "── label: reverb decay min→max ──"
-    assert strip_time(body[3]) == "  preset[15]  reverb decay      5 (blue 6) → 64 (orange 21)"
-    assert strip_time(body[4]) == "  preset[15]  reverb decay      64 (orange 21) → 127 (green 40)"
-    assert body[5] == "── label: reverb mix only ──"
-    assert strip_time(body[6]) == "  preset[16]  reverb mix           4 → 90     (co-moving: 2)"
-    assert body[7] == "         preset[17]  IR cab              #7 → #8"
-    assert len(body) == 8  # q is not a label; no heartbeat lines
+    assert strip_time(body[2]) == "  state: edit, preset 1B"
+    assert body[3] == "── label: reverb decay min→max ──"
+    assert strip_time(body[4]) == "  preset[15]  reverb decay      5 (room 6) → 64 (spring 21)"
+    assert strip_time(body[5]) == "  preset[15]  reverb decay      64 (spring 21) → 127 (cloud 40)"
+    assert body[6] == "── label: reverb mix only ──"
+    assert strip_time(body[7]) == "  preset[16]  reverb mix           4 → 90     (co-moving: 2)"
+    assert body[8] == "         preset[17]  IR cab              #7 → #8"
+    assert len(body) == 9  # q is not a label; no heartbeat lines
     assert re.fullmatch(r"Stopped after \d+\.\d s: 5 changes in \d+ cycles\.", lines[-1])
     assert "Recording" not in run.out
     assert run.records() == []

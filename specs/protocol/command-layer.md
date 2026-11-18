@@ -285,13 +285,51 @@ green 40. The stored presets in the comparison table read as: 1A/2A `35` orange 
 blue 6, 1D `09` blue 10, 2B `18` blue 25, 9A/9B/9D `0c` blue 13, 9C `38` orange 13.
 
 Code: `REVERB_SECTIONS`, `REVERB_SECTION_SIZE`, `REVERB_SECTION_STEPS` and `reverb_decay_parts`
-in `src/openvave/protocol/bytemap.py`; `tests/unit/test_bytemap_doc.py` checks this table
-against them. Since the unreleased change after 0.3.0, the human output of `preset dump`
-and `watch` add this reading (`5    0–127   confirmed  app: blue 6`, `5 (blue 6) → 64 (orange 21)`);
-JSON still carries only the raw value.
+(the app's colours, 0.3.0) and `REVERB_TYPES` / `type_parts` (the manual's names) in
+`src/openvave/protocol/bytemap.py`; `tests/unit/test_bytemap_doc.py` checks this table
+against them. Since the unreleased change after 0.3.0, the human output of `preset dump`,
+`watch` and `set` add the type reading (`5    0–127   confirmed  type: room 6`,
+`5 (room 6) → 64 (spring 21)`, `off` between types); JSON still carries only the raw value.
 
 The app draws MOD FX (byte 11) and DLY Mix (byte 13) with the same three-section widget
 (hypothesis, app code; see [app-features.md](app-features.md)).
+
+**Types (Tank-G manual).** The manual describes the RVB DECAY knob as three processes in knob
+order, ROOM, SPRING and CLOUD, and says the knob between two processes turns the reverb module
+off. That matches the measured split: blue = ROOM (raw 0–39), orange = SPRING (44–83), green =
+CLOUD (88–127), and the app's `X` values (40–43, 84–87) are the off zones between them. The
+colours are only how the app draws the knob; openvave names the types. Source: a third-party copy
+of the manual (askmanual.pages.dev, "M-VAVE Tank-G multi guitar pedal"; not M-VAVE's own PDF).
+That the off zones really silence the reverb is a hypothesis (not heard). The manual describes
+MOD FX (chorus mix, phaser depth, tremolo mix) and DLY MIX (analog, tape, dual delay) the same
+way, with an off zone between processes; the app draws both in the same three colours, and their
+split is **observed** to be the same as reverb decay's (readings below, spec 004 T022).
+
+Typed input (spec 004 R3): `openvave set reverb_decay 12 --type room` writes position 12 of ROOM
+(raw `44 · index(type) + position − 1` = 11); `set reverb_decay 12` keeps the preset's current
+type (refused with `type_required` when the knob sits in an off zone); `--raw 53` writes the raw
+byte. Library: `set_field(field, (type, position))`, `(None, position)` to keep the type,
+`type_raw` / `type_parts` and `TYPED_FIELDS` in `src/openvave/protocol/bytemap.py`. A field takes
+`--type` only when its split is at least `observed` here (checked by
+`tests/unit/test_bytemap_doc.py`):
+
+| Field | Byte | Types (manual, knob order) | Split confidence |
+|---|---|---|---|
+| `reverb_decay` | 15 | room, spring, cloud | observed |
+| `mod_fx` | 11 | chorus, phaser, tremolo | observed |
+| `delay_mix` | 13 | analog, tape, dual | observed |
+
+MOD FX and DLY MIX readings (owner, 2026-11-17, fw 96, preset 1A in normal mode: set the position
+in the app, closed the app, then `openvave preset dump`; nothing saved; transcribed to
+`captures/fw96/20261117-knob-types-app.jsonl`). Every reading fits `raw // 44` with positions
+1–40 and `X` in the off zones; together with reverb decay, both ends of the second off zone (84,
+87) are now observed. DLY MIX blue 1 was not read. Moving MOD FX in the app did not turn the MOD
+block on (byte 1 stayed `00`).
+
+| App | blue 1 | blue 40 | blue X | orange 1 | orange 40 | orange X | green 1 | green 40 |
+|---|---|---|---|---|---|---|---|---|
+| MOD FX (byte 11) | 0 | 39 | 41 | 44 | 83 | 84 | 88 | 127 |
+| DLY MIX (byte 13) | — | 39 | 41 | 44 | 83 | 87 | 88 | 127 |
 
 ### Control inventory (fw 96)
 
@@ -488,7 +526,34 @@ Normal mode (spec 004 check 1, 2026-11-17, fw 96, confirmed over two connections
 the preset again restores the stored bytes. The official app never enters edit mode before
 writing. Evidence: `captures/fw96/20261117-gate-normal_knob_gain.jsonl`,
 `captures/fw96/20261117-gate-normal_knob_gain_b.jsonl`; details in
-[app-features.md](app-features.md). openvave 0.3.0 still refuses writes outside edit mode.
+[app-features.md](app-features.md). Since spec 004, openvave sends edit-buffer writes in normal
+and edit mode alike; the confidence of each row is unchanged (block switches and `led_colour` are
+`observed` from edit mode only and still need `--experimental`).
+
+### Pedal state (spec 004, fw 96)
+
+Every write guard and the read commands use one classification of a global-block read (4 B) and
+an edit-buffer read (21 B). Code: `classify` in `src/openvave/protocol/state.py`
+(`tests/unit/test_state.py`).
+
+| State | Rule | Evidence |
+|---|---|---|
+| `bypass` | slot (global 2) = `ff` and the buffer is 21 × `00`, bank 0–8 | check 2, `captures/fw96/20261117-check2-bypass.jsonl` (held for three reads, ≥ 2 s; mode stayed `1`) |
+| `tuner` | mode (global 3) = `2` | byte map (`mode`) |
+| `normal` | mode = `1`, slot 0–3, bank 0–8, buffer not all zero | byte map; check 1 |
+| `edit` | mode = `0`, slot 0–3, bank 0–8, buffer not all zero | byte map |
+| `unrecognised` | anything else: slot `ff` with a non-zero buffer, an all-zero buffer with a valid slot, an unknown mode value, bank or slot out of range | — |
+
+One read cannot tell bypass from the one-cycle loading transient after a select (slot `ff`, seen
+once on 2026-11-16, buffer not recorded). The session therefore confirms a bypass-looking read with
+a second read of both regions 300 ms later and keeps the second read's state; `watch` reports one
+such cycle as `loading` and two consecutive ones as `bypass`. While bypassed the pedal reports the
+bank but not the slot, so the loaded preset is unknown.
+
+Allowed writes per state (openvave): `set` in normal and edit mode; `preset reload` in normal mode,
+and in edit mode with `--discard-edits`; nothing in tuner, bypass or an unrecognised state
+(refusal reasons `tuner_mode`, `bypassed`, `unrecognised_state`). `preset reload` is the confirmed
+preset-select write for the loaded slot, sent only when the buffer differs from the stored preset.
 
 ### Preset LED colour (app code, 2026-11-17)
 

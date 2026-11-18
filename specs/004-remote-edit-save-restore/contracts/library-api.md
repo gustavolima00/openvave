@@ -14,6 +14,7 @@ async with openvave.TankG.connect() as pedal:
     await pedal.set_field("gain", 90)                 # now also in normal mode
     await pedal.set_field("reverb_decay", ("orange", 10))   # section value → raw 53
     await pedal.reload_preset(discard_edits=False)    # WriteResult; select of the loaded preset
+    plan = await pedal.plan_reload()                  # WritePlan; reads only (no_change: nothing to discard)
     await pedal.bypass_on(discard_edits=False, experimental=True)     # WriteResult (+ .return_index)
     await pedal.bypass_off(1, experimental=True)      # = select 1B, only when bypassed
     await pedal.set_loopback(False, experimental=True)

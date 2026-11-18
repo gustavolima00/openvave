@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from openvave.protocol.writes import WriteTarget
 
 Confidence = Literal["confirmed", "observed", "hypothesis"]
+StateKind = Literal["normal", "edit", "tuner", "bypass", "unrecognised"]
 
 
 class Region(Enum):
@@ -81,6 +82,36 @@ class RegionRead:
 
 
 @dataclass(frozen=True)
+class PedalState:
+    """What the pedal is doing, from the global block and the edit buffer (spec 004 R1).
+
+    Built by :func:`openvave.protocol.classify`; :meth:`TankG.state` confirms ``bypass`` with a
+    second read.
+    """
+
+    kind: StateKind
+    """``normal``, ``edit``, ``tuner``, ``bypass`` or ``unrecognised``."""
+    index: int | None
+    """Loaded preset ``bank·4 + slot`` (0–35); ``None`` in bypass and unrecognised states."""
+    bank: int | None
+    """Reported bank (0–8), also in bypass; ``None`` when out of range."""
+    transient: bool = False
+    """A bypass-looking read that the next read did not confirm (shown as ``loading``)."""
+
+    @property
+    def label(self) -> str:
+        """``kind``, or ``loading`` for a transient bypass (the JSON ``pedal_state`` value)."""
+        return "loading" if self.transient and self.kind == "bypass" else self.kind
+
+    @property
+    def position(self) -> str | None:
+        """``1A``–``9D`` of the loaded preset, or ``None`` when it is not known."""
+        if self.index is None:
+            return None
+        return f"{self.index // 4 + 1}{'ABCD'[self.index % 4]}"
+
+
+@dataclass(frozen=True)
 class DeviceSnapshot:
     """Everything one connection read (what ``openvave info`` shows)."""
 
@@ -92,6 +123,9 @@ class DeviceSnapshot:
     """All four regions, in read order."""
     read_at: datetime
     """Timezone-aware UTC time taken after the last read."""
+    pedal_state: PedalState | None = None
+    """The state classified from the global block and edit buffer (spec 004; ``None`` only
+    when built by hand)."""
 
 
 class Encoding(Enum):

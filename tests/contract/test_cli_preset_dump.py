@@ -40,17 +40,19 @@ DECODED_LINES = [
     "      [8]  middle                        70    0–127      confirmed",
     "      [9]  bass                          50    0–127      confirmed",
     "      [10] volume                        50    0–127      confirmed",
-    "      [11] mod fx                         0    0–127      confirmed",
+    "      [11] mod fx                         0    0–127      confirmed  type: chorus 1",
     "      [12] mod speed                      0    0–127      confirmed",
-    "      [13] delay mix                      0    0–127      confirmed",
+    "      [13] delay mix                      0    0–127      confirmed  type: analog 1",
     "      [14] delay time                     0    0–127      confirmed",
-    "      [15] reverb decay                   5    0–127      confirmed  app: blue 6",
+    "      [15] reverb decay                   5    0–127      confirmed  type: room 6",
     "      [16] reverb mix                     4    0–127      confirmed",
     "      [17] IR cab                        #7    selector   confirmed",
     "      unknown: 18 19 20",
 ]
 QUERY = bytes.fromhex("00 59 11 00 00 00 ff")
 PRESET_READ = bytes.fromhex("00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6")
+GLOBAL_READ = bytes.fromhex("00 59 23 08 00 00 04 00 00 00 20 04 00 00 d7")
+STATE_LINE = "state: normal, preset 1B"
 EXPECTED_DATA = "01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43"
 
 Factory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
@@ -126,13 +128,14 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.parametrize("json_flag", [False, True])
-def test_sends_only_query_and_preset_read(
+def test_sends_only_query_global_and_preset_read(
     capsys: pytest.CaptureFixture[str], json_flag: bool
 ) -> None:
+    # spec 004 R13: the global block is read too, to report the pedal state
     argv = ["preset", "dump"] + (["--json"] if json_flag else [])
     code, _, err, fake = run(capsys, argv)
     assert code == 0, err
-    assert fake.sent == [QUERY, PRESET_READ]
+    assert fake.sent == [QUERY, GLOBAL_READ, PRESET_READ]
     assert fake.closed
 
 
@@ -142,6 +145,7 @@ def test_human_block(capsys: pytest.CaptureFixture[str]) -> None:
     assert err == ""
     assert out.splitlines() == [
         "Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes",
+        STATE_LINE,
         "  00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05",
         "  10: 04 07 43 16 43",
         *DECODED_LINES,
@@ -161,7 +165,8 @@ def test_human_block_untested_firmware(capsys: pytest.CaptureFixture[str]) -> No
         "Current preset  (TANK-Gv2, firmware 97)   type 4 @ 0x10000000, 21 bytes"
         "  (decoded with the fw 96 map)"
     )
-    assert lines[3:] == DECODED_LINES
+    assert lines[1] == STATE_LINE
+    assert lines[4:] == DECODED_LINES
 
 
 def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:

@@ -13,19 +13,22 @@ Two opt-ins, independent (R6):
 `--dry-run` on every command below: does the reads, prints the plan and the exact frames, sends no
 write, takes no backup file, exit 0 even if the real run would be refused (the refusal is printed).
 
-## `openvave set <field> <value> [<position>]` (changed)
+## `openvave set <field> <value> [--type TYPE | --raw]` (changed)
 
 - Works in **normal** and edit mode. Refused (exit 1) in tuner mode (`tuner_mode`), in bypass
   (`bypassed`) and in an unrecognised state (`unrecognised_state`). `not_edit_mode` is gone.
-- Section input: `set reverb_decay <blue|orange|green> <1-40>` (case-insensitive). One value is
-  the raw 0–127 as before. Two values on a field without observed sections, an unknown colour or a
+- Typed input (research R3 amendment): `set reverb_decay <1-40> --type <room|spring|cloud>`
+  (case-insensitive). Without `--type`, the position is taken in the preset's current type
+  (refused, exit 1 `type_required`, when the knob sits between two types); `--raw <0-127>` writes
+  the raw byte. Other fields take one raw value as before. `--type` / `--raw` on a field without
+  an observed type split, an unknown type, `--type` with `--raw`, or a
   position outside 1–40: usage error (exit 2) listing what is accepted.
 
 ```text
-Set reverb_decay 5 (blue 6) → 53 (orange 10)   (current preset 1B, normal mode)
+Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode)
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 35 04 07 64
   reply  00 59 00 01 00 00 00 ff   ACK
-  after  [15] reverb_decay 53 (orange 10)   applied
+  after  [15] reverb_decay 53 (spring 10)   applied
 Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 ```
 
@@ -167,7 +170,7 @@ With `--json` the same information is in `result.steps`, `result.stored_may_have
 | Code | Added meanings |
 |---|---|
 | 1 | refused: `unsafe_required`, `bypassed`, `tuner_mode`, `edit_mode`, `unrecognised_state`, `not_bypassed`, `firmware_mismatch` (plus the 0.3.0 reasons) |
-| 2 | usage: bad section input, missing `bypass off` position, invalid backup file, both or neither of `--slot` / `--all` |
+| 2 | usage: bad typed input, missing `bypass off` position, invalid backup file, both or neither of `--slot` / `--all` |
 | 6 | connection lost / timeout, also mid-sequence (step report printed) |
 | 7 | NAK, also mid-sequence; automatic backup failed its cross-check (nothing written) |
 | 8 | acknowledged but verification failed (bypass not shown, slot or image read-back differs) |

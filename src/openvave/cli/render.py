@@ -16,6 +16,7 @@ from openvave.models import (
     DeviceInfo,
     DeviceSnapshot,
     Encoding,
+    PedalState,
     Region,
     RegionRead,
     WatchChange,
@@ -23,8 +24,9 @@ from openvave.models import (
     WritePlan,
     WriteResult,
 )
-from openvave.protocol.bytemap import reverb_decay_parts
+from openvave.protocol.bytemap import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field, decode_region
+from openvave.protocol.state import classify
 from openvave.protocol.storage import EXPECTED_HEADER, position
 from openvave.protocol.writes import WRITABLE_FIELDS
 
@@ -96,16 +98,18 @@ def _range_cell(field: DecodedField) -> str:
     return f"{entry.min}–{entry.max}"
 
 
-def app_reading(field: DecodedField) -> str | None:
-    """How the phone app shows the field, for human output only (JSON keeps the raw value).
+def type_reading(field: DecodedField) -> str | None:
+    """Type and position of a typed knob, for human output only (JSON keeps the raw value).
 
-    Only ``reverb_decay`` has one: its colour section and position, ``blue 6`` or ``orange X``
-    (command-layer.md "Reverb decay sections"). ``None`` for every other field and out of range.
+    ``room 6``, ``spring 10``, or ``off`` between two types (manual: the module is off there).
+    Only fields in ``TYPED_FIELDS`` have one (command-layer.md "Reverb decay sections");
+    ``None`` for every other field and out of range.
     """
-    if field.entry.name != "reverb_decay" or field.out_of_range:
+    name = field.entry.name
+    if name is None or name not in TYPED_FIELDS or field.out_of_range:
         return None
-    section, position = reverb_decay_parts(field.value)
-    return f"{section} {'X' if position is None else position}"
+    type_name, position = type_parts(name, field.value)
+    return "off" if type_name is None else f"{type_name} {position}"
 
 
 def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
@@ -120,9 +124,9 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
         line += " ?"
     if field.out_of_range:
         line += "  OUT OF RANGE"
-    reading = app_reading(field)
+    reading = type_reading(field)
     if reading is not None:
-        line += f"  app: {reading}"
+        line += f"  type: {reading}"
     return line
 
 
@@ -153,21 +157,46 @@ def human_region(read: RegionRead, firmware: int) -> str:
     return "\n".join([header + _map_note(decoded), *hex_dump(read.data), *field_lines(decoded)])
 
 
+BYPASS_STATE = "state: bypass (all blocks off; the pedal does not report the loaded slot)"
+
+
+def state_text(state: PedalState) -> str:
+    """``normal, preset 1B`` / ``bypass`` / ``loading`` / ``tuner`` / ``unrecognised``."""
+    if state.kind in ("normal", "edit") and state.position is not None:
+        return f"{state.label}, preset {state.position}"
+    return state.label
+
+
+def state_lines(state: PedalState | None) -> list[str]:
+    """The ``state:`` line of ``info`` / ``preset dump`` (spec 004 R13), plus the bank in bypass."""
+    if state is None:
+        return []
+    if state.kind == "bypass" and not state.transient:
+        bank = "?" if state.bank is None else str(state.bank + 1)
+        return [BYPASS_STATE, f"bank {bank}, slot not reported"]
+    return [f"state: {state_text(state)}"]
+
+
 def human_info(snapshot: DeviceSnapshot) -> str:
-    """Identity block, a blank line, then device info / global / status blocks."""
+    """Identity block and state line, a blank line, then device info / global / status blocks."""
     firmware = snapshot.identity.firmware
     blocks = [human_region(snapshot.regions[r], firmware) for r in INFO_HUMAN_REGIONS]
-    return human_identity(snapshot.identity, snapshot.device) + "\n\n" + "\n".join(blocks)
+    head = [human_identity(snapshot.identity, snapshot.device), *state_lines(snapshot.pedal_state)]
+    return "\n".join(head) + "\n\n" + "\n".join(blocks)
 
 
-def human_preset(read: RegionRead, identity: DeviceIdentity) -> str:
-    """``Current preset  (TANK-Gv2, firmware 96)   type 4 @ …`` then hex dump and known fields."""
+def human_preset(
+    read: RegionRead, identity: DeviceIdentity, state: PedalState | None = None
+) -> str:
+    """``Current preset  (TANK-Gv2, firmware 96)   type 4 @ …``, the state line, hex dump and
+    known fields. In bypass the buffer is all zero and is not the preset: no field lines."""
     decoded = decode_region(read, identity.firmware)
     header = (
         f"{REGION_TITLES[read.region]}  ({identity.name}, firmware {identity.firmware})   "
         f"{region_spec(read.region)}{_map_note(decoded)}"
     )
-    return "\n".join([header, *hex_dump(read.data), *field_lines(decoded)])
+    fields = [] if state is not None and state.kind == "bypass" else field_lines(decoded)
+    return "\n".join([header, *state_lines(state), *hex_dump(read.data), *fields])
 
 
 def device_json(device: DeviceInfo | None) -> dict[str, Any] | None:
@@ -206,6 +235,8 @@ def region_json(read: RegionRead, firmware: int) -> dict[str, Any]:
 def info_json(snapshot: DeviceSnapshot) -> dict[str, Any]:
     """The ``openvave info --json`` document (``contracts/info.schema.json``)."""
     document = envelope("info", snapshot.read_at, snapshot.device, snapshot.identity)
+    if snapshot.pedal_state is not None:
+        document["pedal_state"] = snapshot.pedal_state.label
     document["regions"] = {
         region.name.lower(): region_json(read, snapshot.identity.firmware)
         for region, read in snapshot.regions.items()
@@ -266,10 +297,13 @@ WATCH_NAME_WIDTH = 18
 WATCH_VALUE_WIDTH = 4
 
 
-def watch_header(start: WatchStart, interval: float, record: str | None) -> list[str]:
+def watch_header(
+    start: WatchStart, interval: float, record: str | None, state: PedalState | None = None
+) -> list[str]:
     """Start block: what is watched, where it is recorded, and each region's baseline bytes.
 
     Decoded fields are appended for global and status (``preset dump`` shows the preset's).
+    The pedal state comes last (spec 004 R13).
     """
     identity = start.identity
     lines = [
@@ -283,7 +317,14 @@ def watch_header(start: WatchStart, interval: float, record: str | None) -> list
         if region is not Region.CURRENT_PRESET and decoded.fields:
             line += "   " + ", ".join(f"{f.entry.label} = {f.display}" for f in decoded.fields)
         lines.append(line)
+    if state is not None:
+        lines.append(f"  state   {state_text(state)}")
     return lines
+
+
+def watch_state_line(state: PedalState, t: float) -> str:
+    """``+1.02s  state: loading`` when the pedal state changes during a watch (spec 004 R13)."""
+    return f"{f'+{t:.2f}s':>{WATCH_TIME_WIDTH}}  state: {state_text(state)}"
 
 
 def watch_label_line(text: str) -> str:
@@ -291,8 +332,8 @@ def watch_label_line(text: str) -> str:
 
 
 def _with_reading(field: DecodedField) -> str:
-    """``5`` or, where the app has its own reading, ``5 (blue 6)``."""
-    reading = app_reading(field)
+    """``5`` or, for a typed knob, ``5 (room 6)``."""
+    reading = type_reading(field)
     return field.display if reading is None else f"{field.display} ({reading})"
 
 
@@ -315,7 +356,7 @@ def watch_change_lines(event: WatchChange, t: float) -> list[str]:
     cells = [_change_cells(change) for change in event.changes]
     # Labels longer than the column widen it for this event, so values stay aligned.
     width = max([WATCH_NAME_WIDTH, *(len(name) + 1 for name, _, _ in cells)])
-    # Same for old values carrying an app reading (``5 (blue 6)``): arrows stay in one column.
+    # Same for old values carrying a type reading (``5 (room 6)``): arrows stay in one column.
     value_width = max([WATCH_VALUE_WIDTH, *(len(old) for _, old, _ in cells)])
     for i, (change, (name, old, new)) in enumerate(zip(event.changes, cells, strict=True)):
         time_cell = f"+{t:.2f}s" if i == 0 else ""
@@ -346,9 +387,14 @@ def _watch_event(event: str, t: float, **fields: Any) -> dict[str, Any]:
 
 
 def watch_start_json(
-    start: WatchStart, t: float, interval: float, record: str | None
+    start: WatchStart,
+    t: float,
+    interval: float,
+    record: str | None,
+    state: PedalState | None = None,
 ) -> dict[str, Any]:
     firmware = start.identity.firmware
+    extra = {} if state is None else {"pedal_state": state.label}
     return _watch_event(
         "start",
         t,
@@ -359,6 +405,7 @@ def watch_start_json(
             region.name.lower(): region_json(decoded.read, firmware)
             for region, decoded in start.regions.items()
         },
+        **extra,
     )
 
 
@@ -366,7 +413,10 @@ def watch_label_json(text: str, t: float) -> dict[str, Any]:
     return _watch_event("label", t, text=text)
 
 
-def watch_change_json(event: WatchChange, t: float, label: str | None) -> dict[str, Any]:
+def watch_change_json(
+    event: WatchChange, t: float, label: str | None, state: PedalState | None = None
+) -> dict[str, Any]:
+    extra = {} if state is None else {"pedal_state": state.label}
     return _watch_event(
         "change",
         t,
@@ -382,6 +432,7 @@ def watch_change_json(event: WatchChange, t: float, label: str | None) -> dict[s
             }
             for c in event.changes
         ],
+        **extra,
     )
 
 
@@ -398,10 +449,18 @@ def json_line(document: dict[str, Any]) -> str:
 
 # -- writes (contracts/cli.md "openvave set" / "openvave preset select") ------------------------
 
-NOT_SAVED = "Not saved: leave edit mode on the pedal without saving to restore the stored preset."
+NOT_SAVED = "Not saved. Discard: openvave preset reload"
+NOT_SAVED_EDIT = (
+    "Not saved. Discard: openvave preset reload --discard-edits "
+    "(or leave edit mode on the pedal without saving)"
+)
 MODE_NAMES = {0: "edit", 1: "normal", 2: "tuner"}
 REFUSAL_TEXT = {
     "not_edit_mode": "the pedal is not in edit mode",
+    "tuner_mode": "the pedal is in tuner mode",
+    "bypassed": "the pedal is bypassed",
+    "unrecognised_state": "the pedal reports a state openvave does not recognise",
+    "type_required": "the knob sits between two types (module off); needs --type",
     "out_of_range": "value out of range",
     "untested_firmware": "firmware not covered by a confirmed write gate; needs --experimental",
     "experimental_required": "message not confirmed yet; needs --experimental",
@@ -409,8 +468,13 @@ REFUSAL_TEXT = {
 }
 
 
-def _loaded_position(glob: RegionRead) -> str:
+def _loaded_position(glob: RegionRead, buffer: RegionRead | None = None) -> str:
+    """``1B``; ``bypass (bank 1)`` when the edit buffer shows bypass (spec 004); else ``?``."""
     bank, slot = glob.data[1], glob.data[2]
+    if buffer is not None:
+        state = classify(glob.data, buffer.data)
+        if state.kind == "bypass" and state.bank is not None:
+            return f"bypass (bank {state.bank + 1})"
     if bank > 8 or slot > 3:
         return "?"
     return f"{bank + 1}{'ABCD'[slot]}"
@@ -422,7 +486,7 @@ def _field_value(plan: WritePlan, data: bytes) -> str:
     if spec.kind == "led_colour":
         return "#" + data[spec.offset : spec.offset + 3].hex()
     assert spec.entry is not None
-    return decode_field(spec.entry, data[spec.offset]).display
+    return _with_reading(decode_field(spec.entry, data[spec.offset]))
 
 
 def _requested(plan: WritePlan) -> bytes:
@@ -440,7 +504,9 @@ def _change_text(change: ByteChange) -> str:
     else:
         where = f"[{change.offset}]"
     if change.field is not None:
-        return f"{where} {change.field.name} {decode_field(change.field, change.new).display}"
+        return (
+            f"{where} {change.field.name} {_with_reading(decode_field(change.field, change.new))}"
+        )
     return f"{where} {change.new}"
 
 
@@ -476,7 +542,7 @@ def human_set(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> 
     texts = [_change_text(c) for c in result.changes] or ["no change"]
     lines.append(f"  after  {texts[0]}   {status}")
     lines += [f"         {text}" for text in texts[1:]]
-    lines.append(NOT_SAVED)
+    lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
     return "\n".join(lines)
 
 
@@ -484,11 +550,28 @@ def human_select(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) 
     """``Select 2C (index 6)   from 1B`` + write/reply/now lines."""
     index = plan.target.argument
     assert index is not None
+    loaded = _loaded_position(plan.global_before, plan.before)
+    header = f"Select {position(index)} (index {index})   from {loaded}"
+    return _select_lines(header, plan, result, dry_run=dry_run)
+
+
+def human_reload(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Reload 1B (index 1)   discards unsaved edits`` + write/reply/now lines (spec 004 R4)."""
+    index = plan.target.argument
+    assert index is not None
+    if plan.no_change and plan.refusal is None:
+        return f"Reload {position(index)}: nothing to discard; nothing sent"
+    header = f"Reload {position(index)} (index {index})   discards unsaved edits"
+    return _select_lines(header, plan, result, dry_run=dry_run)
+
+
+def _select_lines(
+    header: str, plan: WritePlan, result: WriteResult | None, *, dry_run: bool
+) -> str:
+    index = plan.target.argument
+    assert index is not None
     target = position(index)
-    lines = [
-        f"Select {target} (index {index})   from {_loaded_position(plan.global_before)}",
-        f"  write  {hex_bytes(plan.frame)}",
-    ]
+    lines = [header, f"  write  {hex_bytes(plan.frame)}"]
     lines += _refusal_lines(plan)
     if dry_run or result is None:
         lines.append("  dry run: nothing sent")
@@ -528,7 +611,7 @@ def write_json(
     device: DeviceInfo | None,
     identity: DeviceIdentity,
 ) -> dict[str, Any]:
-    """``set --json`` / ``preset select --json`` (``contracts/write-result.schema.json``)."""
+    """``set`` / ``preset select`` / ``preset reload --json`` (``write-result.schema.json``)."""
     target = plan.target
     document = envelope(command, read_at, device, identity)
     document["plan"] = {

@@ -12,6 +12,9 @@ goes in the CHANGELOG rename table. 0.2.0 renamed ``knob_unknown`` → ``gain`` 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
+
 from openvave.models import ByteMapEntry, Encoding, Region
 
 MAP_FIRMWARE = 96
@@ -173,8 +176,9 @@ REVERB_SECTION_SIZE = 44
 REVERB_SECTION_STEPS = 40
 """Numbered app positions per section (1–40); the rest of a section shows as ``X``."""
 REVERB_SECTIONS: tuple[str, ...] = ("blue", "orange", "green")
-"""Section names, by the colour the app draws them in (it gives them no names). Each is most
-likely a reverb type (hypothesis); the split itself is ``observed`` (2026-11-17, fw 96)."""
+"""Section names by the colour the phone app draws them in: how the app shows the knob, kept
+for 0.3.0 compatibility. The pedal's own names are :data:`REVERB_TYPES` (manual); the split
+itself is ``observed`` (2026-11-17, fw 96)."""
 
 
 def reverb_decay_parts(raw: int) -> tuple[str, int | None]:
@@ -187,3 +191,63 @@ def reverb_decay_parts(raw: int) -> tuple[str, int | None]:
         raise ValueError(f"reverb_decay raw value must be 0-127, got {raw}")
     section, step = divmod(raw, REVERB_SECTION_SIZE)
     return REVERB_SECTIONS[section], (step + 1 if step < REVERB_SECTION_STEPS else None)
+
+
+REVERB_TYPES: tuple[str, ...] = ("room", "spring", "cloud")
+"""Reverb types along the decay knob, in knob order. The Tank-G manual says the RVB DECAY knob
+runs through three processes, ROOM, SPRING and CLOUD, and that between two processes the reverb
+is off. Each type is one measured section of :data:`REVERB_SECTIONS` (same order); between them
+lie 4 raw values (40–43, 84–87) the app shows as ``X``."""
+
+MOD_FX_TYPES: tuple[str, ...] = ("chorus", "phaser", "tremolo")
+"""MOD FX processes in knob order (manual: chorus mix, phaser depth, tremolo mix)."""
+DELAY_MIX_TYPES: tuple[str, ...] = ("analog", "tape", "dual")
+"""DLY MIX processes in knob order (manual: analog, tape, dual delay)."""
+
+TYPED_FIELDS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {"mod_fx": MOD_FX_TYPES, "delay_mix": DELAY_MIX_TYPES, "reverb_decay": REVERB_TYPES}
+)
+"""Fields whose knob runs through named types and whose type split is at least ``observed``
+(spec 004 R3): ``set`` takes ``--type`` for them. All three split the same way: 44 raw values per
+type, positions 1–40, 4 off values between types (reverb decay readings, and the MOD FX / DLY MIX
+readings of spec 004 T022). Mirrors the knob-type table under "Reverb decay sections" in
+``specs/protocol/command-layer.md`` (checked by ``tests/unit/test_bytemap_doc.py``)."""
+
+
+def _types(field: str) -> tuple[str, ...]:
+    types = TYPED_FIELDS.get(field)
+    if types is None:
+        names = ", ".join(sorted(TYPED_FIELDS))
+        raise ValueError(f"{field} has no knob types; fields with types: {names}")
+    return types
+
+
+def type_parts(field: str, raw: int) -> tuple[str | None, int | None]:
+    """(type, position 1–40) of a typed field's raw value, or ``(None, None)`` between types.
+
+    Type ``raw // 44``, position ``raw % 44 + 1`` while ``raw % 44 < 40``; the other values lie
+    between two types, where the manual says the module is off. Raises :class:`ValueError` for a
+    field without types or a raw value outside 0–127.
+    """
+    types = _types(field)
+    if not 0 <= raw <= 127:
+        raise ValueError(f"{field} raw value must be 0-127, got {raw}")
+    index, step = divmod(raw, REVERB_SECTION_SIZE)
+    if step >= REVERB_SECTION_STEPS:
+        return None, None
+    return types[index], step + 1
+
+
+def type_raw(field: str, type_name: str, position: int) -> int:
+    """Raw value of a type and position: ``44 · index(type) + position − 1``.
+
+    ``type_name`` is case-insensitive (``room``, ``spring``, ``cloud`` for ``reverb_decay``);
+    ``position`` is 1–40. Raises :class:`ValueError` otherwise.
+    """
+    types = _types(field)
+    name = type_name.lower()
+    if name not in types:
+        raise ValueError(f"{field} type must be one of {', '.join(types)}, got {type_name!r}")
+    if not 1 <= position <= REVERB_SECTION_STEPS:
+        raise ValueError(f"position must be 1–{REVERB_SECTION_STEPS}, got {position}")
+    return REVERB_SECTION_SIZE * types.index(name) + position - 1

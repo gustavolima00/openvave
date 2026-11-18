@@ -31,7 +31,7 @@ uv run openvave set gain 90
 ```
 
 ```bash
-uv run openvave set reverb_decay orange 10
+uv run openvave set reverb_decay 1 --type cloud
 ```
 
 ```bash

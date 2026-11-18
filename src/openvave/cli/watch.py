@@ -31,11 +31,12 @@ from openvave.models import (
     DecodedRegion,
     DeviceIdentity,
     DeviceInfo,
+    PedalState,
     Region,
     WatchChange,
     WatchStart,
 )
-from openvave.protocol import decode_frame
+from openvave.protocol import classify, decode_frame
 from openvave.protocol.frame import QUERY, READ
 from openvave.session import MIN_WATCH_INTERVAL, TankG
 from openvave.trace import trace_hook
@@ -203,6 +204,10 @@ class WatchRun:
         self.hinted = False
         self.changes = 0
         self.cycles = 0
+        self.pedal_state: PedalState | None = None
+        """Last reported state; a bypass-looking cycle is ``loading`` until the next confirms it."""
+        self._cycle_data: dict[str, bytes] = {}
+        self._previous_data: tuple[bytes, bytes] | None = None
 
     # time
 
@@ -233,9 +238,50 @@ class WatchRun:
         record["hex"] = data.hex(" ")
         if kind == "rx":
             record["cmd"] = data[2]
+            if self.begun and label in ("global", "preset"):
+                self._cycle_data[label] = data[14:-1]
             if self.begun and label == "status":
                 self.cycles += 1
         self._record(record)
+        if kind == "rx" and self.begun and label == "status":
+            self._end_cycle()
+
+    # pedal state (spec 004 R1, R13)
+
+    def _next_state(self, glob: bytes, preset: bytes) -> PedalState:
+        """The state to report: one bypass-looking cycle is ``loading``, two are ``bypass``."""
+        state = classify(glob, preset)
+        if state.kind != "bypass":
+            return state
+        confirmed = self.pedal_state is not None and self.pedal_state.kind == "bypass"
+        return PedalState(kind="bypass", index=None, bank=state.bank, transient=not confirmed)
+
+    def _state_from(self, regions: Mapping[Region, DecodedRegion]) -> PedalState | None:
+        glob, preset = regions.get(Region.GLOBAL), regions.get(Region.CURRENT_PRESET)
+        if glob is None or preset is None:
+            return None
+        return self._next_state(glob.read.data, preset.read.data)
+
+    def _end_cycle(self) -> None:
+        """A cycle whose global and preset bytes did not change yields no change event: confirm
+        a pending ``loading`` here (the only state that can change without a byte changing)."""
+        glob, preset = self._cycle_data.get("global"), self._cycle_data.get("preset")
+        self._cycle_data = {}
+        if glob is None or preset is None:
+            return
+        current = (glob, preset)
+        unchanged = current == self._previous_data
+        self._previous_data = current
+        state = self.pedal_state
+        if unchanged and state is not None and state.transient and not self.json_mode:
+            self._report_state(self._next_state(glob, preset))
+
+    def _report_state(self, state: PedalState | None) -> None:
+        if state is None or state == self.pedal_state:
+            return
+        self.pedal_state = state
+        if not self.json_mode:
+            self._emit(render.watch_state_line(state, self.now()))
 
     # lifecycle
 
@@ -312,12 +358,17 @@ class WatchRun:
 
     def on_start(self, event: WatchStart) -> None:
         self._track(event.regions)
+        self.pedal_state = self._state_from(event.regions)
         t = self.now()
         if self.json_mode:
-            document = render.watch_start_json(event, t, self.interval, self.record_name)
+            document = render.watch_start_json(
+                event, t, self.interval, self.record_name, self.pedal_state
+            )
             self._emit(render.json_line(document))
         else:
-            for line in render.watch_header(event, self.interval, self.record_name):
+            for line in render.watch_header(
+                event, self.interval, self.record_name, self.pedal_state
+            ):
                 self._emit(line)
 
     def on_change(self, event: WatchChange) -> None:
@@ -339,11 +390,16 @@ class WatchRun:
                     "label": self.label,
                 }
             )
+        state = self._state_from(event.regions)
         if self.json_mode:
-            self._emit(render.json_line(render.watch_change_json(event, t, self.label)))
+            if state is not None:
+                self.pedal_state = state
+            document = render.watch_change_json(event, t, self.label, self.pedal_state)
+            self._emit(render.json_line(document))
         else:
             for line in render.watch_change_lines(event, t):
                 self._emit(line)
+            self._report_state(state)
 
     # timing
 

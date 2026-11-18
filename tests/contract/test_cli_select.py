@@ -98,3 +98,12 @@ def test_not_applied_exit_8(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err, _ = run(capsys, ["preset", "select", "2C", "--experimental"], fake)
     assert code == 8
     assert "not applied" in out
+
+
+def test_select_from_bypass_names_the_state(capsys: pytest.CaptureFixture[str]) -> None:
+    # spec 004 gate: the pedal reports no slot while bypassed; say so instead of "?"
+    fake = make_fake(NORMAL, buffer=bytes(21), glob=bytes([0, 0, 0xFF, NORMAL]))
+    code, out, err, _ = run(capsys, ["preset", "select", "1A", "--experimental"], fake)
+    assert code == 0, err
+    assert out.splitlines()[0] == "Select 1A (index 0)   from bypass (bank 1)"
+    assert out.splitlines()[-1].endswith("buffer = stored 1A   applied")

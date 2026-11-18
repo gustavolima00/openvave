@@ -26,7 +26,8 @@ from openvave.errors import (
     OpenvaveError,
     WriteNotAppliedError,
 )
-from openvave.models import DeviceInfo, Region, WritePlan, WriteResult
+from openvave.models import DeviceInfo, WritePlan, WriteResult
+from openvave.protocol.bytemap import REVERB_SECTION_STEPS, TYPED_FIELDS
 from openvave.protocol.storage import parse_position
 from openvave.protocol.writes import WRITABLE_FIELDS
 from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, FieldValue, TankG
@@ -138,15 +139,43 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="select even in edit mode (the pedal's unsaved edits are lost)",
     )
+    reload = preset_sub.add_parser(
+        "reload",
+        parents=[common],
+        help="discard unsaved edits: load the current preset again from its stored copy",
+    )
+    _write_options(reload)
+    reload.add_argument(
+        "--discard-edits",
+        action="store_true",
+        help="reload even in edit mode (the pedal's unsaved edits are lost)",
+    )
+    typed = "; ".join(f"{name}: {', '.join(types)}" for name, types in TYPED_FIELDS.items())
     set_parser = sub.add_parser(
         "set",
         parents=[common],
-        help="change one field of the current preset in the edit buffer (never saved)",
-        description="Writable fields: " + ", ".join(WRITABLE_FIELDS) + ". Leave edit mode on "
-        "the pedal without saving to restore the stored preset.",
+        help="change one field of the current preset (normal or edit mode; not saved)",
+        description="Writable fields: " + ", ".join(WRITABLE_FIELDS) + ". Works in normal and "
+        "edit mode. The change is not saved: 'openvave preset reload' discards it. "
+        f"Knobs that run through types ({typed}) take a position 1–{REVERB_SECTION_STEPS} "
+        "inside a type: 'set reverb_decay 12 --type room'; without --type the preset's current "
+        "type is kept; --raw writes the raw byte 0–127.",
     )
     set_parser.add_argument("field", help="byte map field name, e.g. gain, mod_on, led_colour")
-    set_parser.add_argument("value", help="0–127, 0–8, on/off, or #rrggbb / r,g,b")
+    set_parser.add_argument(
+        "value",
+        help="0–127, 0–8, on/off, #rrggbb / r,g,b; for a typed knob a position 1–40",
+    )
+    set_parser.add_argument(
+        "--type",
+        dest="knob_type",
+        metavar="TYPE",
+        default=None,
+        help="type of a typed knob (reverb_decay: room, spring, cloud)",
+    )
+    set_parser.add_argument(
+        "--raw", action="store_true", help="for a typed knob: the value is the raw byte 0–127"
+    )
     _write_options(set_parser)
     watch_parser = sub.add_parser(
         "watch",
@@ -228,11 +257,13 @@ async def _preset_dump(args: argparse.Namespace, factory: TransportFactory) -> s
         return await factory(args.device, args.scan_timeout)
 
     async with TankG(source, timeout=args.timeout) as pedal:
-        read = await pedal.read(Region.CURRENT_PRESET)
+        state, _, read, _ = await pedal._read_state()
         identity, device = pedal.identity, pedal.device
     if args.json:
-        return render.dumps(render.preset_json(read, datetime.now(UTC), device, identity))
-    return render.human_preset(read, identity)
+        document = render.preset_json(read, datetime.now(UTC), device, identity)
+        document["pedal_state"] = state.label
+        return render.dumps(document)
+    return render.human_preset(read, identity, state)
 
 
 async def _preset_backup(args: argparse.Namespace, factory: TransportFactory) -> str:
@@ -264,14 +295,44 @@ _COLOUR_RGB = re.compile(r"^\s*-?\d+\s*,\s*-?\d+\s*,\s*-?\d+\s*$")
 _INTEGER = re.compile(r"^-?\d+$")
 
 
-def parse_field_value(field: str, text: str) -> FieldValue:
+def parse_typed_value(field: str, text: str, knob_type: str | None, raw: bool) -> FieldValue:
+    """A typed knob's value (spec 004 R3): a position 1–40 in ``knob_type`` (``None``: keep the
+    current type), or the raw byte with ``raw``. :class:`UsageError` when unusable."""
+    types = TYPED_FIELDS[field]
+    if raw:
+        if knob_type is not None:
+            raise UsageError("--raw takes a raw byte 0–127; it cannot be combined with --type")
+        if not _INTEGER.match(text):
+            raise UsageError(f"{field} --raw takes an integer 0–127, got {text!r}")
+        return int(text)
+    if knob_type is not None and knob_type.lower() not in types:
+        raise UsageError(f"{field} type must be one of {', '.join(types)}, got {knob_type!r}")
+    if not _INTEGER.match(text) or not 1 <= int(text) <= REVERB_SECTION_STEPS:
+        raise UsageError(
+            f"{field} takes a position 1–{REVERB_SECTION_STEPS} inside a type "
+            f"(or --raw 0–127), got {text!r}"
+        )
+    return (None if knob_type is None else knob_type.lower(), int(text))
+
+
+def parse_field_value(
+    field: str, text: str, knob_type: str | None = None, raw: bool = False
+) -> FieldValue:
     """Command-line value for ``openvave set``; :class:`UsageError` for an unusable one.
 
     Range is not checked here: an out-of-range value is a refusal (exit 1) from the library.
+    For a field in ``TYPED_FIELDS`` the value is a position inside ``knob_type`` (or the raw
+    byte with ``raw``); ``--type`` / ``--raw`` on any other field is a usage error.
     """
     spec = WRITABLE_FIELDS.get(field)
     if spec is None:
         raise UsageError(f"unknown field {field!r}; writable fields: {', '.join(WRITABLE_FIELDS)}")
+    if field in TYPED_FIELDS:
+        return parse_typed_value(field, text, knob_type, raw)
+    if knob_type is not None or raw:
+        raise UsageError(
+            f"--type / --raw apply only to knobs with types: {', '.join(sorted(TYPED_FIELDS))}"
+        )
     if spec.kind == "led_colour":
         if _COLOUR_HEX.match(text):
             r, g, b = bytes.fromhex(text[1:])
@@ -312,6 +373,8 @@ def _render_write(
         )
     if command == "set":
         return render.human_set(plan, result, dry_run=args.dry_run)
+    if command == "preset reload":
+        return render.human_reload(plan, result, dry_run=args.dry_run)
     return render.human_select(plan, result, dry_run=args.dry_run)
 
 
@@ -359,11 +422,24 @@ async def _preset_select(args: argparse.Namespace, factory: TransportFactory) ->
     )
 
 
+async def _preset_reload(args: argparse.Namespace, factory: TransportFactory) -> str:
+    discard, experimental = args.discard_edits, args.experimental
+    return await _write(
+        args,
+        factory,
+        "preset reload",
+        lambda p: p.plan_reload(discard_edits=discard, experimental=experimental),
+        lambda p: p.reload_preset(discard_edits=discard, experimental=experimental),
+    )
+
+
 async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
     if args.action == "backup":
         return await _preset_backup(args, factory)
     if args.action == "select":
         return await _preset_select(args, factory)
+    if args.action == "reload":
+        return await _preset_reload(args, factory)
     return await _preset_dump(args, factory)
 
 
@@ -379,7 +455,7 @@ COMMANDS: dict[
 def _prepare_write(args: argparse.Namespace) -> None:
     """Parse the field value / position before any pedal I/O (usage errors exit 2)."""
     if args.command == "set":
-        args.parsed_value = parse_field_value(args.field, args.value)
+        args.parsed_value = parse_field_value(args.field, args.value, args.knob_type, args.raw)
     else:
         try:
             args.index = parse_position(args.position)
@@ -415,7 +491,7 @@ def _report(err: OpenvaveError) -> None:
     elif isinstance(err, WriteNotAppliedError):
         print(
             "hint: the pedal acknowledged the write but the re-read does not show it; nothing "
-            "was retried. Leave edit mode without saving to restore the stored preset.",
+            "was retried. 'openvave preset reload' loads the stored preset again.",
             file=sys.stderr,
         )
     elif err.exit_code == 3:

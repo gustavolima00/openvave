@@ -77,8 +77,9 @@ shows it, discard edits with one command, and see a bypassed pedal reported as b
   data-model.md, and the bytes of `captures/fw96/20261117-check2-bypass.jsonl` classify as bypass.
 - Replaying `captures/fw96/20261117-gate-normal_knob_gain.jsonl` through `set_field("gain", 90)`
   sends exactly the capture's frames and reports applied with mode still normal.
-- `set reverb_decay orange 10` plans raw 53; `set gain orange 10` and `set reverb_decay pink 3`
-  exit 2 without a write.
+- `set reverb_decay 10 --type spring` plans raw 53; `set reverb_decay 20` on a room preset plans
+  room 20 (raw 19); `set gain 10 --type room` and `set reverb_decay 3 --type hall` exit 2 without
+  a write (amended from colour input, research R3 amendment).
 - `set` in tuner or bypass exits 1 (`tuner_mode`, `bypassed`) with only reads in the trace.
 - `preset reload` sends one select for the loaded index; with buffer = stored it sends nothing.
 - `info` / `preset dump` on a bypassed fake print `state: bypass` and no decoded field lines;
@@ -86,39 +87,55 @@ shows it, discard edits with one command, and see a bypassed pedal reported as b
 
 ### Setup
 
-- [ ] T001 Confirm the branch `004-remote-edit-save-restore` contains the groundwork (`specs/protocol/app-features.md`, `captures/fw96/20261117-check*.jsonl`) and that `uv run pytest -q` is green before any change; note the baseline test count in this file
-- [ ] T002 [P] Add the committed check captures to the capture index in `captures/README.md` if missing (check 1–4 files, what each holds, that they were sent by `poc/` scripts)
+- [X] T001 Confirm the branch `004-remote-edit-save-restore` contains the groundwork (`specs/protocol/app-features.md`, `captures/fw96/20261117-check*.jsonl`) and that `uv run pytest -q` is green before any change; note the baseline test count in this file
+  - Baseline (2026-11-17, branch at `a6c6e6b`): **1156 passed, 5 skipped**. After T003–T020: 1254 passed, 5 skipped; `ruff check`, `ruff format --check`, `mypy` (strict) clean.
+- [X] T002 [P] Add the committed check captures to the capture index in `captures/README.md` if missing (check 1–4 files, what each holds, that they were sent by `poc/` scripts)
 
 ### Tests for User Story 1 and state reporting (write first, must fail)
 
-- [ ] T003 [P] [US1] `tests/unit/test_state.py`: table-driven `classify(global, buffer)` cases for every row of the data-model state table, including slot `ff` + non-zero buffer and zero buffer + valid slot → `unrecognised`, unknown mode value, bank 9, and the check 2 capture bytes → `bypass`
-- [ ] T004 [P] [US1] `tests/unit/test_sections.py`: `section_raw` for the eight documented readings (blue 1 → 0 … green 40 → 127, orange 10 → 53), round trip with `reverb_decay_parts` for all 120 pairs, `ValueError` for unknown section and positions 0 and 41, `SECTION_FIELDS == {"reverb_decay"}`
-- [ ] T005 [P] [US1] `tests/unit/test_bytemap_doc.py`: extend so the doc's section table and `SECTION_FIELDS` agree (a field is listed iff its sections are ≥ `observed` in `specs/protocol/command-layer.md`)
-- [ ] T006 [P] [US1] `tests/integration/test_set_normal_mode.py`: replay `gate-normal_knob_gain.jsonl` and `gate-normal_knob_gain_b.jsonl` (frames equal, applied, mode stays 1); `set` in edit mode still works; refused in tuner, bypass and unrecognised states with only reads sent; block switch and LED colour in normal mode refused without `experimental`; section tuple `("orange", 10)` writes raw 53
-- [ ] T007 [P] [US1] `tests/integration/test_reload.py`: reload in normal mode sends one `preset_select(loaded)` and verifies buffer = stored; nothing sent when buffer = stored; edit mode needs `discard_edits`; refused in bypass, tuner, unrecognised
-- [ ] T008 [P] [US2] `tests/integration/test_state_session.py`: `TankG.state()` confirms bypass with a second read 300 ms later (injected `sleep`); a slot-`ff` first read followed by a normal second read returns the second state; `snapshot()` carries `pedal_state`
-- [ ] T009 [P] [US1] `tests/contract/test_cli_set.py`: add normal-mode output (`normal mode`, the "Not saved. Discard: … Keep: …" line), section input output with both readings, exit 2 for bad section input, exit 1 reasons `tuner_mode` / `bypassed`; `--json` plan has no `not_edit_mode`
-- [ ] T010 [P] [US1] `tests/contract/test_cli_reload.py`: `preset reload` human and `--json` output (valid against `write-result.schema.json`), `--dry-run`, `--discard-edits`, exit codes
-- [ ] T011 [P] [US2] `tests/contract/test_cli_state.py`: `info`, `preset dump` and `watch` show the `state:` line; in bypass no decoded field lines and `bank <n>, slot not reported`; JSON has top-level `pedal_state` and unchanged `fields`; `watch` `loading` vs `bypass`
+- [X] T003 [P] [US1] `tests/unit/test_state.py`: table-driven `classify(global, buffer)` cases for every row of the data-model state table, including slot `ff` + non-zero buffer and zero buffer + valid slot → `unrecognised`, unknown mode value, bank 9, and the check 2 capture bytes → `bypass`
+- [X] T004 [P] [US1] `tests/unit/test_sections.py`: `section_raw` for the eight documented readings (blue 1 → 0 … green 40 → 127, orange 10 → 53), round trip with `reverb_decay_parts` for all 120 pairs, `ValueError` for unknown section and positions 0 and 41, `SECTION_FIELDS == {"reverb_decay"}`
+- [X] T005 [P] [US1] `tests/unit/test_bytemap_doc.py`: extend so the doc's section table and `SECTION_FIELDS` agree (a field is listed iff its sections are ≥ `observed` in `specs/protocol/command-layer.md`)
+- [X] T006 [P] [US1] `tests/integration/test_set_normal_mode.py`: replay `gate-normal_knob_gain.jsonl` and `gate-normal_knob_gain_b.jsonl` (frames equal, applied, mode stays 1); `set` in edit mode still works; refused in tuner, bypass and unrecognised states with only reads sent; block switch and LED colour in normal mode refused without `experimental`; section tuple `("orange", 10)` writes raw 53
+- [X] T007 [P] [US1] `tests/integration/test_reload.py`: reload in normal mode sends one `preset_select(loaded)` and verifies buffer = stored; nothing sent when buffer = stored; edit mode needs `discard_edits`; refused in bypass, tuner, unrecognised
+- [X] T008 [P] [US2] `tests/integration/test_state_session.py`: `TankG.state()` confirms bypass with a second read 300 ms later (injected `sleep`); a slot-`ff` first read followed by a normal second read returns the second state; `snapshot()` carries `pedal_state`
+- [X] T009 [P] [US1] `tests/contract/test_cli_set.py`: add normal-mode output (`normal mode`, the "Not saved. Discard: … Keep: …" line), section input output with both readings, exit 2 for bad section input, exit 1 reasons `tuner_mode` / `bypassed`; `--json` plan has no `not_edit_mode`
+- [X] T010 [P] [US1] `tests/contract/test_cli_reload.py`: `preset reload` human and `--json` output (valid against `write-result.schema.json`), `--dry-run`, `--discard-edits`, exit codes
+- [X] T011 [P] [US2] `tests/contract/test_cli_state.py`: `info`, `preset dump` and `watch` show the `state:` line; in bypass no decoded field lines and `bank <n>, slot not reported`; JSON has top-level `pedal_state` and unchanged `fields`; `watch` `loading` vs `bypass`
 
 ### Implementation for User Story 1 and state reporting
 
-- [ ] T012 [US1] Add `PedalState` to `src/openvave/models.py` and `classify` in new `src/openvave/protocol/state.py`; export from `src/openvave/protocol/__init__.py` and `src/openvave/__init__.py` (T003)
-- [ ] T013 [P] [US1] Add `SECTION_FIELDS` and `section_raw` to `src/openvave/protocol/bytemap.py` and export them (T004, T005)
-- [ ] T014 [US1] `src/openvave/session.py`: `TankG.state()` (global + buffer, bypass confirmation, injectable `sleep`); `snapshot()` fills `pedal_state` (T008)
-- [ ] T015 [US1] `src/openvave/session.py` + `src/openvave/errors.py`: `plan_set` uses the state (allowed `normal`, `edit`; reasons `tuner_mode`, `bypassed`, `unrecognised_state`), accepts a `(section, position)` value for `SECTION_FIELDS`, refusal messages updated; `not_edit_mode` no longer raised (T006)
-- [ ] T016 [US1] `src/openvave/session.py`: `reload_preset(discard_edits=False, experimental=False)` on top of the select path, with the "nothing to discard" case (T007)
-- [ ] T017 [US1] `src/openvave/cli/__init__.py`: `set <field> <value> [<position>]` parsing, `preset reload` subcommand, usage errors for section input (T009, T010)
-- [ ] T018 [US1] `src/openvave/cli/render.py`: mode name in the `set` header, section readings in before/after, the discard/keep hint, reload output (T009, T010)
-- [ ] T019 [US2] `src/openvave/cli/render.py`, `src/openvave/cli/watch.py`, `src/openvave/_jsonform.py`: `state:` line, bypass rendering, `pedal_state` in JSON, `loading` vs `bypass` in `watch` (T011)
-- [ ] T020 [US1] Docs in the same commits: `specs/protocol/command-layer.md` (pedal-state rules, section input, "openvave 0.3.0 still refuses" sentence replaced), `specs/protocol/app-features.md` (edit-mode section), `README.md` usage of `set` in normal mode and `preset reload`, `CHANGELOG.md` [Unreleased]
+- [X] T012 [US1] Add `PedalState` to `src/openvave/models.py` and `classify` in new `src/openvave/protocol/state.py`; export from `src/openvave/protocol/__init__.py` and `src/openvave/__init__.py` (T003)
+- [X] T013 [P] [US1] Add `SECTION_FIELDS` and `section_raw` to `src/openvave/protocol/bytemap.py` and export them (T004, T005)
+- [X] T014 [US1] `src/openvave/session.py`: `TankG.state()` (global + buffer, bypass confirmation, injectable `sleep`); `snapshot()` fills `pedal_state` (T008)
+- [X] T015 [US1] `src/openvave/session.py` + `src/openvave/errors.py`: `plan_set` uses the state (allowed `normal`, `edit`; reasons `tuner_mode`, `bypassed`, `unrecognised_state`), accepts a `(section, position)` value for `SECTION_FIELDS`, refusal messages updated; `not_edit_mode` no longer raised (T006)
+- [X] T016 [US1] `src/openvave/session.py`: `reload_preset(discard_edits=False, experimental=False)` on top of the select path, with the "nothing to discard" case (T007)
+- [X] T017 [US1] `src/openvave/cli/__init__.py`: `set <field> <value> [<position>]` parsing, `preset reload` subcommand, usage errors for section input (T009, T010)
+- [X] T018 [US1] `src/openvave/cli/render.py`: mode name in the `set` header, section readings in before/after, the discard/keep hint, reload output (T009, T010)
+- [X] T019 [US2] `src/openvave/cli/render.py`, `src/openvave/cli/watch.py`, `src/openvave/_jsonform.py`: `state:` line, bypass rendering, `pedal_state` in JSON, `loading` vs `bypass` in `watch` (T011)
+- [X] T020 [US1] Docs in the same commits: `specs/protocol/command-layer.md` (pedal-state rules, section input, "openvave 0.3.0 still refuses" sentence replaced), `specs/protocol/app-features.md` (edit-mode section), `README.md` usage of `set` in normal mode and `preset reload`, `CHANGELOG.md` [Unreleased]
+  - Deviations, deliberate: (1) the "Not saved" line prints only `Discard: openvave preset reload` (edit mode: `--discard-edits`); `Keep: openvave preset save --unsafe` is added in M2 when `preset save` exists. (2) A reload refused in bypass points to `preset select <position>` until M1 adds `bypass off`. (3) `specs/004-remote-edit-save-restore/contracts/write-result.schema.json` (extended copy, planned for T036) was needed now for `preset reload` and the new refusal reasons. (4) `preset dump` now also reads the global block. (5) `watch --json` carries `pedal_state` on start/change events only; the schema has no event for the unchanged-bytes `loading` → `bypass` confirmation, which only the human output reports.
 
 ### Live verification (milestone gate)
 
-- [ ] T021 [US1] Owner runs quickstart §2 on hardware (knob block is confirmed, no new message): backup, `set gain 90`, `set reverb_decay orange 10`, `preset reload`, backup; researcher compares the two backups (SC-002) and records times (SC-001) and outputs under this task
-- [ ] T022 [US1] Owner runs the read-only section check of quickstart §2 for MOD FX (byte 11) and DLY Mix (byte 13); researcher records the readings in `specs/protocol/command-layer.md` as observed or refuted (R3) and transcribes them to `captures/fw96/<date>-sections-app.jsonl` like the reverb readings
+- [X] T020a [US1] Rework after the owner's review during the gate (2026-11-17): reverb decay types named as in the Tank-G manual (room, spring, cloud; off between types) instead of the app's colours; `set reverb_decay <1-40> [--type T | --raw]`, bare position keeps the current type (`type_required` in an off zone); `TYPED_FIELDS`, `type_raw`, `type_parts`, `REVERB_TYPES`, `type_reading`; spec FR-003/FR-004, research R3 amendment, contracts, command-layer.md (manual source cited), README, CHANGELOG. Tests first (`tests/unit/test_types.py`, `test_cli_set.py`, `test_set_normal_mode.py`)
+- [X] T021 [US1] Owner runs quickstart §2 on hardware (knob block is confirmed, no new message): backup, `set gain 90`, `set reverb_decay orange 10`, `preset reload`, backup; researcher compares the two backups (SC-002) and records times (SC-001) and outputs under this task
+  - Run 2026-11-17 19:59–20:14 UTC, fw 96, owner's Mac, pedal on **1A** in normal mode, phone app closed. Only confirmed messages sent (knob block, preset select).
+  - `preset backup --output /tmp/q-before.json`: 36 presets, header `a5 5a`, cross-check OK.
+  - `set gain 90`: `Set gain 65 → 90   (current preset 1A, normal mode)`, knob block with only byte 6 changed, ACK, `after  [6] gain 90   applied`, mode stayed normal.
+  - `set reverb_decay orange 10` (before T020a): `reverb_decay is already 53 (orange 10); nothing sent` (no-change path; 1A is stored at 53).
+  - `preset reload`: `Reload 1A (index 0)   discards unsaved edits`, select `… e0 01 00 00 01 19`, ACK, `now    bank 1, slot A   buffer = stored 1A   applied`.
+  - After T020a: `set reverb_decay 1 --type cloud`: `Set reverb_decay 53 (spring 10) → 88 (cloud 1)   (current preset 1A, normal mode)`, only byte 15 changed (`35` → `58`; gain back at `41` confirms the first reload), ACK, `applied`. `preset reload` again: applied, buffer = stored 1A.
+  - `preset backup --output /tmp/q-after.json`: identical to `/tmp/q-before.json` in every key except `created_at` (36 presets, image, header) → **SC-002 passed**.
+  - SC-001 (< 5 s per remote edit, scan and connect included): `time uv run openvave set gain 90` → applied, **10.98 s total** (0.24 s user, 0.13 s system): **failed**. Cause: the scan always waited the whole 5 s `--scan-timeout`.
+- [X] T021a [US1] Gate fix for SC-001 (owner's choice, research R3b): `src/openvave/transport/ble.py` `_scan` stops 1 s (`SCAN_GRACE`) after the first `TANK-Gv2_BLE` or at once on `--device`; `discover()` unchanged. Tests first: `tests/unit/test_scan.py`. Docs: research R3b, 001 research R8 note, README options, CHANGELOG. Re-timed on hardware (below)
+  - Re-timing after T021a (owner's Mac, 1A, normal mode): `time uv run openvave set gain 90` → applied in **2.54 s** total → **SC-001 passed**. Other runs: 4.76 s (refused, bypassed), 6.34 s (no change), 10.35 s (applied). Phase breakdown, read-only (`poc/time_phases.py`, six rounds): scan 1.3–2.3 s (pedal heard + 1 s grace), connect + settle + handshake 0.75–1.05 s, two reads 0.12 s, disconnect ≈ 0 s. `poc/time_cli.py` (real `info` in-process): `main()` returned at 3.67 s of a 3.73 s total, so no delay at exit. `uv` start-up 0.23 s warm (1.0 s cold). The slow runs are attributed to late advertising right after the previous connection (the scan varies most); `--scan-timeout` bounds it.
+  - Bypass seen on hardware during the gate (pedal bypassed on the pedal after a reload): `info` printed `state: bypass (all blocks off; the pedal does not report the loaded slot)` and `bank 1, slot not reported`, global `00 00 ff 01` (= check 2); `set gain 90` and `preset reload` refused with `bypassed`, reads only; `preset select 1A` left bypass, verified (header showed `from ?`; fixed after the gate: `from bypass (bank 1)`, test in `tests/contract/test_cli_select.py`).
+- [X] T022 [US1] Owner runs the read-only section check of quickstart §2 for MOD FX (byte 11) and DLY Mix (byte 13); researcher records the readings in `specs/protocol/command-layer.md` as observed or refuted (R3) and transcribes them to `captures/fw96/<date>-sections-app.jsonl` like the reverb readings
+  - Run 2026-11-17, fw 96, preset 1A in normal mode, app colours mapped to the manual's types in knob order. MOD FX (byte 11): blue 1 → 0, blue 40 → 39, blue X → 41, orange 1 → 44, orange 40 → 83, orange X → 84, green 1 → 88, green 40 → 127. DLY MIX (byte 13): blue 40 → 39, blue X → 41, orange 1 → 44, orange 40 → 83, orange X → 87, green 1 → 88, green 40 → 127 (blue 1 not read). **All 15 fit** `raw // 44`, positions 1–40, off zones 40–43 / 84–87 → both splits `observed`. Moving MOD FX in the app did not switch the MOD block on. Capture `captures/fw96/20261117-knob-types-app.jsonl` (`tests/support/knob_types_fixture.py`). The owner touched noise gate and DLY MIX by hand at the MOD FX blue X step (ignored). `preset reload` afterwards: applied.
+  - Pulled forward from T083 at the owner's request: `mod_fx` (chorus, phaser, tremolo) and `delay_mix` (analog, tape, dual) added to `TYPED_FIELDS` and the doc's knob-type table as `observed`, so `set mod_fx 20 --type phaser` and the `type:` readings work now. Tests: `tests/unit/test_types.py`, `test_render_type_reading.py`, `test_cli_preset_dump.py`.
 
-**Checkpoint**: Milestone 0 DONE — remote editing works without edit mode and nothing new has been sent to the pedal
+**Checkpoint**: Milestone 0 DONE — remote editing works without edit mode and nothing new has been sent to the pedal ✅ (2026-11-17: T021 SC-001 2.54 s and SC-002 identical backups; T022 15/15 readings fit)
 
 ---
 
@@ -266,7 +283,7 @@ the rows move to `observed`.
 ### Recording findings
 
 - [ ] T082 [US6] Cut sanitised excerpts with the excerpt tool into `captures/fw96/<date>-gate-<step>.jsonl` for every step run; update `captures/README.md`; T068 goes green
-- [ ] T083 [US6] `specs/protocol/command-layer.md` + `src/openvave/protocol/writes.py`: rows `bypass`, `loopback`, `stored_slot`, `commit`, `stored_image` → `observed` with their excerpts; address map and "Stored presets, switching and saving" updated; status byte named `loopback` in the byte map and `bytemap.py` only if T074 observed an effect; MOD FX / DLY Mix sections added to the doc and `SECTION_FIELDS` if T022 observed them
+- [ ] T083 [US6] `specs/protocol/command-layer.md` + `src/openvave/protocol/writes.py`: rows `bypass`, `loopback`, `stored_slot`, `commit`, `stored_image` → `observed` with their excerpts; address map and "Stored presets, switching and saving" updated; status byte named `loopback` in the byte map and `bytemap.py` only if T074 observed an effect; (MOD FX / DLY Mix types already added in M0 after T022)
 - [ ] T084 [US6] `specs/protocol/app-features.md`: gate results per feature, the open questions answered or still open (commit required?, mute source, knob after remote write, LED colour, loopback meaning and persistence); `CHANGELOG.md` [Unreleased] "Tested" entry
 
 ### Live verification (milestone gate)

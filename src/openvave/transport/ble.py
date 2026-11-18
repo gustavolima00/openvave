@@ -6,9 +6,10 @@ This is the only module that uses ``bleak``, and it imports it lazily so that im
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from openvave.errors import (
     BluetoothUnavailableError,
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from bleak import BleakClient
     from bleak.backends.characteristic import BleakGATTCharacteristic
     from bleak.backends.device import BLEDevice
+    from bleak.backends.scanner import AdvertisementData
 
 logger = logging.getLogger("openvave")
 
@@ -75,21 +77,61 @@ def _map_bleak_error(err: BaseException, during: str) -> Exception:
     return ConnectionLostError(f"{during} failed: {error_message(err)}")
 
 
-async def _scan(timeout: float) -> dict[str, tuple[BLEDevice, DeviceInfo]]:
-    from bleak import BleakScanner
+SCAN_GRACE = 1.0
+"""Seconds a scan keeps listening after the first pedal is seen, so a second pedal still gives
+"more than one pedal" (spec 004 M0 gate, SC-001: the full 5 s scan made every command ~11 s)."""
+
+
+async def _scan(
+    timeout: float,
+    *,
+    wanted_id: str | None = None,
+    stop_early: bool = False,
+    grace: float = SCAN_GRACE,
+    scanner_factory: Callable[..., Any] | None = None,
+) -> dict[str, tuple[BLEDevice, DeviceInfo]]:
+    """Scan for at most ``timeout`` seconds; every advertiser seen, by address.
+
+    With ``stop_early`` the scan ends ``grace`` seconds after the first device advertising
+    :data:`BLE_NAME`, or at once when ``wanted_id`` (case-insensitive) is seen. Without it, the
+    whole timeout is used (``discover``). ``scanner_factory`` replaces ``BleakScanner`` in tests.
+    """
     from bleak.exc import BleakError
 
+    if scanner_factory is None:
+        from bleak import BleakScanner
+
+        scanner_factory = BleakScanner
+    devices: dict[str, tuple[BLEDevice, DeviceInfo]] = {}
+    done = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    grace_timer: list[asyncio.TimerHandle] = []
+    wanted = wanted_id.lower() if wanted_id is not None else None
+
+    def seen(ble_device: BLEDevice, adv: AdvertisementData) -> None:
+        name = adv.local_name or ble_device.name or ""
+        info = DeviceInfo(identifier=ble_device.address, name=name, rssi=adv.rssi)
+        devices[ble_device.address] = (ble_device, info)
+        if not stop_early:
+            return
+        if wanted is not None:
+            if ble_device.address.lower() == wanted:
+                done.set()
+        elif name == BLE_NAME and not grace_timer:
+            grace_timer.append(loop.call_later(grace, done.set))
+
     try:
-        result = await BleakScanner.discover(timeout=timeout, return_adv=True)
+        async with scanner_factory(detection_callback=seen):
+            try:
+                async with asyncio.timeout(timeout):
+                    await done.wait()
+            except TimeoutError:
+                pass
     except (BleakError, OSError) as err:
         raise _map_bleak_error(err, "scan") from err
-    devices: dict[str, tuple[BLEDevice, DeviceInfo]] = {}
-    for ble_device, adv in result.values():
-        name = adv.local_name or ble_device.name or ""
-        devices[ble_device.address] = (
-            ble_device,
-            DeviceInfo(identifier=ble_device.address, name=name, rssi=adv.rssi),
-        )
+    finally:
+        for handle in grace_timer:
+            handle.cancel()
     return devices
 
 
@@ -171,7 +213,7 @@ class BleakTransport:
 
 async def open_ble(device_id: str | None, scan_timeout: float) -> tuple[BleakTransport, DeviceInfo]:
     """Scan, select the pedal and build (not yet open) its transport."""
-    devices = await _scan(scan_timeout)
+    devices = await _scan(scan_timeout, wanted_id=device_id, stop_early=True)
     chosen = select_device([info for _, info in devices.values()], device_id)
     ble_device = devices[chosen.identifier][0]
     return BleakTransport(ble_device), chosen

@@ -107,17 +107,24 @@ async def test_no_change_sends_nothing() -> None:
     assert writes(fake) == []
 
 
-@pytest.mark.parametrize("mode", [NORMAL, TUNER])
-async def test_not_edit_mode_is_refused(mode: int) -> None:
-    fake = make_fake(mode)
+async def test_tuner_mode_is_refused() -> None:
+    # spec 004: normal mode is allowed (check 1); tuner mode is refused before any write
+    fake = make_fake(TUNER)
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_set("gain", 90, experimental=True)
         with pytest.raises(WriteRefusedError) as exc:
             await pedal.set_field("gain", 90, experimental=True)
-    assert plan.refusal == "not_edit_mode"
-    assert exc.value.reason == "not_edit_mode"
+    assert plan.refusal == "tuner_mode"
+    assert exc.value.reason == "tuner_mode"
     assert exc.value.exit_code == 1
     assert writes(fake) == []
+
+
+async def test_normal_mode_is_allowed() -> None:
+    fake = make_fake(NORMAL)
+    async with TankG.over(fake) as pedal:
+        result = await pedal.set_field("gain", 90)
+    assert result.applied is True
 
 
 @pytest.mark.parametrize(

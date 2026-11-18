@@ -46,6 +46,7 @@ CONTRACT_EXPORTS = {
     "StoredPreset",
     "WritePlan",
     "WriteResult",
+    "PedalState",  # spec 004
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -61,6 +62,9 @@ PROTOCOL_EXPORTS = {
     "parse_storage_reply",
     "build_write",
     "parse_write_reply",
+    "classify",  # spec 004
+    "type_raw",  # spec 004
+    "type_parts",  # spec 004
 }
 DATACLASSES = (
     "DeviceInfo",
@@ -77,10 +81,18 @@ DATACLASSES = (
     "StoredPreset",
     "WritePlan",
     "WriteResult",
+    "PedalState",
 )
 FORBIDDEN = ("write", "erase", "address", "commit", "raw")
 """No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""
-WRITE_ACTIONS = {"plan_set", "set_field", "plan_select", "select_preset"}
+WRITE_ACTIONS = {
+    "plan_set",
+    "set_field",
+    "plan_select",
+    "select_preset",
+    "plan_reload",  # spec 004
+    "reload_preset",  # spec 004
+}
 
 
 def test_all_matches_contract() -> None:
@@ -193,6 +205,7 @@ def test_tankg_write_actions_are_named() -> None:
         "over",
         "read",
         "snapshot",
+        "state",  # spec 004
         "watch",
     }
 

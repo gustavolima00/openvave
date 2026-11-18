@@ -47,6 +47,11 @@ What this means for openvave:
 - **Discard**: select the same preset again; the pedal reloads the stored copy. The app does
   exactly this to restore a preset after bypass (below). On hardware, leaving pedal-side edit mode
   without saving also restores the stored bytes (observed).
+- **openvave (spec 004, unreleased)**: `openvave set` now works in normal mode as well as edit mode
+  (refused in tuner mode, bypass and unrecognised states), takes reverb decay as the app shows it
+  as the manual's reverb type and a position (`set reverb_decay 10 --type spring`), and `openvave preset reload` discards unsaved edits with the
+  confirmed preset-select write. Only already-confirmed messages are involved; hardware run of
+  quickstart §2 pending (M0 gate).
 - **Keep (save)**: the app writes its own 21-byte copy of the preset to the stored slot
   `2 + 21·i`, waits 300 ms, writes zero bytes to `0xF0000000` (commit), waits 100 ms, then selects
   `i` (observed, checks 3 and 4: the change survives a power cycle). It does not read the buffer back first, so a host should read
@@ -88,11 +93,12 @@ yet). Knob block: confirmed.
 
 **Section knobs.** The app draws three parameters with the same three-colour arc: MOD FX, DLY Mix
 and REV Decay (all range 0–127). The arc has `ceil(128 / 44) = 3` colours of 44 raw values, each
-numbered 1–40 with `X` past 40. For REV Decay this split is observed on hardware ("Reverb decay
-sections" in command-layer.md); for MOD FX and DLY Mix it is **hypothesis** (same widget, same
-range, not yet checked against the app on the pedal). The colours most likely select the effect
-type (for example three modulation or three delay types) and the number its amount, but the app
-names none of them. REV Mix (16) and MOD Speed / DLY Time are plain 0–127 knobs.
+numbered 1–40 with `X` past 40. The split is **observed** on hardware for all three (REV Decay
+2026-11-17; MOD FX and DLY Mix in spec 004 T022, same day: every reading fits; "Reverb decay
+sections" in command-layer.md). The app names none of the colours; the Tank-G manual does: REV
+Decay room / spring / cloud, MOD FX chorus / phaser / tremolo, DLY Mix analog / tape / dual, and
+the `X` positions between two types turn the module off (manual). openvave uses these names
+(`set mod_fx 20 --type phaser`). REV Mix (16) and MOD Speed / DLY Time are plain 0–127 knobs.
 
 ### Action row
 

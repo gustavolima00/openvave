@@ -70,3 +70,21 @@ def test_altered_doc_is_detected() -> None:
 def test_missing_heading_is_an_error() -> None:
     with pytest.raises(ValueError, match="heading"):
         parse_table(doc_text().replace("### Preset / global byte map", "### Something else"))
+
+
+def test_typed_fields_equal_the_doc_type_table() -> None:
+    """A field takes ``--type`` iff its type split is at least ``observed`` in the doc (R3)."""
+    from openvave.protocol import TYPED_FIELDS
+    from tests.support.bytemap_doc import load_typed_input
+
+    rows = load_typed_input()
+    names = {e.name: e.offset for e in BYTE_MAP if e.region is Region.CURRENT_PRESET}
+    for row in rows:
+        assert names.get(row.field) == row.offset, row
+        assert row.confidence in ("confirmed", "observed", "hypothesis"), row
+    sure = {r.field for r in rows if r.confidence in ("confirmed", "observed")}
+    assert sure == set(TYPED_FIELDS)
+    for row in rows:
+        if row.field in TYPED_FIELDS:
+            assert row.types == TYPED_FIELDS[row.field], row
+    assert {r.field for r in rows} >= {"reverb_decay", "mod_fx", "delay_mix"}

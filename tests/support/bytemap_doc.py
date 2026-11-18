@@ -263,3 +263,30 @@ def load_reverb_readings(path: Path = COMMAND_LAYER) -> list[tuple[str, int]]:
     if header[0] != "App" or values[0] != "Raw":
         raise ValueError(f"unexpected reverb readings table {header}, {values}")
     return [(app, int(raw)) for app, raw in zip(header[1:], values[1:], strict=True)]
+
+
+TYPED_INPUT_HEADER = ["Field", "Byte", "Types (manual, knob order)", "Split confidence"]
+
+
+@dataclass(frozen=True)
+class TypedInputRow:
+    field: str
+    offset: int
+    types: tuple[str, ...]
+    confidence: str
+
+
+def load_typed_input(path: Path = COMMAND_LAYER) -> list[TypedInputRow]:
+    """The knob-type table (spec 004 R3): which fields take ``--type``, with which type names."""
+    tables = [t for t in _reverb_tables(path) if t[0] == TYPED_INPUT_HEADER]
+    if len(tables) != 1:
+        raise ValueError("knob type table not found under the reverb sections heading")
+    return [
+        TypedInputRow(
+            field=cells[0].strip("`"),
+            offset=int(cells[1]),
+            types=tuple(t.strip().strip("`") for t in cells[2].split(",")),
+            confidence=cells[3],
+        )
+        for cells in tables[0][1:]
+    ]

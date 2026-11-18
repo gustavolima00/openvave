@@ -58,6 +58,31 @@ come from [`command-layer.md`](../protocol/command-layer.md) and
   `raw // 44`, both fields are added to the doc and to `SECTION_FIELDS` as `observed` in M3's docs
   change; if not, they stay raw-only and the result is documented.
 
+**Amendment (2026-11-17, M0 gate, owner's decision).** The colour names are the app's drawing,
+not the pedal's. The Tank-G manual names the decay knob's three processes ROOM, SPRING, CLOUD
+(knob order = the measured sections) and says the knob between two processes turns the module off
+(= the app's `X` values). Replaced: `section_raw` / `SECTION_FIELDS` → `type_raw(field, type,
+position)` / `type_parts(field, raw)` / `TYPED_FIELDS` (field → type names); CLI `set
+reverb_decay 12 --type room`; a bare number on a typed knob is a position in the preset's current
+type (refusal `type_required` in an off zone); `--raw` writes the raw byte. The 0.3.0
+`REVERB_SECTIONS` / `reverb_decay_parts` stay as the app's reading. Human output shows `room 6` /
+`off`. Alternatives: a bare number stays raw (rejected: `set reverb_decay 12` and `--type room 12`
+would mean different things); all three typed knobs now (rejected: MOD FX / DLY MIX split not
+measured).
+
+## R3b — Scan that stops early (M0 gate, 2026-11-17)
+
+- **Finding**: on the owner's Mac, `time uv run openvave set gain 90` took 10.98 s wall clock
+  (0.37 s CPU): SC-001 (< 5 s) failed. `BleakScanner.discover(timeout=5)` always scans the whole
+  5 s, even with `--device`, before connecting.
+- **Decision** (owner): connecting commands stop the scan `SCAN_GRACE` = 1 s after the first
+  device advertising `TANK-Gv2_BLE` (a second pedal seen in that second still gives exit 4, "more
+  than one pedal"), and at once when the `--device` identifier is seen. `--scan-timeout` stays the
+  upper bound when no pedal is found. `openvave.discover()` keeps scanning the whole timeout.
+- **Trade-off**: a second pedal that first advertises more than 1 s after the first is no longer
+  detected; spec 001 R8's "never silently pick one" holds within the grace window. Alternatives:
+  no grace (drops the check), keep 5 s and relax SC-001 (rejected by the owner).
+
 ## R4 — Reload (discard unsaved edits)
 
 - **Decision**: `openvave preset reload` / `TankG.reload_preset()`: read the state, then run the

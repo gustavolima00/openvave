@@ -15,12 +15,25 @@ from openvave.transport import Transport
 from openvave.transport.fake import FakeTransport
 from tests.support import storage_fixture as sf
 from tests.support.captures import REPO_ROOT
-from tests.support.write_fixture import ACK, EDIT, NORMAL, make_fake, nak, write_frame, writes
+from tests.support.write_fixture import (
+    ACK,
+    EDIT,
+    NORMAL,
+    TUNER,
+    make_fake,
+    nak,
+    write_frame,
+    writes,
+)
 
 PEDAL = DeviceInfo("3F1A-UUID", "TANK-Gv2_BLE", -58)
-SCHEMA = REPO_ROOT / "specs/003-preset-backup-edit-writes/contracts/write-result.schema.json"
+SCHEMA = REPO_ROOT / "specs/004-remote-edit-save-restore/contracts/write-result.schema.json"
 GAIN_90 = "00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 76"
-NOT_SAVED = "Not saved: leave edit mode on the pedal without saving to restore the stored preset."
+NOT_SAVED = (
+    "Not saved. Discard: openvave preset reload --discard-edits "
+    "(or leave edit mode on the pedal without saving)"
+)
+NOT_SAVED_NORMAL = "Not saved. Discard: openvave preset reload"
 
 Factory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
 
@@ -85,9 +98,9 @@ def test_dry_run_sends_no_write(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_dry_run_shows_the_refusal(capsys: pytest.CaptureFixture[str]) -> None:
-    code, out, err, fake = run(capsys, ["set", "gain", "90", "--dry-run"], make_fake(NORMAL))
+    code, out, err, fake = run(capsys, ["set", "gain", "90", "--dry-run"], make_fake(TUNER))
     assert code == 0, err
-    assert "refused: not_edit_mode" in out
+    assert "refused: tuner_mode" in out
     assert "dry run: nothing sent" in out
     assert writes(fake) == []
     code, out, err, fake = run(capsys, ["set", "mod_on", "on", "--dry-run"])
@@ -147,10 +160,146 @@ def test_json_dry_run_has_no_result(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_refused_exit_1(capsys: pytest.CaptureFixture[str]) -> None:
-    code, _, err, fake = run(capsys, ["set", "gain", "90", "--experimental"], make_fake(NORMAL))
+    code, _, err, fake = run(capsys, ["set", "gain", "90", "--experimental"], make_fake(TUNER))
     assert code == 1
-    assert "edit mode" in err
+    assert "tuner_mode" in err
+    assert "tuner" in err
     assert writes(fake) == []
+
+
+BYPASS = bytes([0, 0, 0xFF, NORMAL])
+
+
+def test_refused_in_bypass_exit_1(capsys: pytest.CaptureFixture[str]) -> None:
+    fake = make_fake(NORMAL, buffer=bytes(21), glob=BYPASS)
+    code, _, err, fake = run(capsys, ["set", "gain", "90"], fake)
+    assert code == 1
+    assert "bypassed" in err
+    assert writes(fake) == []
+    assert all(f[2] in (0x11, 0x23) for f in fake.sent)
+
+
+# -- spec 004: normal mode and section input (contracts/cli.md "openvave set") ---------------
+
+
+def test_normal_mode_output(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, err, fake = run(capsys, ["set", "gain", "90"], make_fake(NORMAL))
+    assert code == 0, err
+    assert out.splitlines() == [
+        "Set gain 60 → 90   (current preset 1B, normal mode)",
+        f"  write  {GAIN_90}",
+        "  reply  00 59 00 01 00 00 00 ff   ACK",
+        "  after  [6] gain 90   applied",
+        NOT_SAVED_NORMAL,
+    ]
+    assert writes(fake) == [bytes.fromhex(GAIN_90)]
+
+
+DECAY_53 = write_frame(
+    0x10000004, sf.PUBLIC_PRESET[4:15] + bytes([53]) + sf.PUBLIC_PRESET[16:18]
+).hex(" ")
+
+
+@pytest.mark.parametrize(
+    "argv", [["10", "--type", "spring"], ["--type", "SPRING", "10"], ["--raw", "53"]]
+)
+def test_type_input_output(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    code, out, err, fake = run(capsys, ["set", "reverb_decay", *argv], make_fake(NORMAL))
+    assert code == 0, err
+    assert out.splitlines() == [
+        "Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode)",
+        f"  write  {DECAY_53}",
+        "  reply  00 59 00 01 00 00 00 ff   ACK",
+        "  after  [15] reverb_decay 53 (spring 10)   applied",
+        NOT_SAVED_NORMAL,
+    ]
+    assert [f.hex(" ") for f in writes(fake)] == [DECAY_53]
+
+
+def test_bare_position_keeps_the_current_type(capsys: pytest.CaptureFixture[str]) -> None:
+    # 1B's decay is raw 5 = room 6; "20" means room 20 = raw 19, not raw 20
+    code, out, err, fake = run(capsys, ["set", "reverb_decay", "20"], make_fake(NORMAL))
+    assert code == 0, err
+    assert out.splitlines()[0] == (
+        "Set reverb_decay 5 (room 6) → 19 (room 20)   (current preset 1B, normal mode)"
+    )
+    expected = write_frame(
+        0x10000004, sf.PUBLIC_PRESET[4:15] + bytes([19]) + sf.PUBLIC_PRESET[16:18]
+    )
+    assert writes(fake) == [expected]
+
+
+def test_bare_position_with_reverb_off_needs_a_type(capsys: pytest.CaptureFixture[str]) -> None:
+    off = sf.PUBLIC_PRESET[:15] + bytes([41]) + sf.PUBLIC_PRESET[16:]  # between room and spring
+    code, out, err, fake = run(
+        capsys, ["set", "reverb_decay", "20", "--dry-run"], make_fake(NORMAL, buffer=off)
+    )
+    assert code == 0, err
+    assert "refused: type_required" in out
+    code, _, err, fake = run(capsys, ["set", "reverb_decay", "20"], make_fake(NORMAL, buffer=off))
+    assert code == 1
+    assert "type_required" in err
+    assert "--type" in err
+    assert writes(fake) == []
+
+
+@pytest.mark.parametrize(
+    ("argv", "needle"),
+    [
+        (["set", "gain", "10", "--type", "room"], "reverb_decay"),
+        (["set", "gain", "10", "--raw"], "reverb_decay"),
+        (["set", "reverb_decay", "3", "--type", "hall"], "room, spring, cloud"),
+        (["set", "reverb_decay", "3", "--type", "orange"], "room, spring, cloud"),
+        (["set", "reverb_decay", "41", "--type", "room"], "1–40"),
+        (["set", "reverb_decay", "0"], "1–40"),
+        (["set", "reverb_decay", "ten", "--type", "room"], "1–40"),
+        (["set", "reverb_decay", "53", "--raw", "--type", "room"], "--raw"),
+        (["set", "reverb_decay", "loud", "--raw"], "0–127"),
+    ],
+)
+def test_bad_type_input_exit_2(
+    capsys: pytest.CaptureFixture[str], argv: list[str], needle: str
+) -> None:
+    fake = make_fake(NORMAL)
+    code, _, err, _ = run(capsys, argv, fake)
+    assert code == 2
+    assert needle in err
+    assert fake.sent == []
+
+
+def test_json_in_normal_mode_has_no_refusal(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, err, _ = run(capsys, ["set", "gain", "90", "--json"], make_fake(NORMAL))
+    assert code == 0, err
+    doc = json.loads(out)
+    validate(doc)
+    assert doc["plan"]["refusal"] is None
+    assert doc["plan"]["global_before"] == "00 00 01 01"
+    assert doc["result"]["applied"] is True
+
+
+@pytest.mark.parametrize(
+    ("glob", "buffer", "reason"),
+    [
+        (bytes([0, 0, 1, TUNER]), sf.PUBLIC_PRESET, "tuner_mode"),
+        (BYPASS, bytes(21), "bypassed"),
+        (bytes([0, 0, 1, 5]), sf.PUBLIC_PRESET, "unrecognised_state"),
+        (
+            bytes([0, 0, 1, NORMAL]),
+            sf.PUBLIC_PRESET[:15] + b"\x55" + sf.PUBLIC_PRESET[16:],
+            "type_required",
+        ),
+    ],
+)
+def test_json_dry_run_refusals_validate(
+    capsys: pytest.CaptureFixture[str], glob: bytes, buffer: bytes, reason: str
+) -> None:
+    fake = make_fake(NORMAL, buffer=buffer, glob=glob)
+    argv = ["set", "reverb_decay", "20", "--dry-run", "--json"]
+    code, out, err, _ = run(capsys, argv, fake)
+    assert code == 0, err
+    doc = json.loads(out)
+    validate(doc)
+    assert doc["plan"]["refusal"] == reason
 
 
 def test_experimental_required_message(capsys: pytest.CaptureFixture[str]) -> None:

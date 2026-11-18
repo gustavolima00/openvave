@@ -7,8 +7,8 @@
 **Status**: Draft
 
 **Input**: User description: "Spec 004: remote editing in normal mode, save, restore, bypass and
-loopback for the M-VAVE Tank-G (fw 96). Builds on 003. (1) `set` in normal mode, with section
-input for reverb decay (`set reverb_decay orange 10`) and a way to discard unsaved remote edits.
+loopback for the M-VAVE Tank-G (fw 96). Builds on 003. (1) `set` in normal mode, with typed
+input for reverb decay (`set reverb_decay 10 --type spring`) and a way to discard unsaved remote edits.
 (2) Bypass on/off (`01` to `0xE1000000 + i`; off = select `i`), and report slot `ff` + zero buffer
 as bypass. (3) `preset save [--to POS]` behind `--unsafe`: automatic backup, slot write, 300 ms,
 commit `0xF0000000`, 100 ms, select, read back. (4) Restore one slot or all 36 from an openvave
@@ -72,13 +72,13 @@ Actors:
 
 With the pedal in its normal playing mode, the user sets a parameter from the computer and hears
 the change at once. Nothing is stored: one command puts the preset back as it was saved. For
-reverb decay the user can type the value the way the phone app shows it, as a colour section and a
-position.
+reverb decay the user can give the reverb type named in the Tank-G manual (room, spring, cloud)
+and a position inside it.
 
 **Why this priority**: it removes the need to press a button on the pedal before every remote
 edit, it is volatile (worst case: reload the preset), and it is already confirmed on hardware.
 
-**Independent Test**: offline, the dry run in normal mode prints the knob-block frame, and section
+**Independent Test**: offline, the dry run in normal mode prints the knob-block frame, and typed
 input maps to the documented raw value. On hardware: set gain in normal mode, see it in the
 re-read, reload the preset, see the stored value return, with identical backups before and after.
 
@@ -90,10 +90,11 @@ re-read, reload the preset, see the stored value return, with identical backups 
 2. **Given** the pedal in edit mode, **When** the user sets a knob, **Then** it works as in 0.3.0.
 3. **Given** the pedal in tuner mode or in bypass, **When** the user sets a field, **Then** the
    tool refuses before sending any write and says why.
-4. **Given** `reverb_decay orange 10`, **When** the user sets it, **Then** the tool writes raw 53
-   and reports both readings (`53`, `orange 10`).
-5. **Given** a section input that is not valid (unknown colour, position outside 1–40, or a field
-   that has no observed sections such as `reverb_mix` or `gain`), **When** the user sets it,
+4. **Given** `reverb_decay 10 --type spring`, **When** the user sets it, **Then** the tool writes
+   raw 53 and reports both readings (`53`, `spring 10`). Without `--type` the position is taken in
+   the preset's current type; `--raw 53` writes the raw byte.
+5. **Given** a typed input that is not valid (unknown type, position outside 1–40, or `--type` on
+   a field without an observed type split such as `reverb_mix` or `gain`), **When** the user sets it,
    **Then** the tool refuses without contacting the pedal for the write and lists what is accepted.
 6. **Given** unsaved remote edits, **When** the user asks to reload the current preset, **Then**
    the tool selects the loaded preset again and reports that the buffer equals the stored preset.
@@ -325,12 +326,15 @@ Remote editing in normal mode
   recognise.
 - **FR-002**: A set MUST keep the 0.3.0 sequence: fresh read, one write that changes only the
   targeted bytes, ACK check, re-read, report applied / not applied with every byte that changed.
-- **FR-003**: For reverb decay the user MUST be able to give the value as a colour section (blue,
-  orange, green) and a position 1–40, as the phone app shows it; a plain raw value 0–127 stays
-  accepted. Reports MUST show both readings.
-- **FR-004**: Section input MUST be refused for every field whose sections are not at least
-  `observed` in the protocol docs. MOD FX and DLY Mix gain section input only if this feature's
-  read-only check observes them; reverb mix has none.
+- **FR-003**: For reverb decay the user MUST be able to give the value as a type named in the
+  Tank-G manual (room, spring, cloud) and a position 1–40 inside it; without a type the preset's
+  current type is kept (refused when the knob sits between two types); the raw value 0–127 stays
+  reachable with an explicit `--raw`. Reports MUST show both readings (raw and type). The app's
+  colours are not used as names (amended 2026-11-17 during the M0 gate, owner's decision).
+- **FR-004**: Typed input MUST be refused for every field whose type split is not at least
+  `observed` in the protocol docs. MOD FX (chorus, phaser, tremolo) and DLY MIX (analog, tape,
+  dual) gain typed input only if this feature's read-only check observes their split (it did:
+  T022, 2026-11-17); reverb mix has none.
 - **FR-005**: The tool MUST offer a named action that discards unsaved edits by reloading the
   loaded preset, and verifies that the buffer equals the stored preset.
 - **FR-006**: The help and the output of a remote edit MUST say that the change is not saved and
@@ -461,8 +465,8 @@ Docs and evidence
   the pedal reports one.
 - **Remote edit**: an unsaved change to the edit buffer; ends by reload (discarded), bypass
   (discarded) or save (stored).
-- **Section value**: a reverb-decay value given as colour section and position, equivalent to one
-  raw value.
+- **Typed value**: a reverb-decay value given as type (room, spring, cloud) and position,
+  equivalent to one raw value; between two types the module is off (manual).
 - **Stored preset / stored image**: as in 003 (21 bytes; header + 36 presets = 758 bytes).
 - **Backup file**: the 003 file; now also the input of restore and the automatic safety copy of
   every unsafe action.

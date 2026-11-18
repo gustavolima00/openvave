@@ -93,6 +93,9 @@ Phase 0 output for [plan.md](plan.md). Each entry: Decision / Rationale / Altern
   the ambiguity error already lists candidates (YAGNI).
 - **Alternatives**: match the BLE-MIDI service UUID (shared by many MIDI devices); match prefix
   `TANK-G` (untested for other models).
+- **Amended by spec 004 (research R3b)**: commands that connect stop the scan 1 s after the first
+  matching pedal (a second pedal in that second still exits 4) or as soon as `--device` is seen;
+  `--scan-timeout` is the upper bound.
 
 ## R9. Timeouts and retries
 

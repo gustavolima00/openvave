@@ -84,8 +84,9 @@ class UnsafeCommandError(OpenvaveError):
 class WriteRefusedError(UnsafeCommandError):
     """A write was refused before anything was sent (spec 003 FR-009/010/014/015/017).
 
-    ``reason`` is one of ``not_edit_mode``, ``out_of_range``, ``untested_firmware``,
-    ``experimental_required``, ``edits_would_be_discarded``, ``unknown_field``.
+    ``reason`` is one of ``out_of_range``, ``untested_firmware``, ``experimental_required``,
+    ``edits_would_be_discarded``, ``unknown_field``, and since spec 004 ``tuner_mode``,
+    ``bypassed``, ``unrecognised_state``. ``not_edit_mode`` (0.3.0) is no longer raised.
     """
 
     exit_code = 1

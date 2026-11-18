@@ -47,14 +47,18 @@ def make_fake(
     script: Mapping[str, tuple[bytes, Replies]] | None = None,
     query_rx: bytes | None = None,
     cls: type[FakeTransport] = FakeTransport,
+    glob: bytes | None = None,
 ) -> FakeTransport:
-    """A fake pedal on 1B: stored image at 0, edit buffer, global block; ACKs allowlisted writes."""
+    """A fake pedal on 1B: stored image at 0, edit buffer, global block; ACKs allowlisted writes.
+
+    ``glob`` replaces the whole global block (e.g. slot ``ff`` for bypass, spec 004).
+    """
     full: dict[str, tuple[bytes, Replies]] = {QUERY: (CAP.tx(QUERY), query_rx or CAP.rx(QUERY))}
     full.update(script or {})
     memory = {
         0: sf.synthetic_image() if image is None else image,
         EDIT_BUFFER: buffer,
-        GLOBAL: global_block(mode),
+        GLOBAL: global_block(mode) if glob is None else glob,
     }
     return cls(full, memory=memory, apply_writes=apply_writes, select_transient=select_transient)
 

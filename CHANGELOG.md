@@ -6,12 +6,54 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `openvave preset reload [--discard-edits] [--dry-run]` / `TankG.reload_preset()` /
+  `TankG.plan_reload()`: discards unsaved edits by selecting the loaded preset again (the
+  confirmed preset-select write) and verifies the buffer equals the stored preset. Nothing is sent
+  when there is nothing to discard; edit mode needs `--discard-edits`.
+- Reverb types for the decay knob, named as in the Tank-G manual: **room**, **spring**, **cloud**
+  (the app's blue, orange, green sections; between two types the reverb is off).
+  `openvave set reverb_decay 10 --type spring`; without `--type` the preset's current type is
+  kept (refusal `type_required` when the knob sits between two types); `--raw 53` writes the raw
+  byte. Library: `set_field("reverb_decay", ("spring", 10))`, `(None, 10)` to keep the type,
+  `openvave.protocol.REVERB_TYPES`, `TYPED_FIELDS`, `type_raw()`, `type_parts()`. Output shows
+  both readings (`5 (room 6) → 53 (spring 10)`).
+- The same for MOD FX (`chorus`, `phaser`, `tremolo`) and DLY MIX (`analog`, `tape`, `dual`):
+  `set mod_fx 20 --type phaser`, `set delay_mix 30 --type tape`; `preset dump` / `watch` show
+  `type: chorus 1`. Their split was checked against the phone app on the pedal (15 readings, all
+  fit). `openvave.protocol.MOD_FX_TYPES`, `DELAY_MIX_TYPES`.
+- Pedal state: `openvave.PedalState`, `openvave.protocol.classify(global, buffer)`,
+  `TankG.state()` (confirms bypass with a second read 300 ms later) and
+  `DeviceSnapshot.pedal_state`. `info` and `preset dump` print a `state:` line (in bypass: no
+  decoded preset fields and `bank <n>, slot not reported`); `watch` prints the state in its header
+  and a line when it changes (`loading` for one bypass-looking cycle, `bypass` for two). JSON adds
+  a top-level `pedal_state` to `info` and `preset dump` and to `watch --json` start and change
+  events; existing fields keep their meaning (`schema_version` 2).
+
 ### Changed
 
-- `preset dump` and `watch` human output show reverb decay (preset byte 15) the way the
-  phone app does, as colour section and position: `app: blue 6` after the field line, and
-  `5 (blue 6) → 64 (orange 21)` in watch changes. JSON is unchanged (`schema_version` 2, raw value
-  only). Library: `openvave.cli.render.app_reading()`.
+- **`openvave set` works in normal mode** (spec 004 check 1: the app never enters edit mode, and
+  the knob block is applied in normal mode, confirmed over two connections). It is refused in
+  tuner mode (`tuner_mode`), while the pedal is bypassed (`bypassed`) and in states openvave does
+  not recognise (`unrecognised_state`). The refusal reason `not_edit_mode` is no longer raised.
+  Block switches and `led_colour` still need `--experimental`.
+- The "Not saved" line after a write now names the discard command
+  (`Not saved. Discard: openvave preset reload`).
+- `openvave preset dump` now also reads the global block (to report the pedal state).
+- Connecting is faster: the Bluetooth scan stops 1 s after the pedal is seen (or as soon as the
+  `--device` identifier is seen) instead of always waiting `--scan-timeout` (5 s). A second pedal
+  seen within that second still gives exit 4. `openvave.discover()` still scans the whole timeout.
+  Measured before: `set gain 90` took 11 s on macOS.
+- JSON write results validate against the spec 004 extension of the schema
+  ([`write-result.schema.json`](specs/004-remote-edit-save-restore/contracts/write-result.schema.json)):
+  command `preset reload` and the new refusal reasons.
+
+- `preset dump` and `watch` human output show reverb decay (preset byte 15) as reverb type and
+  position: `type: room 6` after the field line (`off` between types), and
+  `5 (room 6) → 64 (spring 21)` in watch changes. JSON is unchanged (`schema_version` 2, raw value
+  only). Library: `openvave.cli.render.type_reading()`. `REVERB_SECTIONS` /
+  `reverb_decay_parts` (0.3.0) still give the app's colour reading.
 
 ### Documentation
 
