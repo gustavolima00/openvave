@@ -10,6 +10,13 @@ Two opt-ins, independent (R6):
 - `--experimental`: required when any message the command sends is not `confirmed` in the "Write
   messages" table, or on firmware other than 96 (as in 0.3.0).
 
+On fw 96 after the spec 004 gate sessions (2026-11-18): `bypass`, `stored_slot`, `commit` and
+`stored_image` are `confirmed`, so `bypass on|off`, `preset save` and `preset restore` run
+**without** `--experimental` (save and restore still need `--unsafe`). `loopback`, the block
+switches and `led_colour` stay `observed`: `loopback on|off` and `set` of a block switch or the
+LED colour still need `--experimental`. `--unsafe` never implies `--experimental`, nor the other
+way round.
+
 `--dry-run` on every command below: does the reads, prints the plan and the exact frames, sends no
 write, takes no backup file, exit 0 even if the real run would be refused (the refusal is printed).
 
@@ -29,8 +36,11 @@ Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 35 04 07 64
   reply  00 59 00 01 00 00 00 ff   ACK
   after  [15] reverb_decay 53 (spring 10)   applied
-Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 ```
+
+(In edit mode the last line is `Not saved. Discard: openvave preset reload --discard-edits (or leave
+edit mode on the pedal without saving)`.)
 
 ## `openvave set FIELD=VALUE [FIELD=VALUE ...]` (batch, one connection)
 
@@ -67,13 +77,14 @@ Nothing was retried. Applied fields are in the edit buffer, not saved. Discard: 
 ## `openvave preset reload`
 
 ```text
-openvave preset reload [--discard-edits] [--dry-run]
+openvave preset reload [--discard-edits] [--dry-run] [--experimental]
 ```
 
 Discards unsaved edits by selecting the loaded preset again (R4). Buffer already equal to the
 stored preset: `nothing to discard; nothing sent`, exit 0. In edit mode it needs
 `--discard-edits`; refused in bypass (hint: `bypass off <position>`), tuner and unrecognised
-states. Output and JSON as `preset select`.
+states. Output and JSON as `preset select`. `--experimental` only matters on untested firmware
+(the select is `confirmed`).
 
 ## `openvave bypass on | off <position>`
 
@@ -88,7 +99,9 @@ openvave bypass off <position> [--dry-run] [--experimental]
   buffer. Already bypassed: `already bypassed; nothing sent`.
 - `off <position>`: `1A`–`9D` or `0`–`35`, required (the pedal does not report the slot while
   bypassed; missing → exit 2 with the reported bank). Runs the select path. If the pedal is not
-  bypassed: refused (`not_bypassed`), pointing to `preset select`.
+  bypassed: refused (`not_bypassed`), pointing to `preset select`; in edit mode `edit_mode`.
+- `--experimental`: not needed on fw 96 (`bypass` and the select are `confirmed`, gate sessions A
+  and B); still required on other firmware (`untested_firmware`).
 
 ```text
 Bypass on   (was 1B, normal mode)
@@ -106,7 +119,8 @@ openvave preset save [--to <position>] --unsafe [--experimental] [--dry-run] [--
 
 Stores the current edit buffer in the loaded slot, or in `--to`. Normal mode only (refused in
 edit, tuner, bypass, unrecognised). Steps: read state, buffer and target slot → no change? stop →
-opt-in and confidence checks → full backup to
+opt-in and confidence checks (`--unsafe` always; `--experimental` only on firmware other than 96,
+since `stored_slot`, `commit` and the select are `confirmed` there) → full backup to
 `DIR/tankg-backup-<YYYYmmdd-HHMMSS>-before-save.json` (default `DIR` = current directory; never
 overwrites; failure → nothing written to the pedal) → slot write → read slot back (mismatch: stop
 before the commit) → 300 ms → commit → 100 ms → select → verify (slot, position, buffer).
@@ -147,6 +161,11 @@ a usage error (exit 2) naming the problem. A file from another firmware version 
 - If the loaded preset has unsaved edits: needs `--discard-edits` (M2: every restore ends with a
   select, which discards them, so this applies whichever slot is written).
 - Automatic backup as for save (`…-before-restore.json`).
+- `--unsafe` is required; `--experimental` is not on fw 96 (`stored_slot`, `stored_image`, `commit`
+  and the select are `confirmed`), only on other firmware or for `firmware_mismatch`.
+- The image write is one 773-byte request that the BLE transport splits into several Bluetooth
+  writes (5 at ATT MTU 185); the pedal answers it with one ACK (gate sessions A and B). The
+  slot-by-slot fallback of research R11 (T079) was **not** needed and is not implemented.
 
 ```text
 Restore all presets from backup-a.json   UNSAFE: overwrites stored presets
@@ -170,7 +189,9 @@ openvave loopback (on | off) [--dry-run] [--experimental]
 
 Reads the flag (`0xD0000000` × 1), writes `01` / `00` there, checks the ACK, re-reads. Never
 followed by a commit. Equal value: `loopback is already off; nothing sent`. Needs `--experimental`
-until the message is confirmed. Off: `00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a`.
+(the message is `observed`, gate session A only). Off: `00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a`.
+Observed on fw 96: `on` mixes the pedal's Bluetooth audio into the USB recording, `off` leaves it
+out (still heard); the flag survives a power cycle without a commit.
 
 ## `info`, `preset dump`, `watch` (changed output)
 
@@ -191,10 +212,11 @@ error: no reply to the commit (connection lost)
   select 1C       not sent
 Stored presets may have changed. Nothing was retried.
 Check:   openvave preset backup
-Undo:    openvave preset restore ./tankg-backup-20261118-101500-before-save.json --all --unsafe --experimental
+Undo:    openvave preset restore ./tankg-backup-20261118-101500-before-save.json --all --unsafe
 ```
 
-(`--experimental` is printed while the restore messages are not `confirmed`.)
+(`--experimental` is appended to the Undo line only when `stored_image`, `commit` or the select
+is not sendable by default, i.e. on firmware other than 96.)
 
 With `--json` the same information is in `result.steps`, `result.stored_may_have_changed` and
 `backup_saved_to` ([`sequence-result.schema.json`](sequence-result.schema.json)).
@@ -203,7 +225,7 @@ With `--json` the same information is in `result.steps`, `result.stored_may_have
 
 | Code | Added meanings |
 |---|---|
-| 1 | refused: `unsafe_required`, `bypassed`, `tuner_mode`, `edit_mode`, `unrecognised_state`, `not_bypassed`, `firmware_mismatch` (plus the 0.3.0 reasons) |
+| 1 | refused: `unsafe_required`, `bypassed`, `tuner_mode`, `edit_mode`, `unrecognised_state`, `not_bypassed`, `firmware_mismatch`, `type_required` (plus the 0.3.0 reasons; `not_edit_mode` is no longer raised) |
 | 2 | usage: bad typed input, missing `bypass off` position, invalid backup file, both or neither of `--slot` / `--all` |
 | 6 | connection lost / timeout, also mid-sequence (step report printed) |
 | 7 | NAK, also mid-sequence; automatic backup failed its cross-check (nothing written) |

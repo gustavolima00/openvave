@@ -296,16 +296,45 @@ Observations:
 
 ## Recommended scope for spec 004
 
-1. **Remote editing without the pedal's edit mode**: lift the `set` refusal in normal mode (check 1
-   passed); keep a fresh-read-then-write per field. Accept section input for the three
-   section knobs (`reverb_decay orange 10`, later `mod_fx` / `delay_mix` once observed).
-2. **Save** (`openvave preset save [--to POS]`): read the buffer, write the slot, commit, select,
-   verify by reading the slot back. Behind an explicit `--unsafe` opt-in, with an automatic backup
-   first (Constitution IV).
-3. **Restore from an openvave backup** (one slot or all 36): the same slot / image write + commit,
-   behind `--unsafe` and with a backup of the current state first. This replaces the app's
-   import and factory-restore flows without shipping vendor preset content.
-4. Optional, small: BYPASS and loopback toggles, after their checks.
+Status after 0.4.0 (spec 004 done, fw 96, gate sessions A and B on 2026-11-18). Struck items were
+delivered; the rest stays open.
 
-Out of scope: erase `0x21`, factory restore from vendor images, firmware update, writes to the
-global block, MIDI.
+1. ~~**Remote editing without the pedal's edit mode**~~ done: `openvave set` works in normal mode
+   (fresh read, then write; refused in tuner, bypass and unrecognised states), typed input for the
+   three typed knobs (`set reverb_decay 10 --type spring`, `mod_fx … --type phaser`,
+   `delay_mix … --type tape`), several fields over one connection (`set gain=95 treble=58`), and
+   `openvave preset reload` to discard. Knob block and select are `confirmed`; block switches and
+   LED colour were sent in normal mode once (session A) and stay `observed`, behind
+   `--experimental`.
+2. ~~**Save**~~ done: `openvave preset save [--to POS] --unsafe` (read the buffer, write the slot,
+   read it back, commit, select, verify), automatic backup first. `stored_slot` and `commit` are
+   `confirmed` (1C in session A, 1D in session B, each kept across a power cycle), so no
+   `--experimental` on fw 96.
+3. ~~**Restore from an openvave backup**~~ done: `openvave preset restore FILE (--slot POS | --all)
+   --unsafe`, backup of the current state first. `stored_image` is `confirmed` (one 773-byte request,
+   one ACK, kept across a power cycle in both sessions); the slot-by-slot fallback was not needed.
+4. ~~BYPASS and loopback toggles~~ done: `openvave bypass on` / `bypass off <position>` (`bypass`
+   `confirmed`, no `--experimental` on fw 96) and `openvave loopback on|off` (`observed`, still
+   `--experimental`; `01` mixes the pedal's Bluetooth audio into the USB recording, and the flag
+   survives a power cycle).
+5. ~~Pedal-state reporting~~ done (added during spec 004): `info`, `preset dump` and `watch` print
+   `state:` (normal, edit, tuner, bypass, unrecognised; `watch` also `loading`).
+
+Still open after spec 004:
+
+- A second gate session for `loopback`, the block switches and `led_colour`, to reach `confirmed`.
+- Is the commit required (slot write without `0xF0000000`, then a power cycle)? Not run (T080a).
+- A pedal knob turned after a remote write (T080b, not run); the source of the short mute in the
+  save / restore sequence.
+- The unexplained preset changes seen in both gate sessions (see the session A and B sections:
+  1B → 1A, 1A → 1B, 2D → 1B with nothing written), and the varying power-on preset.
+- Edit mode from the computer: no write is known to enter or leave it, and none is needed.
+- App features not covered: single-preset share / import (`.tkg`, the loaded slot), swap presets,
+  "Save to" with the app's dialog (openvave's `--to` does the same writes), factory restore.
+- Bypass corner cases (another index than the loaded preset, data `00`, footswitch exit), other
+  firmware than 96, other ATT MTUs for the image write.
+- The automatic backup lands in the current directory by default (a git-ignored default or a
+  warning is a follow-up).
+
+Out of scope (unchanged): erase `0x21`, factory restore from vendor images, firmware update,
+writes to the global block, MIDI.

@@ -8,17 +8,12 @@ the new commands, the new exit code and the write allowlist, and the version pri
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
 
-import openvave
-from openvave.cli import main
-
 ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = ROOT / "CHANGELOG.md"
-PYPROJECT = ROOT / "pyproject.toml"
 
 VERSION = "0.3.0"
 
@@ -67,12 +62,4 @@ def test_release_is_not_left_under_unreleased() -> None:
     assert "openvave preset backup [--output" not in unreleased.group(1), "0.3.0 left unreleased"
 
 
-def test_versions_agree() -> None:
-    assert openvave.__version__ == VERSION
-    with PYPROJECT.open("rb") as fh:
-        assert tomllib.load(fh)["project"]["version"] == VERSION
-
-
-def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["--version"]) == 0
-    assert VERSION in capsys.readouterr().out
+# The package version moved on with 0.4.0; tests/contract/test_changelog_040.py checks it.

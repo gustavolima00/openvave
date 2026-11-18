@@ -465,7 +465,6 @@ NOT_SAVED_EDIT = (
 )
 MODE_NAMES = {0: "edit", 1: "normal", 2: "tuner"}
 REFUSAL_TEXT = {
-    "not_edit_mode": "the pedal is not in edit mode",
     "tuner_mode": "the pedal is in tuner mode",
     "bypassed": "the pedal is bypassed",
     "unrecognised_state": "the pedal reports a state openvave does not recognise",

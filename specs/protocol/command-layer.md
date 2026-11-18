@@ -558,8 +558,9 @@ the preset again restores the stored bytes. The official app never enters edit m
 writing. Evidence: `captures/fw96/20261117-gate-normal_knob_gain.jsonl`,
 `captures/fw96/20261117-gate-normal_knob_gain_b.jsonl`; details in
 [app-features.md](app-features.md). Since spec 004, openvave sends edit-buffer writes in normal
-and edit mode alike; the confidence of each row is unchanged (block switches and `led_colour` are
-`observed` from edit mode only and still need `--experimental`).
+and edit mode alike; the confidence of each row is unchanged. Block switches and `led_colour` are
+`observed` (edit mode in spec 003, then once in normal mode in spec 004 gate session A: MOD on lit
+the MOD LED, `ff 00 00` turned the preset LED red; not repeated) and still need `--experimental`.
 
 ### Pedal state (spec 004, fw 96)
 
@@ -586,7 +587,8 @@ and in edit mode with `--discard-edits`; nothing in tuner, bypass or an unrecogn
 (refusal reasons `tuner_mode`, `bypassed`, `unrecognised_state`). `preset reload` is the confirmed
 preset-select write for the loaded slot, sent only when the buffer differs from the stored preset.
 
-Bypass and loopback (openvave, spec 004 M1, both `hypothesis`, so `--experimental`): `bypass on`
+Bypass and loopback (openvave, spec 004 M1; since the gate sessions `bypass` is `confirmed` and
+runs without `--experimental` on fw 96, `loopback` is `observed` and still needs it): `bypass on`
 only in normal mode with a loaded slot (refused in edit mode `edit_mode`, tuner, unrecognised;
 with unsaved edits it needs `--discard-edits`, reason `edits_would_be_discarded`), sends `01` to
 `0xE1000000 + i` for the loaded `i` and is applied when a re-read shows slot `ff` and a zero
@@ -629,16 +631,64 @@ tested.
 - ~~Correlate `0x10000004` byte positions with specific knobs~~ done (2026-11-16): preset 4–17
   are the 14 front-panel knobs, preset 0–3 the block switches (see the byte map). The app's
   14-byte write to `0x10000004` therefore carries every knob of the preset at once.
-- Preset 18–20 and the status byte now have app-code hypotheses (LED colour; loopback flag).
-  Still unknown: the meaning of the header `a5 5a`; the names of the 9 amp types and 9 IR
-  cabs; non-zero write status codes; whether an uncommitted stored-area write persists.
 - ~~Read-only hardware check of the storage layout~~ done (2026-11-17): header, 36 single reads
   and the 758-byte image read all confirmed (see Storage layout).
-- Answered from app code (hypothesis until replayed): `0xE0000000 + i` loads stored preset `i`;
-  stored presets are at `2 + 21·i`; saving is an empty write to `0xF0000000`. Still open for the
-  write spec: does writing the edit buffer move the stored value or only the sound while the
-  knobs keep their physical positions (see "Edit buffer vs knob position")? ~~Does a host write
-  need edit mode (global 3 = `0`)?~~ No: applied in normal mode, mode stays `1` (2026-11-17).
+- ~~Does a host write need edit mode (global 3 = `0`)?~~ No: applied in normal mode, mode stays
+  `1` (check 1, 2026-11-17, confirmed over two connections).
+- ~~Preset 18–20 = LED colour?~~ Yes in normal mode (spec 004 gate session A, 2026-11-18: `ff 00 00`
+  turned the preset LED red); the row stays `observed` (one session).
+- ~~Status byte = loopback flag?~~ Yes: `01` mixes the pedal's Bluetooth audio into the USB
+  recording, `00` leaves it out; it survives a power cycle without a commit (gate session A and
+  the owner's follow-up test, 2026-11-18; row `observed`).
+
+**Closed by spec 004 (0.4.0, fw 96, gate sessions A and B on 2026-11-18):**
+
+- ~~Remote edit in normal mode~~: `openvave set` (one field or `FIELD=VALUE …` over one connection)
+  writes the edit buffer in normal and edit mode; refused in tuner, bypass and unrecognised states.
+- ~~Reload / discard~~: `openvave preset reload` re-selects the loaded preset (the confirmed select)
+  and verifies buffer = stored preset.
+- ~~Bypass~~: `bypass(i)` → `confirmed` (sessions A on 1B and B on 1A); `openvave bypass on`,
+  `bypass off <position>`, no `--experimental` on fw 96.
+- ~~Loopback~~: `openvave loopback on|off` implemented; the row is `observed` (session A only), so
+  it still needs `--experimental`.
+- ~~Save~~: `stored_slot(i)` and `commit` → `confirmed` (saves to 1C and 1D, each kept across a
+  power cycle and restored); `openvave preset save [--to POS] --unsafe`, automatic backup first.
+- ~~Restore one slot / all~~: `stored_image` → `confirmed` (the 773-byte request, 5 Bluetooth
+  writes at MTU 185, one ACK; restore all kept across a power cycle in both sessions);
+  `openvave preset restore FILE (--slot POS | --all) --unsafe`. The slot-by-slot fallback of
+  research R11 was not needed.
+- ~~Pedal state~~: `classify` / `TankG.state()` report normal, edit, tuner, bypass (confirmed by a
+  second read) and unrecognised; `info`, `preset dump` and `watch` print it.
+
+**Still open:**
+
+- Rows still `observed` and behind `--experimental`: `loopback`, the four `block_switch(k)` rows
+  and `led_colour` (their normal-mode repeats in session B were optional and not run). Each needs a
+  second, independent gate session to reach `confirmed`.
+- Is the commit required? A stored-slot write **without** `0xF0000000`, then a power cycle (T080a,
+  not run). openvave always commits, so no feature depends on the answer.
+- What happens when a pedal knob is turned after a remote write ("Edit buffer vs knob position";
+  T080b, not run).
+- Source of the short mute during save / restore (slot write, commit or select; not separated).
+- **Unexplained preset changes**: three times during the gate sessions the pedal was found on
+  another preset than the last command left it (1B → 1A, 1A → 1B, 2D → 1B) with nothing written in
+  between, no footswitch and the app not connected (tasks.md T077, T078, T087). The power-on preset
+  also varied (check 4: the last selected 1C; session A: 1A; session B: 1B). openvave re-reads the state
+  before every write, so no write went to the wrong slot; the cause is unknown.
+- Device info bytes `0x14–0x1F` (type 5) change at runtime and seem to mirror the last selected or
+  written preset; meaning unknown (noted only, T074).
+- Edit mode from the computer: entering or leaving it by a write is unknown and not needed (the app
+  never does it; writing global 3 stays forbidden).
+- App flows not implemented: import / export of single `.tkg` presets, swap presets, and factory
+  restore (vendor image, out of scope). An openvave backup + `preset restore` covers import all.
+- Bypass details not tried: `0xE1000000 + j` for a preset other than the loaded one, data `00`,
+  edit-buffer writes while bypassed, leaving bypass from the footswitches.
+- Other firmware than 96 (every row is listed for fw 96 only), other ATT MTUs for the chunked
+  image write, and non-zero write status codes (no NAK seen yet).
+- Still unknown from earlier: the meaning of the header `a5 5a`; the names of the 9 amp types and
+  9 IR cabs. Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair.
+- The automatic backup defaults to the current directory, which may be a git working tree
+  (observed in every gate step; follow-up: a git-ignored default or a warning).
 
 ### Host observations (from the 001 milestone gates)
 

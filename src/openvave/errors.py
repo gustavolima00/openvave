@@ -1,4 +1,4 @@
-"""Exception hierarchy. Each class maps 1:1 to a CLI exit code (contracts/cli.md)."""
+"""Exception hierarchy. Each class maps to one CLI exit code (``exit_code``, contracts/cli.md)."""
 
 from __future__ import annotations
 
@@ -64,8 +64,10 @@ class ProtocolError(OpenvaveError):
     """A frame or reply was malformed or did not match its request.
 
     ``reason`` is a stable code (``bad_marker``, ``length_mismatch``, ``bad_checksum``,
-    ``wrong_command``, ``echo_mismatch``, ``short_data``, ``bad_identity``); ``detail`` narrows it
-    where useful (e.g. which echo field mismatched).
+    ``wrong_command``, ``echo_mismatch``, ``short_data``, ``bad_identity``, ``backup_mismatch``
+    (a backup whose whole-image read differs from its single reads), and ``nak`` for
+    :class:`WriteNakError`); ``detail`` narrows it where useful (e.g. which echo field
+    mismatched).
     """
 
     exit_code = 7
@@ -97,10 +99,12 @@ class WriteRefusedError(UnsafeCommandError):
 
     ``reason`` is one of ``out_of_range``, ``untested_firmware``, ``experimental_required``,
     ``edits_would_be_discarded``, ``unknown_field``, and since spec 004 ``tuner_mode``,
-    ``bypassed``, ``unrecognised_state``, ``edit_mode`` (bypass, save or restore in edit mode),
-    ``not_bypassed`` (bypass off on a pedal that is not bypassed), ``unsafe_required`` (save or
-    restore without ``unsafe=True``) and ``firmware_mismatch`` (a backup file from another
-    firmware, without ``experimental=True``). ``not_edit_mode`` (0.3.0) is no longer raised.
+    ``bypassed``, ``unrecognised_state``, ``type_required`` (a typed knob given a position
+    without a type while it sits between two types), ``edit_mode`` (bypass on / off, save or
+    restore in edit mode), ``not_bypassed`` (bypass off on a pedal that is not bypassed),
+    ``unsafe_required`` (save or restore without ``unsafe=True``) and ``firmware_mismatch`` (a
+    backup file from another firmware, without ``experimental=True``). ``not_edit_mode`` (0.3.0)
+    is no longer raised.
     """
 
     exit_code = 1

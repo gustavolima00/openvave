@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0]
+
+Remote editing without edit mode, and the first release that can **change stored presets**:
+`set` now works in normal mode, `preset reload` discards edits, `bypass` and `loopback` toggle
+volatile state, and `preset save` / `preset restore` write stored presets behind `--unsafe` and
+an automatic, verified backup. Every new message was first sent by openvave on the owner's pedal
+(fw 96) in two gate sessions, with a backup before and after each step.
+
 ### Added
 
 - **Several fields over one connection**: `openvave set gain=95 treble=58 reverb_decay=room:18
@@ -58,7 +66,8 @@ All notable changes to this project are documented here. The format follows
   write to `2 + 21·i` (21 bytes), read back (a mismatch stops before the commit), 300 ms, the
   empty commit write to `0xF0000000`, 100 ms, select, then verifies stored slot, position and
   buffer. Nothing to save: `1C already holds this sound; nothing sent`. Library:
-  `TankG.plan_save(to)` / `save_preset(to, unsafe=True, on_backup=…)`.
+  `TankG.plan_save(to)` / `save_preset(to, unsafe=True, on_backup=…)`. The slot write and the
+  commit are `confirmed` on fw 96 (gate sessions A and B).
 - **Restore** (UNSAFE): `openvave preset restore FILE (--slot POSITION | --all)
   --unsafe` writes back an openvave backup file, checked before connecting
   (`openvave.backup.restore_problems`). `--slot` uses the save sequence with the file's bytes;
@@ -66,7 +75,8 @@ All notable changes to this project are documented here. The format follows
   writes by the transport), commits, selects the preset that was loaded and verifies with a full
   read. Lists the slots that differ; nothing differs → nothing sent. A file from another firmware
   needs `--experimental` (`firmware_mismatch`); unsaved edits need `--discard-edits`. Library:
-  `TankG.plan_restore(backup, slot=i | all=True)` / `restore(...)`.
+  `TankG.plan_restore(backup, slot=i | all=True)` / `restore(...)`. The slot write, the image
+  write and the commit are `confirmed` on fw 96 (gate sessions A and B).
 - Both take an **automatic backup** before the first write
   (`tankg-backup-<time>-before-save|restore.json` in `--backup-dir`, never overwriting) and stop
   if it fails its cross-check or cannot be written. A failure mid-sequence prints every step

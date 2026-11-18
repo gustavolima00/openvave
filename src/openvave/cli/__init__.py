@@ -219,15 +219,15 @@ def _parser() -> argparse.ArgumentParser:
     bypass = sub.add_parser(
         "bypass",
         parents=[common],
-        help="bypass the pedal (all blocks off) or leave bypass; experimental, not saved",
+        help="bypass the pedal (all blocks off) or leave bypass; not saved",
     )
     bypass_sub = bypass.add_subparsers(dest="action", metavar="ACTION", required=True)
     bypass_on = bypass_sub.add_parser(
         "on",
         parents=[common],
         help="bypass the pedal with the loaded preset (normal mode only)",
-        description="Sends 01 to 0xE1000000 + i for the loaded preset i. Experimental: the "
-        "message is not confirmed yet. Prints the command that leaves bypass.",
+        description="Sends 01 to 0xE1000000 + i for the loaded preset i (confirmed on fw 96). "
+        "Prints the command that leaves bypass.",
     )
     _write_options(bypass_on)
     bypass_on.add_argument(
@@ -251,7 +251,8 @@ def _parser() -> argparse.ArgumentParser:
         parents=[common],
         help="switch the loopback flag (status byte 0xD0000000); experimental",
         description="Reads the flag, writes 01 (on) or 00 (off), re-reads. Never followed by a "
-        "commit. What loopback does on the Tank-G is not observed yet.",
+        "commit. Observed on fw 96: on mixes the pedal's Bluetooth audio into the USB "
+        "recording, off leaves it out; the flag persists across a power cycle.",
     )
     loopback.add_argument("state", choices=("on", "off"), help="on or off")
     _write_options(loopback)
@@ -283,7 +284,8 @@ def _parser() -> argparse.ArgumentParser:
         dest="knob_type",
         metavar="TYPE",
         default=None,
-        help="type of a typed knob (reverb_decay: room, spring, cloud)",
+        help="type of a typed knob (reverb_decay: room, spring, cloud; "
+        "mod_fx: chorus, phaser, tremolo; delay_mix: analog, tape, dual)",
     )
     set_parser.add_argument(
         "--raw", action="store_true", help="for a typed knob: the value is the raw byte 0–127"

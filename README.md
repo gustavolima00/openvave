@@ -13,12 +13,14 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 ## Status
 
-Version 0.3.0 identifies a connected pedal, decodes every byte of the current preset and global
-settings that is understood (all but 4 of 26), **backs up** the 36 stored presets, and makes its
-first **writes**: one field of the current preset in the edit buffer, or a preset select. The
-development version adds `preset save` and `preset restore`: openvave changes stored presets
-**only** through those two commands, only with `--unsafe`, and always after an automatic, verified
-backup; every other write is volatile. Every write openvave can send is listed, with its evidence, under "Write messages" in
+Version 0.4.0 identifies a connected pedal, decodes every byte of the current preset and global
+settings that is understood (all but 4 of 26) and **backs up** the 36 stored presets. It edits the
+current preset **remotely in normal mode**, as the phone app does (one field, or several over one
+connection), discards those edits with `preset reload`, selects presets, switches **bypass** and
+(experimental) **loopback**, and is the first release that can **change stored presets**:
+`preset save` and `preset restore`. openvave changes stored presets **only** through those two
+commands, only with `--unsafe`, and always after an automatic, verified backup; every other write
+is volatile (see [Safety](#safety)). Every write openvave can send is listed, with its evidence, under "Write messages" in
 [`command-layer.md`](specs/protocol/command-layer.md); nothing else can be encoded. Protocol notes
 live in [`specs/protocol/`](specs/protocol/); feature specs are driven by
 [Spec Kit](https://github.com/github/spec-kit).
@@ -193,7 +195,7 @@ Set gain 60 → 90   (current preset 1B, normal mode)
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 76
   reply  00 59 00 01 00 00 00 ff   ACK
   after  [6] gain 90   applied
-Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 ```
 
 The reverb decay knob runs through three reverb types, **room**, **spring** and **cloud** (as the
@@ -206,7 +208,7 @@ Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 35 04 07 64
   reply  00 59 00 01 00 00 00 ff   ACK
   after  [15] reverb_decay 53 (spring 10)   applied
-Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 ```
 
 Without `--type` the preset keeps its current type (`set reverb_decay 20` on a room preset is
@@ -242,7 +244,7 @@ Set 5 fields   (current preset 1B, normal mode)
          [18] 32
          [19] 64
          [20] 255
-Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 ```
 
 - All knob fields travel in **one** knob-block write, rebuilt from the edit-buffer read just
@@ -253,7 +255,7 @@ Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 - The whole batch is refused, with nothing sent, if any field would be refused (out of range,
   `--experimental` missing for the block switches or the LED colour, tuner mode, bypass …).
   `--dry-run` prints every frame and the refusal; `--json` prints one document
-  (`set-fields-result.schema.json`).
+  ([`set-fields-result.schema.json`](specs/004-remote-edit-save-restore/contracts/set-fields-result.schema.json)).
 - If something fails mid-batch (NAK, lost connection, a write the re-read does not show), the
   rest is not sent, nothing is retried, and openvave lists each field as `applied`, `unknown`,
   `not applied` or `not sent`; `openvave preset reload` discards what was applied.
@@ -295,24 +297,24 @@ Every write is checked: after the pedal's ACK, openvave reads the pedal again an
 `applied` only if the change is there. A NAK (exit 7) or a write that did not apply (exit 8) is
 reported with the raw bytes and is never retried.
 
-**`--experimental`.** A write runs by default only when its message is `confirmed` (seen the same
-way in two independent sessions on the pedal) and the firmware is 96. Today that is the knob
-block (every knob and selector) and preset select. The block switches and `led_colour` are
-`observed` (one session) and need `--experimental`, as does any write on other firmware. Whether
-`led_colour` changes the preset's LED has not been seen yet: the bytes it writes are documented as
-a hypothesis.
+The knob block (every knob and selector) and preset select are `confirmed` and run by default on
+firmware 96. The block switches (`amp_on`, `mod_on`, `delay_on`, `reverb_on`) and `led_colour`
+are still `observed` and need `--experimental` (see [Safety](#safety)). Whether `led_colour`
+changes the preset's LED has not been seen yet: the bytes it writes are documented as a
+hypothesis.
 
-### Bypass and loopback (experimental): `openvave bypass`, `openvave loopback`
+### Bypass and loopback: `openvave bypass`, `openvave loopback`
 
 `bypass on` turns the whole pedal off (clean sound, LEDs off), as the app's BYPASS button does;
 `bypass off <position>` leaves bypass by selecting that preset. While bypassed the pedal does not
 report which slot was loaded, so `bypass on` prints the command to come back, and `bypass off`
-needs the position. Both messages are not confirmed on the pedal by openvave yet, so `bypass on`
-needs `--experimental` (`bypass off` is the confirmed preset select). `bypass on` works in normal
-mode only; with unsaved edits it needs `--discard-edits`.
+needs the position (without one it exits 2 and names the bank the pedal reports). The bypass
+message is `confirmed` on firmware 96 and `bypass off` is the confirmed preset select, so neither
+needs `--experimental`. `bypass on` works in normal mode only; with unsaved edits it needs
+`--discard-edits`. `bypass off` is refused when the pedal is not bypassed (use `preset select`).
 
 ```text
-$ openvave bypass on --experimental
+$ openvave bypass on
 Bypass on   (was 1B, normal mode)
   write  00 59 22 09 00 00 04 01 00 00 e1 01 00 00 01 17
   reply  00 59 00 01 00 00 00 ff   ACK
@@ -320,29 +322,35 @@ Bypass on   (was 1B, normal mode)
 Leave bypass: openvave bypass off 1B
 ```
 
-`loopback on|off` switches the status byte the app calls Loopback (`0xD0000000`, `01` in every
-session so far). What it does on the Tank-G, and whether it survives a power cycle, is not known
-yet, so it needs `--experimental`. It reads the flag, writes one byte, reads it back, and is never
-followed by a commit; an equal value sends nothing (`loopback is already on; nothing sent`).
+`loopback on|off` (**experimental**) switches the status byte the app calls Loopback
+(`0xD0000000`). Seen in one session so far (`observed`), so it needs `--experimental`: `on` mixes
+the pedal's Bluetooth audio (for example a phone backing track) into the USB recording, `off`
+leaves it out (you still hear it), and the flag persists across a power cycle. It reads the flag,
+writes one byte, reads it back, and is never followed by a commit; an equal value sends nothing
+(`loopback is already on; nothing sent`). `openvave loopback off --experimental --dry-run` shows
+the frame (`00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a`) and sends nothing.
 
-Neither command saves anything. Both support `--dry-run`, `--json` and `--trace`.
+Neither command touches stored presets. Both support `--dry-run`, `--json` and `--trace`.
 
 ### Saving and restoring stored presets (UNSAFE): `openvave preset save`, `openvave preset restore`
 
 These are the only commands that change **stored** presets. Both need `--unsafe` ("I accept that a
-stored preset is overwritten"), and while their messages are not yet confirmed by this project's
-own gate sessions they also need `--experimental`. Before the first write each one takes a full
+stored preset is overwritten"). Their messages (stored slot, commit, stored image) are `confirmed`
+on firmware 96, so they do not need `--experimental` there; `--experimental` never replaces
+`--unsafe`. Before the first write each one takes a full
 backup (the same reads and cross-check as `preset backup`) and saves it as
 `tankg-backup-<date>-<time>-before-save.json` (or `-before-restore`) in `--backup-dir` (default:
 the current directory; an existing file is never overwritten). If the backup fails, nothing is
 written. There is no option to skip it.
 
-`preset save [--to POSITION]` stores the current sound (the edit buffer) in the loaded slot, or in
-`--to`. Normal mode only. The sequence is the phone app's: slot write, read the slot back (a
-mismatch stops before the commit), 300 ms, commit, 100 ms, select, verify.
+`preset save [--to POSITION] --unsafe` stores the current sound (the edit buffer) in the loaded
+slot, or in `--to`. Normal mode only. The sequence is the phone app's: slot write, read the slot
+back (a mismatch stops before the commit), 300 ms, commit, 100 ms, select, verify. If the slot
+already holds the sound, nothing is sent and no backup is taken
+(`1C already holds this sound; nothing sent`).
 
 ```text
-$ openvave preset save --to 1C --unsafe --experimental
+$ openvave preset save --to 1C --unsafe
 Save current sound to 1C (index 2)   UNSAFE: overwrites a stored preset
   [6] gain 60 → 90
 Backup saved: tankg-backup-20261118-101500-before-save.json
@@ -355,13 +363,27 @@ A power loss during the next second has an unknown outcome.
   verify stored 1C = written bytes, pedal on 1C, buffer = stored   saved
 ```
 
-`preset restore FILE (--slot POSITION | --all)` writes back an openvave backup file. The file is
-checked before connecting (format version, 36 presets of 21 bytes, positions, header `a5 5a`,
-image = header + presets); a file from another firmware needs `--experimental`. It lists the slots
+`preset restore FILE (--slot POSITION | --all) --unsafe` writes back an openvave backup file. The
+file is checked before connecting (format version, 36 presets of 21 bytes, positions, header
+`a5 5a`, image = header + presets; an invalid file exits 2); a file from another firmware needs
+`--experimental`. It lists the slots
 that differ and sends nothing when none does. `--slot` uses the save sequence with the file's
 bytes; `--all` writes the whole 758-byte image in one message, commits, selects the preset that
 was loaded and compares a full read with the file. Every restore ends with a select, so unsaved
 edits need `--discard-edits`.
+
+```text
+$ openvave preset restore backup-a.json --all --unsafe
+Restore all presets from backup-a.json   UNSAFE: overwrites stored presets
+  differ: 1C 3B 9D (3 of 36)
+Backup saved: ./tankg-backup-20261118-102000-before-restore.json
+  write  00 59 22 fe 02 00 04 00 00 00 00 f6 02 00 a5 5a …(758 bytes)… xx   ACK   (773 bytes)
+  wait   300 ms
+  write  00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b   ACK   (commit)
+  wait   100 ms
+  write  …   ACK   (select 1B)
+  verify 36 of 36 presets and header equal backup-a.json   restored
+```
 
 The mute you may hear during the commit comes from the pedal. A power loss during the write has an
 unknown outcome. Nothing is ever retried: if a step fails, the command lists every step
@@ -369,14 +391,50 @@ unknown outcome. Nothing is ever retried: if a step fails, the command lists eve
 two recovery commands (`openvave preset backup`, `openvave preset restore <automatic backup>
 --all --unsafe`). `--dry-run` prints every frame (the image in full) and takes no backup.
 
+### Safety
+
+openvave only sends a write it can encode from its documented list ("Write messages" in
+[`command-layer.md`](specs/protocol/command-layer.md)), and every write command takes two
+separate opt-ins:
+
+- **`--experimental`**: needed for a message that is not yet `confirmed` (seen the same way in two
+  independent sessions on the pedal), and for any write on firmware other than 96 (or a restore
+  file from another firmware). It never implies `--unsafe`.
+- **`--unsafe`**: required by every command that changes stored presets (`preset save`,
+  `preset restore`), whatever the confidence. Nothing else changes a stored preset: `set`,
+  `preset select`, `preset reload`, `bypass` and `loopback` are volatile, and `--experimental`
+  never unlocks a persistent write.
+
+Confidence of the write messages on firmware 96:
+
+| Message | Used by | Confidence |
+|---|---|---|
+| knob block, preset select | `set` (knobs, selectors), `preset select`, `preset reload`, `bypass off` | `confirmed` |
+| bypass | `bypass on` | `confirmed` |
+| stored slot, commit, stored image | `preset save`, `preset restore` (also need `--unsafe`) | `confirmed` |
+| block switches, LED colour | `set amp_on` / `mod_on` / `delay_on` / `reverb_on`, `set led_colour` | `observed` (needs `--experimental`) |
+| loopback | `loopback on`, `loopback off` | `observed` (needs `--experimental`) |
+
+Before the first write, `preset save` and `preset restore` take an automatic, verified backup in
+`--backup-dir` and stop if it fails; it cannot be skipped. Every write is acknowledged and
+verified by a re-read, and **nothing is ever retried**: a NAK, a lost connection or a write that
+did not apply stops the command and reports what was sent. Use `--dry-run` first: it does the
+reads, prints every frame, and sends no write.
+
+openvave never sends: the erase command (`0x21`), writes to the global block
+(`0x20000000`–`0x20000003`, including the mode byte: it never enters or leaves edit mode), the
+app's whole-edit-buffer write, factory restore images, or a firmware update. None of these can be
+encoded.
+
 ### Options
 
 `--json`, `--device ID`, `--scan-timeout SECONDS` (default 5: the most a scan waits; it stops 1 s
 after the pedal is seen, or at once with `--device`), `--timeout SECONDS` (default 2)
 and `--trace` (hex of every frame on stderr) work on every command, before or after it. The full
 list is in [the CLI contract](specs/001-readonly-ble-connection/contracts/cli.md) and its
-[0.2.0](specs/002-preset-byte-map/contracts/cli.md) and
-[0.3.0](specs/003-preset-backup-edit-writes/contracts/cli.md) additions.
+[0.2.0](specs/002-preset-byte-map/contracts/cli.md),
+[0.3.0](specs/003-preset-backup-edit-writes/contracts/cli.md) and
+[0.4.0](specs/004-remote-edit-save-restore/contracts/cli.md) additions.
 
 ### JSON output
 
@@ -386,8 +444,9 @@ Schemas: [`info`](specs/001-readonly-ble-connection/contracts/info.schema.json),
 [`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), each
 decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json),
 [`preset backup`](specs/003-preset-backup-edit-writes/contracts/backup.schema.json) and the
-[`set` / `preset select` / `preset reload` / `bypass` / `loopback` result](specs/004-remote-edit-save-restore/contracts/write-result.schema.json)
-and the [`preset save` / `preset restore` result](specs/004-remote-edit-save-restore/contracts/sequence-result.schema.json)
+[`set` / `preset select` / `preset reload` / `bypass` / `loopback` result](specs/004-remote-edit-save-restore/contracts/write-result.schema.json),
+the [`set FIELD=VALUE ...` result](specs/004-remote-edit-save-restore/contracts/set-fields-result.schema.json)
+(also printed when a batch stops midway) and the [`preset save` / `preset restore` result](specs/004-remote-edit-save-restore/contracts/sequence-result.schema.json)
 (a save or restore that stops mid-sequence still prints its document, with every step's status).
 `info` and `preset dump` add a top-level `pedal_state` (`normal`, `edit`, `tuner`, `bypass`,
 `loading`, `unrecognised`), and so do `watch --json` start and change events. Bytes
@@ -409,7 +468,8 @@ found · `4` more than one pedal (use `--device`) · `5` Bluetooth unavailable o
 `6` connection lost or timed out · `7` protocol error, NAK or backup cross-check mismatch · `8`
 write acknowledged but not applied. Details in the
 [CLI contract](specs/001-readonly-ble-connection/contracts/cli.md#exit-codes) and its
-[0.3.0 additions](specs/003-preset-backup-edit-writes/contracts/cli.md#exit-codes-additions).
+[0.3.0 additions](specs/003-preset-backup-edit-writes/contracts/cli.md#exit-codes-additions)
+(0.4.0 adds no new code: [spec 004 CLI contract](specs/004-remote-edit-save-restore/contracts/cli.md#exit-codes-no-new-code)).
 
 ### Library
 
@@ -431,7 +491,7 @@ asyncio.run(main())
 ```
 
 `TankG.watch()` yields the same events as `openvave watch`; `backup()`, `plan_set()` /
-`set_field()`, `plan_select()` / `select_preset()`, `plan_reload()` / `reload_preset()`,
+`set_field()`, `plan_set_fields()` / `set_fields()`, `plan_select()` / `select_preset()`, `plan_reload()` / `reload_preset()`,
 `plan_bypass_on()` / `bypass_on()` (its result's `return_index` is the preset to return to),
 `plan_bypass_off(i)` / `bypass_off(i)`, `plan_loopback(on)` / `set_loopback(on)`, `plan_save()` /
 `save_preset()` and `plan_restore(backup, slot=i | all=True)` / `restore()` do what the matching
@@ -439,8 +499,9 @@ commands do (writes take `experimental=True` where the CLI needs `--experimental
 take `unsafe=True` and a required `on_backup` callback that receives the automatic backup before
 the first write). See the
 library contracts ([0.1.0](specs/001-readonly-ble-connection/contracts/library-api.md),
-[0.2.0](specs/002-preset-byte-map/contracts/library-api.md) and
-[0.3.0](specs/003-preset-backup-edit-writes/contracts/library-api.md) additions), including how to
+[0.2.0](specs/002-preset-byte-map/contracts/library-api.md),
+[0.3.0](specs/003-preset-backup-edit-writes/contracts/library-api.md) and
+[0.4.0](specs/004-remote-edit-save-restore/contracts/library-api.md) additions), including how to
 test against `FakeTransport` without a pedal.
 
 ## Development
