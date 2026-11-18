@@ -51,6 +51,11 @@ CONTRACT_EXPORTS = {
     "SequenceStep",
     "SequenceResult",
     "StepOutcome",
+    "FieldEdit",  # batch set
+    "EditWrite",
+    "EditPlan",
+    "EditWriteOutcome",
+    "EditResult",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -90,6 +95,11 @@ DATACLASSES = (
     "SequenceStep",
     "SequenceResult",
     "StepOutcome",
+    "FieldEdit",
+    "EditWrite",
+    "EditPlan",
+    "EditWriteOutcome",
+    "EditResult",
 )
 FORBIDDEN = ("write", "erase", "address", "commit", "raw")
 """No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""
@@ -110,6 +120,8 @@ WRITE_ACTIONS = {
     "save_preset",
     "plan_restore",
     "restore",
+    "plan_set_fields",  # batch set: several fields over one session
+    "set_fields",
 }
 
 

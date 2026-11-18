@@ -13,6 +13,11 @@ Writes (spec 003) go through one guarded path: :meth:`~TankG.set_field` and
 passes, send at most one allowlisted ``0x22`` frame, check the ACK and re-read to verify. A write
 is never retried.
 
+:meth:`~TankG.set_fields` changes several fields over the same session (batch edit): one pair of
+reads, then the knob block (every knob field in one frame, rebuilt from that read), the block
+switches and the LED colour, each acknowledged and verified by a re-read before the next is sent.
+The whole batch is refused before anything is sent if any field would be refused.
+
 Persistent writes (spec 004) have one path only: :meth:`~TankG.save_preset` and
 :meth:`~TankG.restore` run a fixed :class:`~openvave.models.SequencePlan` through the sequence
 runner, which refuses without ``unsafe=True``, takes and hands over a full backup before the first
@@ -25,7 +30,7 @@ import asyncio
 import inspect
 import logging
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from types import TracebackType
 
@@ -35,6 +40,7 @@ from openvave.errors import (
     OpenvaveError,
     ProtocolError,
     RequestTimeoutError,
+    WriteNakError,
     WriteNotAppliedError,
     WriteRefusedError,
 )
@@ -44,6 +50,12 @@ from openvave.models import (
     DeviceIdentity,
     DeviceInfo,
     DeviceSnapshot,
+    EditPlan,
+    EditResult,
+    EditWrite,
+    EditWriteOutcome,
+    FieldEdit,
+    FieldStatus,
     PedalState,
     Region,
     RegionRead,
@@ -86,6 +98,9 @@ from openvave.protocol.storage import (
     position,
 )
 from openvave.protocol.writes import (
+    EDIT_BUFFER,
+    KNOB_COUNT,
+    KNOB_FIRST,
     LED_LENGTH,
     WRITABLE_FIELDS,
     WritableField,
@@ -417,6 +432,188 @@ class TankG:
         else:
             applied = after.data[spec.offset : spec.offset + len(wanted)] == wanted
         return self._finish(plan, reply, after, glob, applied)
+
+    async def plan_set_fields(
+        self,
+        changes: Mapping[str, FieldValue] | Iterable[tuple[str, FieldValue]],
+        *,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> EditPlan:
+        """Plan a change of several fields of the edit buffer: reads global and the edit buffer
+        once, sends nothing.
+
+        ``changes`` maps field names to values as :meth:`set_field` takes them (a mapping, or
+        ``(field, value)`` pairs). Knob fields share **one** knob-block frame rebuilt from the
+        edit-buffer read; each block switch and the LED colour get their own frame. Fields that
+        already hold their value add nothing. ``plan.refusal`` is the first refusal in request
+        order (state refusals first); a refused batch sends nothing. Raises
+        :class:`WriteRefusedError` (``unknown_field``) and :class:`ValueError` (wrong type or
+        syntax, a field given twice, no field at all) before any read.
+        """
+        requests = _edit_requests(changes)
+        state, glob, buffer, reads = await self._read_state(sleep)
+        data = buffer.data
+        resolved: list[tuple[WritableField, bytes | None, str | None]] = []
+        for spec, typed, wanted in requests:
+            refusal = None
+            if typed is not None and typed[0] is None:
+                current_type, _ = type_parts(spec.name, data[spec.offset])
+                if current_type is None:
+                    refusal = "type_required"
+                else:
+                    wanted = _field_bytes(spec, type_raw(spec.name, current_type, typed[1]))
+            if wanted is None and refusal is None:
+                refusal = "out_of_range"
+            resolved.append((spec, wanted, refusal))
+
+        def changed(spec: WritableField, wanted: bytes | None) -> bool:
+            return wanted is not None and data[spec.offset : spec.offset + len(wanted)] != wanted
+
+        writes: list[EditWrite] = []
+        knobs = [(s, w) for s, w, _ in resolved if s.kind == "knob_block" and changed(s, w)]
+        if knobs:
+            block = bytearray(data[KNOB_FIRST : KNOB_FIRST + KNOB_COUNT])
+            for spec, wanted in knobs:
+                assert wanted is not None
+                block[spec.offset - KNOB_FIRST] = wanted[0]
+            writes.append(_edit_frame(WriteTarget.knob_block(), bytes(block), knobs))
+        others = sorted(
+            ((s, w) for s, w, _ in resolved if s.kind != "knob_block" and changed(s, w)),
+            key=lambda item: item[0].offset,
+        )
+        for spec, wanted in others:
+            assert wanted is not None
+            writes.append(_edit_frame(spec.target(), wanted, [(spec, wanted)]))
+        gates = {w.target: self._gate(w.target, experimental) for w in writes}
+
+        state_refusal = STATE_REFUSALS.get(state.kind)
+        fields: list[FieldEdit] = []
+        for spec, wanted, refusal in resolved:
+            size = len(wanted) if wanted else (LED_LENGTH if spec.kind == "led_colour" else 1)
+            current = data[spec.offset : spec.offset + size]
+            no_change = wanted is not None and current == wanted
+            if refusal is None and not no_change:
+                refusal = gates.get(spec.target())
+            fields.append(
+                FieldEdit(
+                    field=spec.name,
+                    target=spec.target(),
+                    offset=spec.offset,
+                    current=current,
+                    wanted=wanted or b"",
+                    no_change=no_change,
+                    refusal=state_refusal or refusal,
+                )
+            )
+        refused = next((f for f in fields if f.refusal is not None), None)
+        return EditPlan(
+            state=state,
+            fields=tuple(fields),
+            writes=tuple(writes),
+            reads=reads,
+            before=buffer,
+            global_before=glob,
+            refusal=refused.refusal if refused is not None else None,
+            refused_field=None if refused is None or state_refusal else refused.field,
+        )
+
+    async def set_fields(
+        self,
+        changes: Mapping[str, FieldValue] | Iterable[tuple[str, FieldValue]],
+        *,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> EditResult:
+        """Change several fields of the current preset in the edit buffer over this one session
+        (never saved).
+
+        Builds :meth:`plan_set_fields`'s plan and raises :class:`WriteRefusedError` if any
+        field refuses it (nothing is sent). Otherwise sends the plan's frames in order — the knob
+        block first, right after the edit-buffer read it was rebuilt from — and after each one
+        checks the ACK and re-reads the edit buffer before sending the next. Stops at the first
+        problem, without retrying: a NAK (:class:`WriteNakError`), a lost link or timeout, or a
+        re-read that does not show the write (:class:`WriteNotAppliedError`, ``result`` None).
+        The error carries the partial :class:`~openvave.models.EditResult` in ``.edit``: which
+        fields were applied, which are unknown and which were not sent. Nothing to change →
+        returns at once, nothing sent. ``experimental=True`` as for :meth:`set_field`.
+        """
+        plan = await self.plan_set_fields(changes, experimental=experimental, sleep=sleep)
+        if plan.refusal is not None:
+            text = self._edit_refusal_text(plan)
+            raise WriteRefusedError(plan.refusal, f"refused ({plan.refusal}): {text}")
+        status: dict[str, FieldStatus] = {
+            f.field: "unchanged" if f.no_change else "not_sent" for f in plan.fields
+        }
+        wanted = {f.field: f for f in plan.fields}
+        outcomes: list[EditWriteOutcome] = []
+        after: RegionRead | None = None
+
+        def result(glob: RegionRead | None = None) -> EditResult:
+            rest = tuple(EditWriteOutcome(w, "not_sent") for w in plan.writes[len(outcomes) :])
+            changes_ = (diff(plan.global_before, glob) if glob is not None else ()) + (
+                diff(plan.before, after) if after is not None else ()
+            )
+            return EditResult(
+                plan=plan,
+                writes=tuple(outcomes) + rest,
+                field_status=tuple((f.field, status[f.field]) for f in plan.fields),
+                after=after,
+                global_after=glob,
+                changes=changes_,
+            )
+
+        try:
+            for edit in plan.writes:
+                try:
+                    reply = await self._request(edit.frame)
+                    parse_write_reply(reply)
+                except OpenvaveError as err:
+                    nak = isinstance(err, WriteNakError)
+                    reply_ = err.reply if isinstance(err, WriteNakError) else b""
+                    outcomes.append(EditWriteOutcome(edit, "nak" if nak else "no_reply", reply_))
+                    status.update(dict.fromkeys(edit.fields, "unknown"))
+                    raise
+                outcomes.append(EditWriteOutcome(edit, "acked", reply))
+                status.update(dict.fromkeys(edit.fields, "unknown"))
+                after = await self.read(Region.CURRENT_PRESET)
+                start = edit.target.address - EDIT_BUFFER
+                applied = after.data[start : start + len(edit.data)] == edit.data
+                outcomes[-1] = EditWriteOutcome(edit, "acked", reply, applied)
+                for name in edit.fields:
+                    f = wanted[name]
+                    shown = after.data[f.offset : f.offset + len(f.wanted)] == f.wanted
+                    status[name] = "applied" if shown else "not_applied"
+                if not applied:
+                    names = ", ".join(n for n in edit.fields if status[n] == "not_applied")
+                    left = [n for n, s in status.items() if s == "not_sent"]
+                    tail = f"; not sent: {', '.join(left)}" if left else ""
+                    raise WriteNotAppliedError(
+                        None, f"set {names}: acknowledged but not applied (re-read differs){tail}"
+                    )
+            glob = await self.read(Region.GLOBAL)
+        except OpenvaveError as err:
+            if err.edit is None:
+                err.edit = result()
+            raise
+        return result(glob)
+
+    def _edit_refusal_text(self, plan: EditPlan) -> str:
+        reason = plan.refusal or ""
+        edit = next((f for f in plan.fields if f.field == plan.refused_field), None)
+        if edit is None:
+            return self._refusal_text(reason)
+        if reason == "experimental_required":
+            confidence = message_for(edit.target.kind, edit.target.argument).confidence
+            text = (
+                f"{edit.target.kind} is '{confidence}' in the protocol docs (Write messages); "
+                "pass --experimental (experimental=True) to send it"
+            )
+        elif reason == "out_of_range":
+            text = "value out of range for this field"
+        else:
+            text = self._refusal_text(reason)
+        return f"{edit.field}: {text}"
 
     async def plan_select(
         self, index: int, *, discard_edits: bool = False, experimental: bool = False
@@ -1492,6 +1689,47 @@ def _field_bytes(spec: WritableField, value: FieldValue) -> bytes | None:
         raise ValueError(f"{spec.name} takes an integer, got {value!r}")
     assert entry.min is not None and entry.max is not None
     return bytes([value]) if entry.min <= value <= entry.max else None
+
+
+def _edit_requests(
+    changes: Mapping[str, FieldValue] | Iterable[tuple[str, FieldValue]],
+) -> list[tuple[WritableField, tuple[str | None, int] | None, bytes | None]]:
+    """Check a batch edit before any I/O: ``(spec, typed value, wanted bytes)`` per field.
+
+    ``wanted`` is ``None`` when out of range or when the type is to be kept (resolved after the
+    read). Raises :class:`WriteRefusedError` (``unknown_field``) and :class:`ValueError`.
+    """
+    items = list(changes.items()) if isinstance(changes, Mapping) else list(changes)
+    if not items:
+        raise ValueError("set_fields needs at least one field")
+    seen: set[str] = set()
+    requests = []
+    for field, value in items:
+        if field in seen:
+            raise ValueError(f"{field} given twice")
+        seen.add(field)
+        spec = WRITABLE_FIELDS.get(field)
+        if spec is None:
+            valid = ", ".join(WRITABLE_FIELDS)
+            raise WriteRefusedError(
+                "unknown_field", f"unknown field {field!r}; writable fields: {valid}"
+            )
+        typed = _typed_value(spec, value)
+        keep_type = typed is not None and typed[0] is None
+        requests.append((spec, typed, None if keep_type else _field_bytes(spec, value)))
+    return requests
+
+
+def _edit_frame(
+    target: WriteTarget, data: bytes, fields: list[tuple[WritableField, bytes | None]]
+) -> EditWrite:
+    return EditWrite(
+        target=target,
+        data=data,
+        frame=build_write(target, data),
+        fields=tuple(spec.name for spec, _ in fields),
+        confidence=message_for(target.kind, target.argument).confidence,
+    )
 
 
 _ACTION_NAMES = {

@@ -32,6 +32,38 @@ Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode
 Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
 ```
 
+## `openvave set FIELD=VALUE [FIELD=VALUE ...]` (batch, one connection)
+
+- Positionals that all contain `=` select this form; `set FIELD VALUE` (no `=`) is the form above,
+  unchanged. A mix, a field given twice, an empty field or value, an unknown field or a bad value,
+  and `--type` / `--raw` in this form: usage error (exit 2), nothing sent, no connection.
+- Typed knobs (`mod_fx`, `delay_mix`, `reverb_decay`): `POSITION` (keep the current type),
+  `TYPE:POSITION` or `raw:N`.
+- One session: reads global and the edit buffer once; plans the knob block (every knob field in
+  **one** write, rebuilt from that read), then block switches 0–3, then the LED colour; fields
+  already at their value add nothing. All fields unchanged: `gain, amp_on already set; nothing
+  sent`.
+- Refusals as for one field, per write (`--experimental` for the `observed` block switch and LED
+  writes), checked for the whole batch before anything is sent: exit 1, the error names the first
+  refusing field (`refused (out_of_range): treble: …`).
+- Sends the writes in order; after each, checks the ACK and re-reads the edit buffer before the
+  next. Stops at the first NAK (exit 7), lost link / timeout (exit 6) or re-read that does not
+  show the write (exit 8); never retries. stderr then lists every field:
+
+```text
+error: write not acknowledged: reply 00 59 00 01 00 00 01 fe
+  gain          applied
+  treble        applied
+  reverb_decay  applied
+  delay_on      unknown (nak)
+  led_colour    not sent
+Nothing was retried. Applied fields are in the edit buffer, not saved. Discard: openvave preset reload
+```
+
+- `--json`: one document ([`set-fields-result.schema.json`](set-fields-result.schema.json)),
+  printed on success, for `--dry-run`, and on a failure mid-batch (`result.applied` false,
+  `result.fields` per field); a refusal keeps stdout empty as before.
+
 ## `openvave preset reload`
 
 ```text

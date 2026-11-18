@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Several fields over one connection**: `openvave set gain=95 treble=58 reverb_decay=room:18
+  delay_on=on led_colour=#2040ff --experimental`. One session reads the pedal once, sends every
+  knob field in a single knob-block write (rebuilt from that read), then each block switch and the
+  LED colour, and checks each write's ACK and re-read before the next. Typed knobs take
+  `POSITION`, `TYPE:POSITION` or `raw:N`. The batch is refused as a whole, with nothing sent, if
+  any field is; fields already set are skipped. `--dry-run` prints every frame; `--json` prints
+  a `set-fields-result.schema.json` document, also when the batch stops midway. A failure
+  mid-batch (NAK, lost link, re-read differs) stops without retrying and lists every field as
+  applied / unknown / not applied / not sent. The `set FIELD VALUE [--type | --raw]` form is
+  unchanged. Library: `TankG.plan_set_fields(changes)` / `set_fields(changes)`, new types
+  `EditPlan`, `EditWrite`, `FieldEdit`, `EditResult`, `EditWriteOutcome`, and
+  `OpenvaveError.edit` (the partial result on an error raised mid-batch).
+
 - `openvave preset reload [--discard-edits] [--dry-run]` / `TankG.reload_preset()` /
   `TankG.plan_reload()`: discards unsaved edits by selecting the loaded preset again (the
   confirmed preset-select write) and verifies the buffer equals the stored preset. Nothing is sent

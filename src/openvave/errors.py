@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from openvave.models import DeviceInfo, SequenceResult, WriteResult
+    from openvave.models import DeviceInfo, EditResult, SequenceResult, WriteResult
 
 
 class OpenvaveError(Exception):
@@ -15,10 +15,15 @@ class OpenvaveError(Exception):
     ``sequence`` is set on an error raised in the middle of ``save_preset`` / ``restore``: the
     partial :class:`~openvave.models.SequenceResult` (which steps were acknowledged, not sent or
     unanswered, and whether stored presets may have changed). ``None`` otherwise.
+
+    ``edit`` is set on an error raised in the middle of ``set_fields`` (a batch edit): the
+    partial :class:`~openvave.models.EditResult` saying which fields were applied, which are
+    unknown and which were not sent. ``None`` otherwise.
     """
 
     exit_code: ClassVar[int] = 1
     sequence: SequenceResult | None = None
+    edit: EditResult | None = None
 
 
 class NoDeviceFoundError(OpenvaveError):
@@ -122,7 +127,8 @@ class WriteNotAppliedError(OpenvaveError):
     """The write was acknowledged but the re-read does not show it (FR-012, exit code 8).
 
     ``result`` is the :class:`~openvave.models.WriteResult` with ``applied`` false; ``None`` when
-    a save/restore read-back failed, whose details are in ``sequence`` instead.
+    a save/restore read-back failed, whose details are in ``sequence`` instead, or a batch edit
+    stopped, whose details are in ``edit``.
     """
 
     exit_code = 8

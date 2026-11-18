@@ -12,6 +12,8 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         backup = await pedal.backup()                    # all 36 stored presets, verified
         plan = await pedal.plan_set("gain", 90)          # reads only: the exact write frame
         result = await pedal.set_field("gain", 90, experimental=True)   # edit buffer, unsaved
+        result = await pedal.set_fields({"gain": 95, "delay_on": True},  # several fields,
+                                        experimental=True)                # one session
         result = await pedal.select_preset(6, experimental=True)        # load stored 2C
         result = await pedal.save_preset(unsafe=True, experimental=True,  # PERSISTENT: backup
                                          on_backup=store)                 # first, then save
@@ -57,7 +59,12 @@ from openvave.models import (
     DeviceIdentity,
     DeviceInfo,
     DeviceSnapshot,
+    EditPlan,
+    EditResult,
+    EditWrite,
+    EditWriteOutcome,
     Encoding,
+    FieldEdit,
     PedalState,
     Region,
     RegionRead,
@@ -90,8 +97,13 @@ __all__ = [
     "DeviceIdentity",
     "DeviceInfo",
     "DeviceSnapshot",
+    "EditPlan",
+    "EditResult",
+    "EditWrite",
+    "EditWriteOutcome",
     "Encoding",
     "FakeTransport",
+    "FieldEdit",
     "HandshakeError",
     "MultipleDevicesError",
     "NoDeviceFoundError",
