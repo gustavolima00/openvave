@@ -216,6 +216,50 @@ room 20); `--raw 53` writes the raw byte 0–127. `preset dump` and `watch` show
 MOD FX and DLY MIX work the same way, with the manual's names: `set mod_fx 20 --type phaser`
 (chorus, phaser, tremolo) and `set delay_mix 30 --type tape` (analog, tape, dual).
 
+#### Several fields over one connection
+
+Each `openvave set` connects, reads, writes and disconnects, which takes seconds per field on a
+real pedal. To dial in a whole sound, give several `FIELD=VALUE` pairs to one `set`:
+
+```text
+$ openvave set gain=95 treble=58 reverb_decay=room:18 delay_on=on led_colour=#2040ff --experimental
+Set 5 fields   (current preset 1B, normal mode)
+  gain          60 → 95
+  treble        60 → 58
+  reverb_decay  5 (room 6) → 17 (room 18)
+  delay_on      off → on
+  led_colour    #431643 → #2040ff
+  write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 5f 3a 46 32 32 00 00 00 00 11 04 07 67   knob_block: gain, treble, reverb_decay
+  reply  00 59 00 01 00 00 00 ff   ACK   applied
+  write  00 59 22 09 00 00 04 02 00 00 10 01 00 00 01 e7   block_switch 2: delay_on
+  reply  00 59 00 01 00 00 00 ff   ACK   applied
+  write  00 59 22 0b 00 00 04 12 00 00 10 03 00 00 20 40 ff 77   led_colour: led_colour
+  reply  00 59 00 01 00 00 00 ff   ACK   applied
+  after  [2] delay_on on
+         [6] gain 95
+         [7] treble 58
+         [15] reverb_decay 17 (room 18)
+         [18] 32
+         [19] 64
+         [20] 255
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
+```
+
+- All knob fields travel in **one** knob-block write, rebuilt from the edit-buffer read just
+  before it; each block switch and the LED colour get their own write. Every write is
+  acknowledged and checked by a re-read before the next one goes out.
+- Typed knobs take `POSITION` (keep the current type), `TYPE:POSITION` (`reverb_decay=room:18`)
+  or `raw:N` (`reverb_decay=raw:53`). Fields already at their value are skipped.
+- The whole batch is refused, with nothing sent, if any field would be refused (out of range,
+  `--experimental` missing for the block switches or the LED colour, tuner mode, bypass …).
+  `--dry-run` prints every frame and the refusal; `--json` prints one document
+  (`set-fields-result.schema.json`).
+- If something fails mid-batch (NAK, lost connection, a write the re-read does not show), the
+  rest is not sent, nothing is retried, and openvave lists each field as `applied`, `unknown`,
+  `not applied` or `not sent`; `openvave preset reload` discards what was applied.
+- The library call is `await pedal.set_fields({"gain": 95, "reverb_decay": ("room", 18),
+  "delay_on": True}, experimental=True)` (`plan_set_fields` for the plan only).
+
 ```text
 $ openvave preset reload
 Reload 1B (index 1)   discards unsaved edits
@@ -227,7 +271,7 @@ Reload 1B (index 1)   discards unsaved edits
 `preset reload` sends nothing when there is nothing to discard. In edit mode it needs
 `--discard-edits` (the pedal's own unsaved edits are lost too).
 
-`set <field> <value>` changes one field of the current preset:
+`set <field> <value>` changes one field of the current preset (`set field=value ...` several):
 
 | Field | Value |
 |---|---|

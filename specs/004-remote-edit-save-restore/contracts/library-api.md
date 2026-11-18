@@ -68,7 +68,10 @@ from `save_preset` / `restore` carry `.sequence` (the partial `SequenceResult`).
   may be plain or coroutine functions.
 - `state`, `read`, `snapshot`, `watch`, `backup` and every `plan_*` send no write.
 - `set_field`, `reload_preset`, `bypass_on`, `bypass_off`, `set_loopback` send at most one write.
-  `save_preset` and `restore` send at most three, in the documented order.
+  `save_preset` and `restore` send at most three, in the documented order. `set_fields` sends
+  at most six (one knob block, up to four block switches, the LED colour), each verified by a
+  re-read before the next, and attaches the partial `EditResult` (`err.edit`) to an error raised
+  mid-batch.
 - No write is ever retried. No method writes the global block or changes the pedal's mode.
 - A frame longer than one Bluetooth write is split by the transport into consecutive chunks; the
   protocol layer always sees whole frames.

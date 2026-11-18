@@ -31,6 +31,8 @@ from openvave.errors import (
 from openvave.models import (
     Backup,
     DeviceInfo,
+    EditPlan,
+    EditResult,
     SequencePlan,
     SequenceResult,
     WritePlan,
@@ -257,17 +259,24 @@ def _parser() -> argparse.ArgumentParser:
     set_parser = sub.add_parser(
         "set",
         parents=[common],
-        help="change one field of the current preset (normal or edit mode; not saved)",
+        usage="openvave set FIELD VALUE [--type TYPE | --raw] [options]\n"
+        "       openvave set FIELD=VALUE [FIELD=VALUE ...] [options]",
+        help="change fields of the current preset (normal or edit mode; not saved)",
         description="Writable fields: " + ", ".join(WRITABLE_FIELDS) + ". Works in normal and "
         "edit mode. The change is not saved: 'openvave preset reload' discards it. "
         f"Knobs that run through types ({typed}) take a position 1–{REVERB_SECTION_STEPS} "
         "inside a type: 'set reverb_decay 12 --type room'; without --type the preset's current "
-        "type is kept; --raw writes the raw byte 0–127.",
+        "type is kept; --raw writes the raw byte 0–127. Several fields over one connection: "
+        "'set gain=95 treble=58 reverb_decay=room:18 delay_on=on led_colour=#2040ff' "
+        "(typed knobs take POSITION, TYPE:POSITION or raw:N); all knob fields go in one "
+        "knob-block write, and the whole batch is refused if any field is.",
     )
-    set_parser.add_argument("field", help="byte map field name, e.g. gain, mod_on, led_colour")
     set_parser.add_argument(
-        "value",
-        help="0–127, 0–8, on/off, #rrggbb / r,g,b; for a typed knob a position 1–40",
+        "assignments",
+        nargs="+",
+        metavar="FIELD VALUE | FIELD=VALUE",
+        help="a field and its value (0–127, 0–8, on/off, #rrggbb / r,g,b; a position 1–40 "
+        "for a typed knob), or one or more FIELD=VALUE",
     )
     set_parser.add_argument(
         "--type",
@@ -455,6 +464,44 @@ def parse_field_value(
     raise UsageError(f"{field} takes an integer {entry.min}–{entry.max}, got {text!r}")
 
 
+def parse_assignments(
+    texts: Sequence[str], knob_type: str | None, raw: bool
+) -> tuple[str, str] | list[tuple[str, FieldValue]]:
+    """``set`` positionals: ``(field, value)`` for ``set FIELD VALUE``, else the parsed
+    ``FIELD=VALUE`` pairs of a batch. :class:`UsageError` for anything else."""
+    if not any("=" in text for text in texts):
+        if len(texts) != 2:
+            raise UsageError("give FIELD VALUE, or one or more FIELD=VALUE")
+        return texts[0], texts[1]
+    if not all("=" in text for text in texts):
+        raise UsageError("mix of forms: give FIELD VALUE, or only FIELD=VALUE pairs")
+    if knob_type is not None or raw:
+        raise UsageError(
+            "--type / --raw apply to the FIELD VALUE form; in FIELD=VALUE write "
+            "TYPE:POSITION (reverb_decay=room:18) or raw:N (reverb_decay=raw:53)"
+        )
+    pairs: list[tuple[str, FieldValue]] = []
+    seen: set[str] = set()
+    for text in texts:
+        field, _, value = text.partition("=")
+        if not field or not value:
+            raise UsageError(f"expected FIELD=VALUE, got {text!r}")
+        if field in seen:
+            raise UsageError(f"{field} given twice")
+        seen.add(field)
+        if field in TYPED_FIELDS:
+            kind, colon, rest = value.partition(":")
+            if not colon:
+                pairs.append((field, parse_typed_value(field, value, None, False)))
+            elif kind.lower() == "raw":
+                pairs.append((field, parse_typed_value(field, rest, None, True)))
+            else:
+                pairs.append((field, parse_typed_value(field, rest, kind, False)))
+        else:
+            pairs.append((field, parse_field_value(field, value)))
+    return pairs
+
+
 def _render_write(
     args: argparse.Namespace,
     command: str,
@@ -511,6 +558,8 @@ async def _write(
 
 
 async def _set(args: argparse.Namespace, factory: TransportFactory) -> str:
+    if args.pairs is not None:
+        return await _set_fields(args, factory)
     field, value, experimental = args.field, args.parsed_value, args.experimental
     return await _write(
         args,
@@ -519,6 +568,43 @@ async def _set(args: argparse.Namespace, factory: TransportFactory) -> str:
         lambda p: p.plan_set(field, value, experimental=experimental),
         lambda p: p.set_field(field, value, experimental=experimental),
     )
+
+
+async def _set_fields(args: argparse.Namespace, factory: TransportFactory) -> str:
+    """``set FIELD=VALUE ...``: plan (dry run) or the batch, all over one connection."""
+    pairs, experimental = args.pairs, args.experimental
+
+    async def source() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    async with TankG(source, timeout=args.timeout) as pedal:
+
+        def document(plan: EditPlan, result: EditResult | None) -> str:
+            return render.dumps(
+                render.edit_json(
+                    plan,
+                    result,
+                    dry_run=args.dry_run,
+                    read_at=datetime.now(UTC),
+                    device=pedal.device,
+                    identity=pedal.identity,
+                )
+            )
+
+        if args.dry_run:
+            plan = await pedal.plan_set_fields(pairs, experimental=experimental)
+            return document(plan, None) if args.json else render.human_edit(plan, None)
+        try:
+            result = await pedal.set_fields(pairs, experimental=experimental)
+        except OpenvaveError as err:
+            edit = err.edit
+            if edit is None:
+                raise
+            if args.json:
+                print(document(edit.plan, edit))
+            print("\n".join(render.edit_failure_lines(str(err), edit)), file=sys.stderr)
+            raise _Reported(err) from err
+    return document(result.plan, result) if args.json else render.human_edit(result.plan, result)
 
 
 async def _preset_select(args: argparse.Namespace, factory: TransportFactory) -> str:
@@ -750,7 +836,13 @@ COMMANDS: dict[
 def _prepare_write(args: argparse.Namespace) -> None:
     """Parse the field value / position before any pedal I/O (usage errors exit 2)."""
     if args.command == "set":
-        args.parsed_value = parse_field_value(args.field, args.value, args.knob_type, args.raw)
+        parsed = parse_assignments(args.assignments, args.knob_type, args.raw)
+        if isinstance(parsed, tuple):
+            args.pairs = None
+            args.field, args.value = parsed
+            args.parsed_value = parse_field_value(args.field, args.value, args.knob_type, args.raw)
+        else:
+            args.pairs = parsed
     elif args.command == "bypass" and args.position is None:
         args.index = None  # read the state first, then a usage error (_bypass_position_missing)
     else:
@@ -856,7 +948,13 @@ def main(
     """
     parser = _parser()
     try:
-        args = parser.parse_args(argv)
+        args, extras = parser.parse_known_args(argv)
+        if extras:
+            # ``set reverb_decay --raw 53``: a positional after an option is left over by
+            # argparse when the positional takes nargs="+"; give it back to ``set``
+            if args.command != "set" or any(e.startswith("-") for e in extras):
+                parser.error(f"unrecognized arguments: {' '.join(extras)}")
+            args.assignments += extras
     except SystemExit as exit_:
         return exit_.code if isinstance(exit_.code, int) else EXIT_USAGE
     if args.command is None:

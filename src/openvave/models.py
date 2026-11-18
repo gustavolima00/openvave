@@ -487,6 +487,124 @@ class SequenceResult:
     """Slots whose read-back differs from what was written (full restore verification)."""
 
 
+FieldStatus = Literal["applied", "unchanged", "not_applied", "unknown", "not_sent"]
+EditWriteStatus = Literal["acked", "nak", "no_reply", "not_sent"]
+
+
+@dataclass(frozen=True)
+class FieldEdit:
+    """One field of a batch edit (``TankG.plan_set_fields``), as planned from the reads."""
+
+    field: str
+    """The field name (``gain``, ``delay_on``, ``led_colour`` …)."""
+    target: WriteTarget
+    """The allowlisted write that carries it (the knob block for every knob field)."""
+    offset: int
+    """First preset offset the field occupies."""
+    current: bytes
+    """The field's bytes in the edit buffer at plan time."""
+    wanted: bytes
+    """The bytes requested (empty when out of range or the type cannot be resolved)."""
+    no_change: bool
+    """The field already holds the requested value; it adds nothing to any write."""
+    refusal: str | None
+    """Why this field refuses the batch (``out_of_range``, ``type_required``,
+    ``experimental_required``, ``untested_firmware``, a state refusal), or ``None``."""
+
+
+@dataclass(frozen=True)
+class EditWrite:
+    """One ``0x22`` frame of a batch edit: the knob block (all knob fields at once), one block
+    switch, or the LED colour."""
+
+    target: WriteTarget
+    """The allowlisted write target."""
+    data: bytes
+    """The bytes written (the knob block is rebuilt from the plan's edit-buffer read)."""
+    frame: bytes
+    """The exact ``0x22`` frame (what a dry run prints)."""
+    fields: tuple[str, ...]
+    """The fields this write changes, in request order."""
+    confidence: Confidence
+    """The write message's confidence in the "Write messages" table."""
+
+
+@dataclass(frozen=True)
+class EditPlan:
+    """What ``openvave set FIELD=VALUE ...`` would send, built from one pair of reads.
+
+    ``TankG.plan_set_fields`` returns it without writing; ``TankG.set_fields`` builds the same
+    plan and sends :attr:`writes` in order: the knob block first (right after the edit-buffer
+    read it was rebuilt from), then block switches 0–3, then the LED colour.
+    """
+
+    state: PedalState
+    """The pedal state as read while planning."""
+    fields: tuple[FieldEdit, ...]
+    """Every requested field, in request order."""
+    writes: tuple[EditWrite, ...]
+    """The frames to send, in send order; empty when nothing would change."""
+    reads: tuple[bytes, ...]
+    """The read frames sent to build the plan, in order."""
+    before: RegionRead
+    """Edit buffer at plan time."""
+    global_before: RegionRead
+    """Global block at plan time."""
+    refusal: str | None
+    """Why the batch would be refused (the first refusing field's reason), or ``None``. A
+    refused batch sends nothing."""
+    refused_field: str | None
+    """The field whose refusal is :attr:`refusal` (``None`` for a state refusal)."""
+
+    @property
+    def no_change(self) -> bool:
+        """Every field already holds its value: nothing would be sent."""
+        return not self.writes and all(f.wanted for f in self.fields)
+
+
+@dataclass(frozen=True)
+class EditWriteOutcome:
+    """What happened to one :class:`EditWrite` when the batch ran."""
+
+    write: EditWrite
+    """The planned write."""
+    status: EditWriteStatus
+    """``acked``, ``nak``, ``no_reply`` (link lost or timed out) or ``not_sent``."""
+    reply: bytes = b""
+    """The raw reply (the ACK, or the NAK as received)."""
+    applied: bool | None = None
+    """The re-read shows the written bytes; ``None`` when not re-read."""
+
+
+@dataclass(frozen=True)
+class EditResult:
+    """Outcome of a batch edit; also attached (``.edit``) to an error raised mid-batch."""
+
+    plan: EditPlan
+    """The plan that was run."""
+    writes: tuple[EditWriteOutcome, ...]
+    """One outcome per planned write, in order (empty when nothing was sent)."""
+    field_status: tuple[tuple[str, FieldStatus], ...]
+    """``(field, status)`` in request order: ``applied``, ``unchanged`` (nothing to send),
+    ``not_applied`` (acknowledged, re-read differs), ``unknown`` (NAK or no reply) or
+    ``not_sent`` (a write before it failed)."""
+    after: RegionRead | None
+    """The last edit-buffer re-read (``None`` when nothing was re-read)."""
+    global_after: RegionRead | None
+    """The global block re-read at the end (``None`` when the batch stopped early)."""
+    changes: tuple[ByteChange, ...]
+    """Every byte that differs from the plan's reads: global first, then the edit buffer."""
+
+    @property
+    def applied(self) -> bool:
+        """Every field is ``applied`` or ``unchanged``."""
+        return all(s in ("applied", "unchanged") for _, s in self.field_status)
+
+    def fields_with(self, status: FieldStatus) -> tuple[str, ...]:
+        """The fields with ``status``, in request order."""
+        return tuple(name for name, s in self.field_status if s == status)
+
+
 @dataclass(frozen=True)
 class FieldSpec:
     """Deprecated (001): a known byte. Use :class:`ByteMapEntry` / ``BYTE_MAP`` instead."""

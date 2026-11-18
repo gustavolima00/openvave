@@ -15,6 +15,9 @@ from openvave.models import (
     DeviceIdentity,
     DeviceInfo,
     DeviceSnapshot,
+    EditPlan,
+    EditResult,
+    EditWrite,
     Encoding,
     PedalState,
     Region,
@@ -493,7 +496,12 @@ def _loaded_position(glob: RegionRead, buffer: RegionRead | None = None) -> str:
 
 def _field_value(plan: WritePlan, data: bytes) -> str:
     """Display form of a field value from the preset bytes ``data`` (21) or the write data."""
-    spec = WRITABLE_FIELDS[plan.field or ""]
+    return _value_text(plan.field or "", data)
+
+
+def _value_text(field: str, data: bytes) -> str:
+    """Display form of ``field`` read from the preset bytes ``data`` (21)."""
+    spec = WRITABLE_FIELDS[field]
     if spec.kind == "led_colour":
         return "#" + data[spec.offset : spec.offset + 3].hex()
     assert spec.entry is not None
@@ -721,6 +729,168 @@ def write_json(
         if result.return_index is not None:
             document["result"]["return_index"] = result.return_index
             document["result"]["return_position"] = position(result.return_index)
+    return document
+
+
+# -- batch edit (contracts/cli.md "openvave set FIELD=VALUE ...") -------------------------------
+
+FIELD_STATUS_TEXT = {
+    "applied": "applied",
+    "unchanged": "unchanged",
+    "not_applied": "not applied",
+    "unknown": "unknown",
+    "not_sent": "not sent",
+}
+EDIT_FAILURE_HINT = (
+    "Nothing was retried. Applied fields are in the edit buffer, not saved. "
+    "Discard: openvave preset reload"
+)
+
+
+def _edit_target(write: EditWrite) -> str:
+    target = write.target
+    name = target.kind if target.argument is None else f"{target.kind} {target.argument}"
+    return f"{name}: {', '.join(write.fields)}"
+
+
+def _edit_requested(plan: EditPlan) -> bytes:
+    """The edit buffer as it would be after every write of the plan."""
+    buffer = bytearray(plan.before.data)
+    for f in plan.fields:
+        if f.wanted:
+            buffer[f.offset : f.offset + len(f.wanted)] = f.wanted
+    return bytes(buffer)
+
+
+def _edit_refusal_lines(plan: EditPlan) -> list[str]:
+    reason = plan.refusal
+    if reason is None:
+        return []
+    detail = REFUSAL_TEXT.get(reason, reason)
+    edit = next((f for f in plan.fields if f.field == plan.refused_field), None)
+    if edit is not None:
+        if reason == "experimental_required":
+            write = next(w for w in plan.writes if edit.field in w.fields)
+            detail = f"{write.target.kind} is '{write.confidence}'; needs --experimental"
+        detail = f"{edit.field}: {detail}"
+    return [f"  refused: {reason} ({detail})"]
+
+
+def human_edit(plan: EditPlan, result: EditResult | None) -> str:
+    """``Set 5 fields   (current preset 1B, normal mode)``, one line per field, then every
+    write (and its reply when sent), the changes and the not-saved hint."""
+    if plan.no_change and plan.refusal is None:
+        return f"{', '.join(f.field for f in plan.fields)} already set; nothing sent"
+    mode = MODE_NAMES.get(plan.global_before.data[3], str(plan.global_before.data[3]))
+    count = len(plan.fields)
+    lines = [
+        f"Set {count} field{'' if count == 1 else 's'}   "
+        f"(current preset {_loaded_position(plan.global_before)}, {mode} mode)"
+    ]
+    width = max(len(f.field) for f in plan.fields)
+    requested = _edit_requested(plan)
+    for f in plan.fields:
+        old = _value_text(f.field, plan.before.data)
+        if f.no_change:
+            text = f"{old} (unchanged)"
+        else:
+            text = f"{old} → {_value_text(f.field, requested) if f.wanted else '?'}"
+        lines.append(f"  {f.field:<{width}}  {text}")
+    outcomes = result.writes if result is not None else ()
+    for i, write in enumerate(plan.writes):
+        lines.append(f"  write  {hex_bytes(write.frame)}   {_edit_target(write)}")
+        if i < len(outcomes) and outcomes[i].status == "acked":
+            done = "applied" if outcomes[i].applied else "not applied"
+            lines.append(f"  reply  {hex_bytes(outcomes[i].reply)}   ACK   {done}")
+    lines += _edit_refusal_lines(plan)
+    if result is None:
+        lines.append("  dry run: nothing sent")
+        return "\n".join(lines)
+    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    lines.append(f"  after  {texts[0]}")
+    lines += [f"         {text}" for text in texts[1:]]
+    lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
+    return "\n".join(lines)
+
+
+def edit_failure_lines(message: str, result: EditResult) -> list[str]:
+    """stderr report of a batch edit that stopped: the error, each field's status, the hint."""
+    outcome_of = {name: o for o in result.writes for name in o.write.fields}
+    width = max(len(name) for name, _ in result.field_status)
+    lines = [f"error: {message}"]
+    for name, status in result.field_status:
+        text = FIELD_STATUS_TEXT[status]
+        outcome = outcome_of.get(name)
+        if status == "unknown" and outcome is not None:
+            text += f" ({outcome.status.replace('_', ' ')})"
+        lines.append(f"  {name:<{width}}  {text}")
+    lines.append(EDIT_FAILURE_HINT)
+    return lines
+
+
+def edit_json(
+    plan: EditPlan,
+    result: EditResult | None,
+    *,
+    dry_run: bool,
+    read_at: datetime,
+    device: DeviceInfo | None,
+    identity: DeviceIdentity,
+) -> dict[str, Any]:
+    """``set FIELD=VALUE ... --json`` (``set-fields-result.schema.json``)."""
+    document = envelope("set", read_at, device, identity)
+    document["plan"] = {
+        "action": "set",
+        "fields": [
+            {
+                "field": f.field,
+                "kind": f.target.kind,
+                "offset": f.offset,
+                "before": hex_bytes(f.current),
+                "requested": hex_bytes(f.wanted),
+                "no_change": f.no_change,
+                "refusal": f.refusal,
+            }
+            for f in plan.fields
+        ],
+        "writes": [
+            {
+                "target": {
+                    "kind": w.target.kind,
+                    "type": w.target.type,
+                    "address": f"0x{w.target.address:08x}",
+                    "length": w.target.length,
+                    "argument": w.target.argument,
+                },
+                "data": hex_bytes(w.data),
+                "frame": hex_bytes(w.frame),
+                "fields": list(w.fields),
+                "confidence": w.confidence,
+            }
+            for w in plan.writes
+        ],
+        "reads": [hex_bytes(r) for r in plan.reads],
+        "before": hex_bytes(plan.before.data),
+        "global_before": hex_bytes(plan.global_before.data),
+        "no_change": plan.no_change,
+        "refusal": plan.refusal,
+        "refused_field": plan.refused_field,
+        "dry_run": dry_run,
+    }
+    if result is not None and not dry_run:
+        document["result"] = {
+            "writes": [
+                {"status": o.status, "reply": hex_bytes(o.reply), "applied": o.applied}
+                for o in result.writes
+            ],
+            "fields": dict(result.field_status),
+            "after": None if result.after is None else hex_bytes(result.after.data),
+            "global_after": (
+                None if result.global_after is None else hex_bytes(result.global_after.data)
+            ),
+            "changes": _changes_json(result.changes),
+            "applied": result.applied,
+        }
     return document
 
 
