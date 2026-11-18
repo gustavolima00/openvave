@@ -20,6 +20,7 @@ STORE_ADDRESS = 0
 EDIT_BUFFER = 0x10000000
 GLOBAL_ADDRESS = 0x20000000
 SELECT_BASE = 0xE0000000
+BYPASS_BASE = 0xE1000000
 PRESET_SIZE = 21
 STORE_OFFSET = 2
 WRITE_ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
@@ -67,8 +68,11 @@ class FakeTransport:
       them to ``memory``: edit-buffer writes change the block at ``0x10000000``; a preset select
       ``i`` copies stored preset ``i`` (block at address 0) into the edit buffer, sets global
       bytes 0–2 (browsed bank, bank, slot) and leaves edit mode (mode 0 → 1). This models the
-      pedal as the app describes it; it is not hardware evidence. Without it, an unscripted write
-      is a test error.
+      pedal as the app describes it; it is not hardware evidence. A bypass write (``0xE1000000 +
+      i``) sets the global slot to ``ff`` and zeroes the edit buffer (mode and bank unchanged, as
+      in spec 004 check 2); the next select leaves bypass. A loopback write stores its byte in
+      the status block at ``0xD0000000`` (which ``memory`` must then hold). Without
+      ``apply_writes``, an unscripted write is a test error.
     - ``select_transient``: after each applied preset select, the next this-many global reads
       return slot ``ff`` (the loading state seen once on hardware).
 
@@ -218,7 +222,9 @@ class FakeTransport:
             raise AssertionError(f"FakeTransport: write outside the allowlist {frame.hex(' ')}")
         address = int.from_bytes(body[1:5], "little")
         data = body[ECHO_LEN:]
-        if address >= SELECT_BASE:
+        if address >= BYPASS_BASE:
+            self._bypass()
+        elif address >= SELECT_BASE:
             self._select(address - SELECT_BASE)
         else:
             self._poke(address, data)
@@ -246,6 +252,11 @@ class FakeTransport:
         bank, slot = divmod(index, 4)
         self._poke(GLOBAL_ADDRESS, bytes([bank, bank, slot, mode]))
         self._transient_left = self._select_transient
+
+    def _bypass(self) -> None:
+        self._poke(EDIT_BUFFER, bytes(PRESET_SIZE))
+        _, glob = self._block_at(GLOBAL_ADDRESS, 4)
+        self._poke(GLOBAL_ADDRESS, glob[:2] + b"\xff" + glob[3:])
 
     def _memory_reply(self, frame: bytes) -> bytes | None:
         """A read reply built from :attr:`_memory`, or ``None`` if the request is not covered."""

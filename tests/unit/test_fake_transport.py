@@ -13,6 +13,9 @@ from openvave.transport import Transport
 from openvave.transport.fake import FakeTransport
 from tests.support import storage_fixture as sf
 from tests.support.captures import FW96_CONNECT, GLOBAL, LABELS, QUERY, load_capture
+from tests.support.write_fixture import ACK, NORMAL, make_fake, write_frame
+
+GLOBAL_ADDR, BUFFER_ADDR = 0x20000000, 0x10000000
 
 CAP = load_capture(FW96_CONNECT)
 
@@ -220,3 +223,45 @@ async def test_from_capture_accepts_memory_and_chunk_size() -> None:
     await fake.write(sf.read_request(0, 758))
     await _settle()
     assert len(got.chunks) == 5
+
+
+# -- bypass and loopback (spec 004 T025) --------------------------------------------------------
+
+
+async def _write_and_settle(fake: FakeTransport, frame: bytes, got: Collector) -> bytes:
+    got.chunks.clear()
+    await fake.write(frame)
+    await _settle()
+    return b"".join(got.chunks)
+
+
+async def test_bypass_write_zeroes_buffer_and_sets_slot_ff() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(0xE1000001, b"\x01"), got) == ACK
+    glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
+    assert glob == sf.read_reply(GLOBAL_ADDR, bytes([0, 0, 0xFF, NORMAL]))
+    buffer = await _write_and_settle(fake, sf.read_request(BUFFER_ADDR, 21), got)
+    assert buffer == sf.read_reply(BUFFER_ADDR, bytes(21))
+
+
+async def test_select_leaves_bypass() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    await _write_and_settle(fake, write_frame(0xE1000001, b"\x01"), got)
+    assert await _write_and_settle(fake, write_frame(0xE0000001, b"\x01"), got) == ACK
+    glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
+    assert glob == sf.read_reply(GLOBAL_ADDR, bytes([0, 0, 1, NORMAL]))
+    buffer = await _write_and_settle(fake, sf.read_request(BUFFER_ADDR, 21), got)
+    assert buffer == sf.read_reply(BUFFER_ADDR, sf.PUBLIC_PRESET)
+
+
+@pytest.mark.parametrize("value", [b"\x00", b"\x01"])
+async def test_loopback_write_stores_the_byte(value: bytes) -> None:
+    fake = make_fake(NORMAL, status=b"\x01" if value == b"\x00" else b"\x00")
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(0xD0000000, value), got) == ACK
+    status = await _write_and_settle(fake, sf.read_request(0xD0000000, 1), got)
+    assert status == sf.read_reply(0xD0000000, value)
+    glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
+    assert glob == sf.read_reply(GLOBAL_ADDR, bytes([0, 0, 1, NORMAL]))  # nothing else moved

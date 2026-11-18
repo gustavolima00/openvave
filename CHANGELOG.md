@@ -23,6 +23,23 @@ All notable changes to this project are documented here. The format follows
   `set mod_fx 20 --type phaser`, `set delay_mix 30 --type tape`; `preset dump` / `watch` show
   `type: chorus 1`. Their split was checked against the phone app on the pedal (15 readings, all
   fit). `openvave.protocol.MOD_FX_TYPES`, `DELAY_MIX_TYPES`.
+- **Bypass** (experimental): `openvave bypass on [--discard-edits]` sends `01` to
+  `0xE1000000 + i` for the loaded preset (normal mode only) and reports `applied` when the pedal
+  reads slot `ff` with an all-zero buffer, then prints `Leave bypass: openvave bypass off 1B`.
+  `openvave bypass off <position>` leaves bypass with the confirmed preset select, only when the
+  pedal is bypassed (refusal `not_bypassed` otherwise); without a position it exits 2 and names
+  the bank the pedal reports. Library: `TankG.plan_bypass_on()` / `bypass_on()` (result
+  `return_index`), `plan_bypass_off(i)` / `bypass_off(i)`, `WriteTarget.bypass(i)`. The message is
+  `hypothesis` (seen once from a `poc/` script, spec 004 check 2; openvave has not sent it), so
+  `bypass on` needs `--experimental`.
+- **Loopback** (experimental): `openvave loopback on|off` reads the status byte (`0xD0000000`),
+  writes `01`/`00`, and reads it back; never followed by a commit; an equal value sends nothing.
+  Library: `TankG.plan_loopback(on)` / `set_loopback(on)`, `WriteTarget.loopback()`. Message
+  `hypothesis` (app code only); what loopback does on the Tank-G is not known yet.
+- `WriteTarget.persistent` (false for every target so far) and refusal reasons `edit_mode` and
+  `not_bypassed`. The write allowlist grows by exactly these two volatile kinds; bypass data other
+  than `01`, an index above 35, loopback data other than `00`/`01` or any other length stay
+  unencodable.
 - Pedal state: `openvave.PedalState`, `openvave.protocol.classify(global, buffer)`,
   `TankG.state()` (confirms bypass with a second read 300 ms later) and
   `DeviceSnapshot.pedal_state`. `info` and `preset dump` print a `state:` line (in bypass: no
@@ -47,7 +64,10 @@ All notable changes to this project are documented here. The format follows
   Measured before: `set gain 90` took 11 s on macOS.
 - JSON write results validate against the spec 004 extension of the schema
   ([`write-result.schema.json`](specs/004-remote-edit-save-restore/contracts/write-result.schema.json)):
-  command `preset reload` and the new refusal reasons.
+  commands `preset reload`, `bypass on|off`, `loopback on|off`, target kinds `bypass` and
+  `loopback`, the new refusal reasons, change region `status`, and `return_index` /
+  `return_position` in a `bypass on` result.
+- A write refused because the pedal is bypassed now points to `openvave bypass off <position>`.
 
 - `preset dump` and `watch` human output show reverb decay (preset byte 15) as reverb type and
   position: `type: room 6` after the field line (`off` between types), and

@@ -95,4 +95,4 @@ async def test_no_loaded_slot_is_refused(glob: bytes, buffer: bytes, reason: str
             await pedal.reload_preset(sleep=_no_sleep)
     assert writes(fake) == []
     if reason == "bypassed":
-        assert "preset select" in str(exc.value)
+        assert "bypass off <position>" in str(exc.value)

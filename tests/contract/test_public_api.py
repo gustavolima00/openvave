@@ -92,6 +92,12 @@ WRITE_ACTIONS = {
     "select_preset",
     "plan_reload",  # spec 004
     "reload_preset",  # spec 004
+    "plan_bypass_on",  # spec 004 M1
+    "bypass_on",
+    "plan_bypass_off",
+    "bypass_off",
+    "plan_loopback",
+    "set_loopback",
 }
 
 
@@ -215,6 +221,14 @@ def test_protocol_module_exposes_write_allowlist() -> None:
     target = openvave.protocol.WriteTarget.preset_select(6)
     assert (target.type, target.address, target.length) == (4, 0xE0000006, 1)
     assert isinstance(openvave.protocol.WRITE_MESSAGES, tuple)
+
+
+def test_spec004_m1_targets_are_volatile_constructors() -> None:
+    target_cls = openvave.protocol.WriteTarget
+    bypass, loopback = target_cls.bypass(1), target_cls.loopback()
+    assert (bypass.kind, bypass.address, bypass.persistent) == ("bypass", 0xE1000001, False)
+    assert (loopback.kind, loopback.address, loopback.persistent) == ("loopback", 0xD0000000, False)
+    assert "return_index" in {f.name for f in dataclasses.fields(openvave.WriteResult)}
 
 
 def test_write_errors_exit_codes() -> None:

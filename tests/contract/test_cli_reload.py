@@ -88,7 +88,7 @@ def test_dry_run_prints_the_refusal(capsys: pytest.CaptureFixture[str]) -> None:
 @pytest.mark.parametrize(
     ("glob", "buffer", "needle"),
     [
-        (bytes([0, 0, 0xFF, NORMAL]), bytes(21), "preset select"),
+        (bytes([0, 0, 0xFF, NORMAL]), bytes(21), "bypass off <position>"),
         (bytes([0, 0, 1, 6]), P, "unrecognised_state"),
     ],
 )

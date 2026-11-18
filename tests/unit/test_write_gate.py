@@ -35,8 +35,15 @@ def test_confidence_after_gate_session_b() -> None:
         ("block_switch", 3): "observed",
         ("led_colour", None): "observed",
         ("preset_select", None): "confirmed",
+        ("bypass", None): "hypothesis",  # spec 004 M1, until gate session A of 004
+        ("loopback", None): "hypothesis",
         ("ack", None): "confirmed",
     }
+
+
+@pytest.mark.parametrize(("kind", "argument"), [("bypass", 1), ("bypass", 35), ("loopback", None)])
+def test_spec004_hypothesis_rows_need_the_opt_in(kind: str, argument: int | None) -> None:
+    assert sendable_by_default(kind, argument, 96) is False
 
 
 @pytest.mark.parametrize(

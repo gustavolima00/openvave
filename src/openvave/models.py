@@ -352,7 +352,8 @@ class WritePlan:
     """
 
     action: str
-    """``set <field>`` or ``select <position>``."""
+    """``set <field>``, ``select <position>``, ``reload <position>``, ``bypass on <position>``,
+    ``bypass off <position>`` or ``loopback on|off``."""
     target: WriteTarget
     """The allowlisted write target."""
     data: bytes
@@ -362,7 +363,7 @@ class WritePlan:
     reads: tuple[bytes, ...]
     """The read frames sent to build the plan, in order."""
     before: RegionRead
-    """Edit buffer (current preset) at plan time."""
+    """Edit buffer (current preset) at plan time; the status byte for a loopback plan."""
     global_before: RegionRead
     """Global block (browsed bank, bank, slot, mode) at plan time."""
     no_change: bool
@@ -384,13 +385,16 @@ class WriteResult:
     reply: bytes
     """The raw reply (the 8-byte ACK); empty if nothing was sent (no change)."""
     after: RegionRead
-    """Edit buffer re-read after the write."""
+    """Edit buffer re-read after the write; the status byte for a loopback write."""
     global_after: RegionRead
     """Global block re-read after the write."""
     changes: tuple[ByteChange, ...]
     """Every byte that differs from the plan's reads: global first, then the edit buffer."""
     applied: bool
     """The targeted bytes now equal the request (select: bank/slot and stored bytes match)."""
+    return_index: int | None = None
+    """``bypass_on`` only: the preset (0–35) that ``bypass_off`` should select to leave bypass,
+    since the pedal does not report its slot while bypassed (spec 004 FR-010)."""
 
 
 @dataclass(frozen=True)

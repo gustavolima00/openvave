@@ -2,7 +2,8 @@
 
 Pedal on 1B in normal mode: ``01`` to ``0xE1000001`` (ACK), then select 1B. Read straight from
 the committed frames (no ``openvave`` decoding). The bypass frame is not in openvave's write
-allowlist, so the excerpt is not a ``-gate-`` file; this test checks it instead.
+allowlist until spec 004 M1 and was sent by a ``poc/`` script, so the excerpt is not a ``-gate-``
+file; this test checks it instead.
 """
 
 from __future__ import annotations
@@ -62,6 +63,8 @@ def test_bypass_zeroes_the_buffer_and_select_restores() -> None:
     assert reads(pairs, BUFFER_READ, w2, end)[-1] == STORED_1B
 
 
-def test_only_the_bypass_write_is_outside_the_allowlist() -> None:
+def test_every_frame_is_inside_the_allowlist() -> None:
+    # spec 004 M1 added bypass(i) to the allowlist; before that this frame was the one outside it
     sent = [tx for tx, _ in exchanges()]
-    assert unsafe_frames(sent) == [BYPASS_1B]
+    assert BYPASS_1B in sent
+    assert unsafe_frames(sent) == []

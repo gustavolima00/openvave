@@ -21,10 +21,18 @@ ALLOWED_WRITES = [
     write_frame(0x10000012, bytes.fromhex("ff 00 00")),
     write_frame(0xE0000000, b"\x01"),
     write_frame(0xE0000023, b"\x01"),
+    write_frame(0xE1000001, b"\x01"),  # bypass 1B (spec 004 M1)
+    write_frame(0xE1000023, b"\x01"),
+    write_frame(0xD0000000, b"\x00"),  # loopback off
+    write_frame(0xD0000000, b"\x01"),  # loopback on
 ]
 FORBIDDEN_WRITES = {
     "commit": write_frame(0xF0000000, b""),
-    "loopback": write_frame(0xD0000000, b"\x01"),
+    "loopback-02": write_frame(0xD0000000, b"\x02"),
+    "loopback-x2": write_frame(0xD0000000, b"\x01\x01"),
+    "loopback-t5": sf.frame(0x22, bytes.fromhex("05 00 00 00 d0 01 00 00 01")),
+    "bypass-36": write_frame(0xE1000024, b"\x01"),
+    "bypass-00": write_frame(0xE1000001, b"\x00"),
     "stored-0": write_frame(0x0, bytes(758)),
     "stored-2": write_frame(0x2, bytes(21)),
     "knob-1byte": write_frame(0x10000004, b"\x05"),

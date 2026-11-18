@@ -465,6 +465,8 @@ REFUSAL_TEXT = {
     "untested_firmware": "firmware not covered by a confirmed write gate; needs --experimental",
     "experimental_required": "message not confirmed yet; needs --experimental",
     "edits_would_be_discarded": "unsaved edits would be discarded; needs --discard-edits",
+    "edit_mode": "the pedal is in edit mode",
+    "not_bypassed": "the pedal is not bypassed; use preset select",
 }
 
 
@@ -565,6 +567,67 @@ def human_reload(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) 
     return _select_lines(header, plan, result, dry_run=dry_run)
 
 
+def human_bypass_on(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Bypass on   (was 1B, normal mode)`` + write/reply/now and the line that leaves bypass."""
+    if plan.no_change and plan.refusal is None:
+        return "already bypassed; nothing sent"
+    mode = MODE_NAMES.get(plan.global_before.data[3], str(plan.global_before.data[3]))
+    lines = [f"Bypass on   (was {_loaded_position(plan.global_before, plan.before)}, {mode} mode)"]
+    lines.append(f"  write  {hex_bytes(plan.frame)}")
+    lines += _refusal_lines(plan)
+    if dry_run or result is None:
+        lines.append("  dry run: nothing sent")
+        return "\n".join(lines)
+    lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
+    if result.applied:
+        lines.append("  now    bypass (slot ff, buffer all 00)   applied")
+        if result.return_index is not None:
+            lines.append(f"Leave bypass: openvave bypass off {position(result.return_index)}")
+    else:
+        slot = result.global_after.data[2]
+        zero = "all 00" if result.after.data == bytes(len(result.after.data)) else "not all 00"
+        lines.append(
+            f"  now    slot {slot:02x}, buffer {zero}   "
+            "not applied (expected slot ff, buffer all 00)"
+        )
+    return "\n".join(lines)
+
+
+def human_bypass_off(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Bypass off: select 1B (index 1)   from bypass (bank 1)`` + the select lines."""
+    index = plan.target.argument
+    assert index is not None
+    loaded = _loaded_position(plan.global_before, plan.before)
+    header = f"Bypass off: select {position(index)} (index {index})   from {loaded}"
+    return _select_lines(header, plan, result, dry_run=dry_run)
+
+
+def _loopback_name(data: bytes) -> str:
+    return {b"\x00": "off", b"\x01": "on"}.get(data, data.hex(" ") or "?")
+
+
+def human_loopback(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> str:
+    """``Loopback on → off   (status byte 0xD0000000, …)`` + write/reply/after lines."""
+    new = _loopback_name(plan.data)
+    if plan.no_change and plan.refusal is None:
+        return f"loopback is already {new}; nothing sent"
+    old = _loopback_name(plan.before.data)
+    lines = [
+        f"Loopback {old} → {new}   (status byte 0xD0000000, meaning not yet observed)",
+        f"  write  {hex_bytes(plan.frame)}",
+    ]
+    lines += _refusal_lines(plan)
+    if dry_run or result is None:
+        lines.append("  dry run: nothing sent")
+        return "\n".join(lines)
+    lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
+    status = "applied" if result.applied else "not applied"
+    after = result.after.data
+    reading = f"status {hex_bytes(after)} (loopback {_loopback_name(after)})"
+    lines.append(f"  after  {reading}   {status}")
+    return "\n".join(lines)
+
+
 def _select_lines(
     header: str, plan: WritePlan, result: WriteResult | None, *, dry_run: bool
 ) -> str:
@@ -588,10 +651,13 @@ def _select_lines(
     return "\n".join(lines)
 
 
+_REGION_NAMES = {Region.GLOBAL: "global", Region.STATUS: "status"}
+
+
 def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
     return [
         {
-            "region": "global" if c.region is Region.GLOBAL else "preset",
+            "region": _REGION_NAMES.get(c.region, "preset"),
             "offset": c.offset,
             "before": c.old,
             "after": c.new,
@@ -611,7 +677,8 @@ def write_json(
     device: DeviceInfo | None,
     identity: DeviceIdentity,
 ) -> dict[str, Any]:
-    """``set`` / ``preset select`` / ``preset reload --json`` (``write-result.schema.json``)."""
+    """``set`` / ``preset select`` / ``preset reload`` / ``bypass`` / ``loopback --json``
+    (``write-result.schema.json``)."""
     target = plan.target
     document = envelope(command, read_at, device, identity)
     document["plan"] = {
@@ -642,4 +709,7 @@ def write_json(
             "changes": _changes_json(result.changes),
             "applied": result.applied,
         }
+        if result.return_index is not None:
+            document["result"]["return_index"] = result.return_index
+            document["result"]["return_position"] = position(result.return_index)
     return document

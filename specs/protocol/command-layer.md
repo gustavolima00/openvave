@@ -497,12 +497,14 @@ selects got the same bytes. No NAK has been seen, so non-zero status codes remai
 
 ### Write messages
 
-The only writes openvave can encode (spec 003, 0.3.0). This table is authoritative;
-`src/openvave/protocol/writes.py` `WRITE_MESSAGES` mirrors it row for row, and
-`tests/unit/test_writes_doc.py` fails on any difference. Every write is type 4 and carries the
-usual frame: `00 59 22 | len | type | address (4, LE) | length (3, LE) | data | checksum`. The
-encoder refuses every other `0x22` body; erase (`0x21`), the commit (`0xF0000000`), stored-area
-writes (`0x0`–`0x2F5`) and the loopback write (`0xD0000000`) are not encodable.
+The only writes openvave can encode (spec 003, 0.3.0; `bypass(i)` and `loopback` added by spec
+004 M1). This table is authoritative; `src/openvave/protocol/writes.py` `WRITE_MESSAGES` mirrors
+it row for row, and `tests/unit/test_writes_doc.py` fails on any difference. Every write is type 4
+and carries the usual frame: `00 59 22 | len | type | address (4, LE) | length (3, LE) | data |
+checksum`. The encoder refuses every other `0x22` body, including bypass with data other than
+`01` or an index above 35, and loopback with data other than `00`/`01` or a length other than 1;
+erase (`0x21`), the commit (`0xF0000000`) and stored-area writes (`0x0`–`0x2F5`) are not
+encodable. Every row is volatile: none changes a stored preset.
 
 Rule: a row is `observed` only when it cites a committed capture of **this project's own send**
 (a gate excerpt in `captures/fw96/`), and `confirmed` when it cites two independent sessions.
@@ -519,6 +521,8 @@ write is sent without `--experimental` only when its row is `confirmed`, the `ac
 | `block_switch(3)` | 4 | `0x10000003` | 1 | reverb on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_reverb.jsonl` | gate session A: reverb off on 1B, ACK, only byte 3 changed, applied |
 | `led_colour` | 4 | `0x10000012` | 3 | R, G, B, 0–255 each (preset 18–20) | ACK | observed | 96 | `captures/fw96/20261117-gate-led_colour.jsonl` | gate session A: `ff 00 00` on 1B, ACK, bytes 18–20 changed, applied. The write is observed; that 18–20 drive the preset LED is not (in edit mode the LEDs show block colours) |
 | `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | confirmed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl`, `captures/fw96/20261117-gate-select_b_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B; gate session B (normal mode, new connection): 1D → 1A and 1A → 1D. Each: ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
+| `bypass(i)` | 4 | `0xE1000000 + i` | 1 | always `01`; i = the loaded preset (0–35) | ACK | hypothesis | 96 | — | spec 004 check 2 (2026-11-17, 1B, normal mode, sent by a `poc/` script, not by openvave): `… e1 01 00 00 01 17`, ACK; the global slot then read `ff`, the edit buffer 21 × `00`, mode stayed normal; select 1B left bypass and restored the stored bytes (`captures/fw96/20261117-check2-bypass.jsonl`). openvave sends it only for the loaded preset; leaving bypass is a `preset_select(i)` |
+| `loopback` | 4 | `0xD0000000` | 1 | `00` off / `01` on | ACK (expected) | hypothesis | 96 | — | from the app's code (the Loopback button writes this byte); never sent yet. The 1-byte read at this address is confirmed and has read `01` in every session. Meaning and persistence unknown; openvave never follows it with a commit |
 | `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl` | the reply to all eight gate-session-A writes and all three gate-session-B writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
 
 Normal mode (spec 004 check 1, 2026-11-17, fw 96, confirmed over two connections): the
@@ -554,6 +558,15 @@ Allowed writes per state (openvave): `set` in normal and edit mode; `preset relo
 and in edit mode with `--discard-edits`; nothing in tuner, bypass or an unrecognised state
 (refusal reasons `tuner_mode`, `bypassed`, `unrecognised_state`). `preset reload` is the confirmed
 preset-select write for the loaded slot, sent only when the buffer differs from the stored preset.
+
+Bypass and loopback (openvave, spec 004 M1, both `hypothesis`, so `--experimental`): `bypass on`
+only in normal mode with a loaded slot (refused in edit mode `edit_mode`, tuner, unrecognised;
+with unsaved edits it needs `--discard-edits`, reason `edits_would_be_discarded`), sends `01` to
+`0xE1000000 + i` for the loaded `i` and is applied when a re-read shows slot `ff` and a zero
+buffer; already bypassed sends nothing. `bypass off <position>` runs the confirmed select path
+only when the pedal is bypassed (otherwise `not_bypassed`); the position must be given because the
+pedal does not report the slot while bypassed. `loopback on|off` reads `0xD0000000` × 1, writes
+`01`/`00` there, re-reads, and is allowed in every recognised state (never followed by a commit).
 
 ### Preset LED colour (app code, 2026-11-17)
 

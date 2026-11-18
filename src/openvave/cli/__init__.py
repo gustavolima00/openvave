@@ -103,7 +103,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openvave",
         description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded "
-        "edit-buffer writes (never saved). Unofficial. "
+        "volatile writes (edit buffer, preset select, bypass, loopback; never saved). Unofficial. "
         "Not affiliated with or endorsed by M-VAVE / Cuvave.",
     )
     parser.add_argument("--version", action="version", version=f"openvave {__version__}")
@@ -150,6 +150,45 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="reload even in edit mode (the pedal's unsaved edits are lost)",
     )
+    bypass = sub.add_parser(
+        "bypass",
+        parents=[common],
+        help="bypass the pedal (all blocks off) or leave bypass; experimental, not saved",
+    )
+    bypass_sub = bypass.add_subparsers(dest="action", metavar="ACTION", required=True)
+    bypass_on = bypass_sub.add_parser(
+        "on",
+        parents=[common],
+        help="bypass the pedal with the loaded preset (normal mode only)",
+        description="Sends 01 to 0xE1000000 + i for the loaded preset i. Experimental: the "
+        "message is not confirmed yet. Prints the command that leaves bypass.",
+    )
+    _write_options(bypass_on)
+    bypass_on.add_argument(
+        "--discard-edits",
+        action="store_true",
+        help="bypass even with unsaved edits (they are lost)",
+    )
+    bypass_off = bypass_sub.add_parser(
+        "off",
+        parents=[common],
+        help="leave bypass by selecting a preset (the position is required)",
+        description="The pedal does not report its loaded slot while bypassed, so the position "
+        "to return to is required (bypass on prints it).",
+    )
+    bypass_off.add_argument(
+        "position", nargs="?", default=None, help="1A–9D (case-insensitive) or index 0–35"
+    )
+    _write_options(bypass_off)
+    loopback = sub.add_parser(
+        "loopback",
+        parents=[common],
+        help="switch the loopback flag (status byte 0xD0000000); experimental",
+        description="Reads the flag, writes 01 (on) or 00 (off), re-reads. Never followed by a "
+        "commit. What loopback does on the Tank-G is not observed yet.",
+    )
+    loopback.add_argument("state", choices=("on", "off"), help="on or off")
+    _write_options(loopback)
     typed = "; ".join(f"{name}: {', '.join(types)}" for name, types in TYPED_FIELDS.items())
     set_parser = sub.add_parser(
         "set",
@@ -375,6 +414,12 @@ def _render_write(
         return render.human_set(plan, result, dry_run=args.dry_run)
     if command == "preset reload":
         return render.human_reload(plan, result, dry_run=args.dry_run)
+    if command == "bypass on":
+        return render.human_bypass_on(plan, result, dry_run=args.dry_run)
+    if command == "bypass off":
+        return render.human_bypass_off(plan, result, dry_run=args.dry_run)
+    if command.startswith("loopback"):
+        return render.human_loopback(plan, result, dry_run=args.dry_run)
     return render.human_select(plan, result, dry_run=args.dry_run)
 
 
@@ -433,6 +478,61 @@ async def _preset_reload(args: argparse.Namespace, factory: TransportFactory) ->
     )
 
 
+async def _bypass_position_missing(args: argparse.Namespace, factory: TransportFactory) -> str:
+    """``bypass off`` without a position: read the state, then a usage error naming the bank."""
+
+    async def source() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    async with TankG(source, timeout=args.timeout) as pedal:
+        state = await pedal.state()
+    if state.kind == "bypass" and state.bank is not None:
+        bank = state.bank + 1
+        raise UsageError(
+            "a position is required: the pedal does not report the loaded slot while bypassed "
+            f"(it reports bank {bank}); e.g. openvave bypass off {bank}A … {bank}D"
+        )
+    where = f" (on {state.position})" if state.position else ""
+    raise UsageError(
+        f"a position is required, and the pedal is not bypassed{where} ({state.label}); "
+        "to load a preset use openvave preset select <position>"
+    )
+
+
+async def _bypass(args: argparse.Namespace, factory: TransportFactory) -> str:
+    experimental = args.experimental
+    if args.action == "on":
+        discard = args.discard_edits
+        return await _write(
+            args,
+            factory,
+            "bypass on",
+            lambda p: p.plan_bypass_on(discard_edits=discard, experimental=experimental),
+            lambda p: p.bypass_on(discard_edits=discard, experimental=experimental),
+        )
+    if args.index is None:
+        return await _bypass_position_missing(args, factory)
+    index = args.index
+    return await _write(
+        args,
+        factory,
+        "bypass off",
+        lambda p: p.plan_bypass_off(index, experimental=experimental),
+        lambda p: p.bypass_off(index, experimental=experimental),
+    )
+
+
+async def _loopback(args: argparse.Namespace, factory: TransportFactory) -> str:
+    on, experimental = args.state == "on", args.experimental
+    return await _write(
+        args,
+        factory,
+        f"loopback {args.state}",
+        lambda p: p.plan_loopback(on, experimental=experimental),
+        lambda p: p.set_loopback(on, experimental=experimental),
+    )
+
+
 async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
     if args.action == "backup":
         return await _preset_backup(args, factory)
@@ -449,6 +549,8 @@ COMMANDS: dict[
     "info": _info,
     "preset": _preset,
     "set": _set,
+    "bypass": _bypass,
+    "loopback": _loopback,
 }
 
 
@@ -456,11 +558,19 @@ def _prepare_write(args: argparse.Namespace) -> None:
     """Parse the field value / position before any pedal I/O (usage errors exit 2)."""
     if args.command == "set":
         args.parsed_value = parse_field_value(args.field, args.value, args.knob_type, args.raw)
+    elif args.command == "bypass" and args.position is None:
+        args.index = None  # read the state first, then a usage error (_bypass_position_missing)
     else:
         try:
             args.index = parse_position(args.position)
         except ValueError as err:
             raise UsageError(str(err)) from None
+
+
+def _command_name(args: argparse.Namespace) -> str:
+    """``set``, ``preset select``, ``bypass off`` …: the command as typed, for error lines."""
+    action = getattr(args, "action", None)
+    return args.command if action is None else f"{args.command} {action}"
 
 
 def _prepare_backup(args: argparse.Namespace) -> None:
@@ -489,9 +599,14 @@ def _report(err: OpenvaveError) -> None:
         else:
             print("hint: turn Bluetooth on and check this user may access it", file=sys.stderr)
     elif isinstance(err, WriteNotAppliedError):
+        kind = err.result.plan.target.kind
+        check = {
+            "bypass": "'openvave info' shows the pedal state.",
+            "loopback": "'openvave info' shows the status byte.",
+        }.get(kind, "'openvave preset reload' loads the stored preset again.")
         print(
             "hint: the pedal acknowledged the write but the re-read does not show it; nothing "
-            "was retried. 'openvave preset reload' loads the stored preset again.",
+            f"was retried. {check}",
             file=sys.stderr,
         )
     elif err.exit_code == 3:
@@ -533,12 +648,15 @@ def main(
         except files.TargetExistsError as err:
             print(f"openvave preset backup: error: {err}", file=sys.stderr)
             return EXIT_USAGE
-    if args.command == "set" or (args.command == "preset" and args.action == "select"):
+    if (
+        args.command == "set"
+        or (args.command == "preset" and args.action == "select")
+        or (args.command == "bypass" and args.action == "off")
+    ):
         try:
             _prepare_write(args)
         except UsageError as err:
-            name = "set" if args.command == "set" else "preset select"
-            print(f"openvave {name}: error: {err}", file=sys.stderr)
+            print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
@@ -551,6 +669,9 @@ def main(
             output = asyncio.run(COMMANDS[args.command](args, factory))
         except files.TargetExistsError as err:
             print(f"openvave preset backup: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
+        except UsageError as err:
+            print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
         except OpenvaveError as err:
             if debug:

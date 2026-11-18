@@ -1,6 +1,7 @@
-"""The closed write surface (spec 003, research R2/R4/R6): pure data, no I/O.
+"""The closed write surface (spec 003 research R2/R4/R6, spec 004 R5/R7): pure data, no I/O.
 
-Only four kinds of write exist, all to the volatile edit buffer or the preset-select register:
+Only these kinds of write exist, all volatile (edit buffer, select and bypass registers, the
+status flag):
 
 =================  ====  ===================  ===  ==========================================
 Kind               Type  Address              Len  Data
@@ -9,11 +10,14 @@ Kind               Type  Address              Len  Data
 ``block_switch``   4     ``0x10000000 + k``   1    the switch's on/off raw value (k = 0–3)
 ``led_colour``     4     ``0x10000012``       3    R, G, B (0–255 each)
 ``preset_select``  4     ``0xE0000000 + i``   1    always ``01`` (i = 0–35)
+``bypass``         4     ``0xE1000000 + i``   1    always ``01`` (i = 0–35, the loaded preset)
+``loopback``       4     ``0xD0000000``       1    ``00`` (off) or ``01`` (on)
 =================  ====  ===================  ===  ==========================================
 
-:class:`WriteTarget` can only be built by its four constructors, and
+:class:`WriteTarget` can only be built by its constructors, and
 :func:`~openvave.protocol.frame.encode_frame` refuses any ``0x22`` body outside this table. There
-is no erase, no commit (``0xF0000000``), no stored-area write and no loopback write.
+is no erase, no commit (``0xF0000000``) and no stored-area write; no target is
+:attr:`~WriteTarget.persistent`.
 
 :data:`WRITE_MESSAGES` mirrors the "Write messages" table in ``specs/protocol/command-layer.md``
 row for row (``tests/unit/test_writes_doc.py`` fails on any difference). Change both in the same
@@ -29,7 +33,9 @@ from typing import Literal
 from openvave.models import ByteMapEntry, Confidence, Encoding, Region
 from openvave.protocol.bytemap import BYTE_MAP
 
-WriteKind = Literal["knob_block", "block_switch", "led_colour", "preset_select"]
+WriteKind = Literal[
+    "knob_block", "block_switch", "led_colour", "preset_select", "bypass", "loopback"
+]
 
 WRITE_TYPE = 4
 """Region type byte of every allowlisted write."""
@@ -50,6 +56,13 @@ SELECT_BASE = 0xE0000000
 """Preset select register: ``01`` to ``SELECT_BASE + i`` loads stored preset ``i``."""
 SELECT_DATA = b"\x01"
 PRESET_COUNT = 36
+BYPASS_BASE = 0xE1000000
+"""Bypass register: ``01`` to ``BYPASS_BASE + i`` bypasses the pedal with preset ``i`` loaded
+(spec 004 check 2: slot then reads ``ff`` and the edit buffer all zero)."""
+BYPASS_DATA = b"\x01"
+LOOPBACK_ADDRESS = 0xD0000000
+"""The 1-byte status flag the app calls loopback (spec 004 US5; meaning not yet observed)."""
+LOOPBACK_VALUES = (b"\x00", b"\x01")
 
 _KEY = object()
 
@@ -60,12 +73,16 @@ def _shape(kind: str, argument: int | None) -> tuple[int, int, int] | None:
         return (WRITE_TYPE, KNOB_BLOCK_ADDRESS, KNOB_COUNT)
     if kind == "led_colour" and argument is None:
         return (WRITE_TYPE, LED_ADDRESS, LED_LENGTH)
+    if kind == "loopback" and argument is None:
+        return (WRITE_TYPE, LOOPBACK_ADDRESS, 1)
     if isinstance(argument, bool) or not isinstance(argument, int):
         return None
     if kind == "block_switch" and 0 <= argument < SWITCH_COUNT:
         return (WRITE_TYPE, EDIT_BUFFER + argument, 1)
     if kind == "preset_select" and 0 <= argument < PRESET_COUNT:
         return (WRITE_TYPE, SELECT_BASE + argument, 1)
+    if kind == "bypass" and 0 <= argument < PRESET_COUNT:
+        return (WRITE_TYPE, BYPASS_BASE + argument, 1)
     return None
 
 
@@ -78,14 +95,15 @@ def _check_argument(name: str, value: int, count: int) -> None:
 
 @dataclass(frozen=True)
 class WriteTarget:
-    """One allowlisted write target. Built only by the four constructors below.
+    """One allowlisted write target. Built only by the constructors below.
 
     There is no constructor taking an address, and ``dataclasses.replace`` cannot move a target
     off the allowlist (the shape is re-checked on construction).
     """
 
     kind: WriteKind
-    """``knob_block``, ``block_switch``, ``led_colour`` or ``preset_select``."""
+    """``knob_block``, ``block_switch``, ``led_colour``, ``preset_select``, ``bypass`` or
+    ``loopback``."""
     type: int
     """Region type byte (always 4)."""
     address: int
@@ -93,7 +111,8 @@ class WriteTarget:
     length: int
     """Number of data bytes the write carries."""
     argument: int | None
-    """Switch number ``k`` (0–3) or preset index ``i`` (0–35); ``None`` otherwise."""
+    """Switch number ``k`` (0–3) or preset index ``i`` (0–35, select and bypass); ``None``
+    otherwise."""
     _key: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -124,13 +143,39 @@ class WriteTarget:
         _check_argument("preset index", index, PRESET_COUNT)
         return cls("preset_select", WRITE_TYPE, SELECT_BASE + index, 1, index, _KEY)
 
+    @classmethod
+    def bypass(cls, index: int) -> WriteTarget:
+        """Bypass with preset ``index`` (0–35) loaded: ``01`` to ``0xE1000000 + index``.
+
+        Volatile; selecting a preset leaves bypass (spec 004 check 2).
+        """
+        _check_argument("preset index", index, PRESET_COUNT)
+        return cls("bypass", WRITE_TYPE, BYPASS_BASE + index, 1, index, _KEY)
+
+    @classmethod
+    def loopback(cls) -> WriteTarget:
+        """The loopback flag: ``00`` / ``01`` to ``0xD0000000``, 1 byte. Never committed."""
+        return cls("loopback", WRITE_TYPE, LOOPBACK_ADDRESS, 1, None, _KEY)
+
+    @property
+    def persistent(self) -> bool:
+        """Does a write to this target change stored presets? False for every kind so far."""
+        return False
+
 
 def check_write_data(target: WriteTarget, data: bytes) -> None:
-    """Raise :class:`ValueError` unless ``data`` fits ``target`` (length; select data ``01``)."""
+    """Raise :class:`ValueError` unless ``data`` fits ``target``.
+
+    Length must match; select and bypass data is always ``01``; loopback data ``00`` or ``01``.
+    """
     if len(data) != target.length:
         raise ValueError(f"{target.kind} takes {target.length} bytes, got {len(data)}")
     if target.kind == "preset_select" and data != SELECT_DATA:
         raise ValueError("preset select data is always 01")
+    if target.kind == "bypass" and data != BYPASS_DATA:
+        raise ValueError("bypass data is always 01")
+    if target.kind == "loopback" and data not in LOOPBACK_VALUES:
+        raise ValueError("loopback data is 00 or 01")
 
 
 _SHAPES: Mapping[tuple[int, int, int], tuple[str, int | None]] = {
@@ -138,8 +183,10 @@ _SHAPES: Mapping[tuple[int, int, int], tuple[str, int | None]] = {
     for kind, args in (
         ("knob_block", (None,)),
         ("led_colour", (None,)),
+        ("loopback", (None,)),
         ("block_switch", tuple(range(SWITCH_COUNT))),
         ("preset_select", tuple(range(PRESET_COUNT))),
+        ("bypass", tuple(range(PRESET_COUNT))),
     )
     for arg in args
     if (shape := _shape(kind, arg)) is not None
@@ -178,7 +225,9 @@ def rebuild_knob_block(buffer: bytes, offset: int, value: int) -> bytes:
 
 # -- write messages (mirrors the "Write messages" doc table) -----------------------------------
 
-MessageKind = Literal["knob_block", "block_switch", "led_colour", "preset_select", "ack"]
+MessageKind = Literal[
+    "knob_block", "block_switch", "led_colour", "preset_select", "bypass", "loopback", "ack"
+]
 
 
 @dataclass(frozen=True)
@@ -188,11 +237,13 @@ class WriteMessage:
     kind: MessageKind
     """A write kind, or ``ack`` for the write acknowledgement."""
     argument: int | None
-    """Switch number for ``block_switch`` rows; ``None`` otherwise (one select row for all i)."""
+    """Switch number for ``block_switch`` rows; ``None`` otherwise (one select row and one
+    bypass row for all i)."""
     type: int | None
     """Region type byte; ``None`` for the ACK row."""
     address: int | None
-    """Address (the base ``0xE0000000`` for preset select); ``None`` for the ACK row."""
+    """Address (the base ``0xE0000000`` / ``0xE1000000`` for select / bypass); ``None`` for the
+    ACK row."""
     length: int | None
     """Data length; ``None`` for the ACK row."""
     confidence: Confidence
@@ -248,11 +299,14 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
         "select_b",
         "select_b_back",
     ),
+    _row("hypothesis", "bypass", None, BYPASS_BASE, 1),
+    _row("hypothesis", "loopback", None, LOOPBACK_ADDRESS, 1),
     _row("confirmed", "ack", None, None, None, "knob_gain", "select", "knob_treble", "select_b"),
 )
 """Every write message and the ACK, as documented (fw 96). Gate sessions A and B confirm the
 knob block, preset select and the ACK; the block switches and LED colour stay ``observed``
-(session A only), so they still need ``--experimental``."""
+(session A only), so they still need ``--experimental``. Bypass and loopback are ``hypothesis``
+until openvave's own gate sends them (spec 004 R7; check 2 was a ``poc/`` send)."""
 
 _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 
@@ -260,8 +314,8 @@ _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 def message_for(
     kind: str, argument: int | None, messages: Sequence[WriteMessage] = WRITE_MESSAGES
 ) -> WriteMessage:
-    """The row for a write. Preset select has one row for every index. ``KeyError`` if none."""
-    wanted = None if kind == "preset_select" else argument
+    """The row for a write. Select and bypass have one row for every index. ``KeyError`` if none."""
+    wanted = None if kind in ("preset_select", "bypass") else argument
     for m in messages:
         if m.kind == kind and m.argument == wanted:
             return m

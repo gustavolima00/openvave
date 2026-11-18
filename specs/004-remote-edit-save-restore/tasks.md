@@ -157,31 +157,69 @@ without `--experimental`; nothing new is sent to the pedal yet.
 
 ### Tests for User Stories 2 and 5 (write first, must fail)
 
-- [ ] T023 [P] [US2] `tests/unit/test_writes.py`: `bypass(i)` and `loopback()` shapes, data rules, argument range, `persistent is False`, `allowed_write_body` accepts exactly these and still rejects `0xE1000000+36`, `0xD0000000`×2 and `0xD0000000` type 5
-- [ ] T024 [P] [US2] `tests/unit/test_writes_doc.py` + `tests/support/writes_doc.py`: the doc table has `bypass(i)` and `loopback` rows, `hypothesis`, mirrored by `WRITE_MESSAGES`
-- [ ] T025 [P] [US2] `tests/unit/test_fake_transport.py`: fake pedal enters bypass on the bypass write (global slot `ff`, buffer zeros), leaves it on select, and stores the loopback byte
-- [ ] T026 [P] [US2] `tests/integration/test_bypass.py`: check 2 replay; applied; refused per state table; `edits_would_be_discarded`; already bypassed → no change; `bypass_off` only in bypass; NAK → `WriteNakError`; ACK but not bypassed → `WriteNotAppliedError`; result carries the return index
-- [ ] T027 [P] [US5] `tests/integration/test_loopback.py`: read, one write, ACK, re-read; no change when equal; refused without `experimental` and in `unrecognised`; never followed by a commit frame; NAK and not-applied paths
-- [ ] T028 [P] [US2] `tests/contract/test_cli_bypass.py`: human and `--json` output of `bypass on` / `bypass off <pos>`, the "Leave bypass: openvave bypass off 1B" line, `--dry-run`, exit 2 for a missing position (message names the reported bank), exit codes 1/7/8
-- [ ] T029 [P] [US5] `tests/contract/test_cli_loopback.py`: `loopback on|off` output, `--dry-run`, no-change line, refusal without `--experimental`
-- [ ] T030 [P] [US2] `tests/support/audit.py` + `tests/unit/test_audit.py`: the audit accepts the two new kinds and nothing else new
+- [X] T023 [P] [US2] `tests/unit/test_writes.py`: `bypass(i)` and `loopback()` shapes, data rules, argument range, `persistent is False`, `allowed_write_body` accepts exactly these and still rejects `0xE1000000+36`, `0xD0000000`×2 and `0xD0000000` type 5
+- [X] T024 [P] [US2] `tests/unit/test_writes_doc.py` + `tests/support/writes_doc.py`: the doc table has `bypass(i)` and `loopback` rows, `hypothesis`, mirrored by `WRITE_MESSAGES`
+- [X] T025 [P] [US2] `tests/unit/test_fake_transport.py`: fake pedal enters bypass on the bypass write (global slot `ff`, buffer zeros), leaves it on select, and stores the loopback byte
+- [X] T026 [P] [US2] `tests/integration/test_bypass.py`: check 2 replay; applied; refused per state table; `edits_would_be_discarded`; already bypassed → no change; `bypass_off` only in bypass; NAK → `WriteNakError`; ACK but not bypassed → `WriteNotAppliedError`; result carries the return index
+- [X] T027 [P] [US5] `tests/integration/test_loopback.py`: read, one write, ACK, re-read; no change when equal; refused without `experimental` and in `unrecognised`; never followed by a commit frame; NAK and not-applied paths
+- [X] T028 [P] [US2] `tests/contract/test_cli_bypass.py`: human and `--json` output of `bypass on` / `bypass off <pos>`, the "Leave bypass: openvave bypass off 1B" line, `--dry-run`, exit 2 for a missing position (message names the reported bank), exit codes 1/7/8
+- [X] T029 [P] [US5] `tests/contract/test_cli_loopback.py`: `loopback on|off` output, `--dry-run`, no-change line, refusal without `--experimental`
+- [X] T030 [P] [US2] `tests/support/audit.py` + `tests/unit/test_audit.py`: the audit accepts the two new kinds and nothing else new
 
 ### Implementation for User Stories 2 and 5
 
-- [ ] T031 [US2] `src/openvave/protocol/writes.py`: `WriteTarget.bypass(i)`, `.loopback()`, data rules in `check_write_data`, `_SHAPES`, `WriteTarget.persistent`, two `WRITE_MESSAGES` rows (`hypothesis`, check 2 in Notes) (T023, T024)
-- [ ] T032 [US2] `specs/protocol/command-layer.md`: the two "Write messages" rows and the allowlist sentence, in the same commit as T031
-- [ ] T033 [US2] `src/openvave/transport/fake.py`: bypass state and loopback byte (T025)
-- [ ] T034 [US2] `src/openvave/session.py`: `bypass_on(discard_edits, experimental)` and `bypass_off(index, experimental)` (select path, only in bypass); `WriteResult` gains an optional `return_index` in `src/openvave/models.py` (T026)
-- [ ] T035 [US5] `src/openvave/session.py`: `set_loopback(on, experimental)` (T027)
-- [ ] T036 [US2] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `bypass on|off`, `loopback on|off` commands and output; `write-result.schema.json` consumers accept the new `command` and `target.kind` values (add them to `specs/004-remote-edit-save-restore/contracts/` as an extended copy if the 003 schema's enums reject them) (T028, T029)
-- [ ] T037 [US2] `tests/support/audit.py`: allow the two kinds (T030); `tests/contract/test_public_api.py` lists the new exports
-- [ ] T038 [US2] `README.md` and `CHANGELOG.md` [Unreleased]: bypass and loopback commands, both experimental
+- [X] T031 [US2] `src/openvave/protocol/writes.py`: `WriteTarget.bypass(i)`, `.loopback()`, data rules in `check_write_data`, `_SHAPES`, `WriteTarget.persistent`, two `WRITE_MESSAGES` rows (`hypothesis`, check 2 in Notes) (T023, T024)
+- [X] T032 [US2] `specs/protocol/command-layer.md`: the two "Write messages" rows and the allowlist sentence, in the same commit as T031
+- [X] T033 [US2] `src/openvave/transport/fake.py`: bypass state and loopback byte (T025)
+- [X] T034 [US2] `src/openvave/session.py`: `bypass_on(discard_edits, experimental)` and `bypass_off(index, experimental)` (select path, only in bypass); `WriteResult` gains an optional `return_index` in `src/openvave/models.py` (T026)
+- [X] T035 [US5] `src/openvave/session.py`: `set_loopback(on, experimental)` (T027)
+- [X] T036 [US2] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `bypass on|off`, `loopback on|off` commands and output; `write-result.schema.json` consumers accept the new `command` and `target.kind` values (add them to `specs/004-remote-edit-save-restore/contracts/` as an extended copy if the 003 schema's enums reject them) (T028, T029)
+- [X] T037 [US2] `tests/support/audit.py`: allow the two kinds (T030); `tests/contract/test_public_api.py` lists the new exports
+- [X] T038 [US2] `README.md` and `CHANGELOG.md` [Unreleased]: bypass and loopback commands, both experimental
+  - Done 2026-11-18. Suite **1418 passed, 5 skipped** (M0 end: 1254 + gate fixes); `ruff check`,
+    `ruff format --check`, `mypy` (strict) clean. Decisions: (1) `bypass off` sends the confirmed
+    preset select, so it needs no `--experimental`; only `bypass on` and `loopback` do. (2)
+    `bypass on` in edit mode is refused as `edit_mode`, `bypass off` outside bypass as
+    `not_bypassed` (normal) / `edit_mode` / `tuner_mode` / `unrecognised_state`. (3) Public plan
+    methods `plan_bypass_on`, `plan_bypass_off`, `plan_loopback` (dry run and library), as for
+    `set` / `select` / `reload`. (4) A loopback plan's `before` and result's `after` are the status
+    byte; JSON change region `status`. (5) M0 deviation (2) closed: the `bypassed` refusal now
+    points to `bypass off <position>`. (6) `bypass off` without a position connects, reads the
+    state, then exits 2 naming the reported bank (`e.g. openvave bypass off 3A … 3D`).
 
 ### Live verification (milestone gate)
 
-- [ ] T039 [US2] Owner runs the first two commands of quickstart §3 with `--trace` (`bypass on --dry-run --experimental`, `loopback off --dry-run --experimental`); researcher checks the trace holds reads only and the printed frames equal the frames of the Independent test criteria; outputs recorded under this task
+- [X] T039 [US2] Owner runs the first two commands of quickstart §3 with `--trace` (`bypass on --dry-run --experimental`, `loopback off --dry-run --experimental`); researcher checks the trace holds reads only and the printed frames equal the frames of the Independent test criteria; outputs recorded under this task
+  - Offline rehearsal 2026-11-18 (fake pedal on 1B, normal mode, status `01`; not hardware): both
+    exit 0, `dry run: nothing sent`, trace holds only `0x11` and `0x23` frames. Printed frames:
+    `00 59 22 09 00 00 04 01 00 00 e1 01 00 00 01 17` (bypass 1B) and
+    `00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a` (loopback off), equal to the Independent test
+    criteria. Superseded by the hardware run below.
+  - Hardware run 2026-11-18 ~13:05 UTC, fw 96, owner's Mac (Terminal panel; the owner allowed the
+    researcher to run commands). Raw output: `captures/private/20261118-t039-phase{1,2}.log`.
+    12 connections, 57 frames sent: 12 × `0x11`, 44 × `0x23`, **one** `0x22`, the confirmed
+    `preset_select(0)`. No bypass or loopback frame was sent.
+  - Phase 1, pedal found **bypassed** (global `00 00 ff 01`, buffer 21 × `00`, left over from an
+    earlier session): `bypass on --dry-run --experimental` → `already bypassed; nothing sent`, exit 0
+    (bypass confirmed by the second read); `loopback off --dry-run --experimental` → frame
+    `… d0 01 00 00 00 2a`, `dry run: nothing sent`; `bypass off` (no position) → exit 2, `it reports
+    bank 1; e.g. openvave bypass off 1A … 1D`; `bypass off 1A --dry-run` → select frame
+    `… e0 01 00 00 01 19`.
+  - `bypass off 1A` (real, confirmed select): ACK, `now bank 1, slot A   buffer = stored 1A
+    applied`; first global re-read already `00 00 00 01` (no `ff` transient). First hardware run of
+    the `bypass_off` path. `preset dump`: `state: normal, preset 1A`.
+  - Phase 2, normal mode on 1A: `bypass on --dry-run --experimental` → `Bypass on   (was 1A, normal
+    mode)`, frame `00 59 22 09 00 00 04 00 00 00 e1 01 00 00 01 18` (= `build_write(bypass(0))`; the
+    criteria frame `… 01 17` is index 1, 1B); without `--experimental` the dry run prints
+    `refused: experimental_required (bypass is 'hypothesis'; …)` and the real run exits 1, reads
+    only. `loopback off --dry-run --experimental` → `Loopback on → off`, frame `… d0 01 00 00 00 2a`
+    (status read `01`); `loopback off` without `--experimental` → exit 1; `loopback on --dry-run
+    --experimental` → `loopback is already on; nothing sent`; `bypass off 1A` in normal mode → exit 1
+    `not_bypassed`, reads only; `bypass on --dry-run --experimental --json` → `plan.target`
+    `bypass` `0xe1000000`, `confidence` `hypothesis`, `refusal` null, `dry_run` true.
+  - Pedal left on 1A, normal mode, buffer = stored 1A, status `01`.
 
-**Checkpoint**: Milestone 1 DONE — bypass and loopback are implemented and tested; neither has been sent by openvave
+**Checkpoint**: Milestone 1 DONE — bypass and loopback are implemented and tested; neither has been sent by openvave ✅ (2026-11-18: suite 1418 passed; T039 on hardware, 12 connections, only reads plus one confirmed select)
 
 ---
 

@@ -15,8 +15,11 @@ async with openvave.TankG.connect() as pedal:
     await pedal.set_field("reverb_decay", ("orange", 10))   # section value → raw 53
     await pedal.reload_preset(discard_edits=False)    # WriteResult; select of the loaded preset
     plan = await pedal.plan_reload()                  # WritePlan; reads only (no_change: nothing to discard)
+    plan = await pedal.plan_bypass_on()               # WritePlan; reads only (no_change if bypassed)
     await pedal.bypass_on(discard_edits=False, experimental=True)     # WriteResult (+ .return_index)
+    plan = await pedal.plan_bypass_off(1)             # WritePlan; refusal not_bypassed unless bypassed
     await pedal.bypass_off(1, experimental=True)      # = select 1B, only when bypassed
+    plan = await pedal.plan_loopback(False)           # WritePlan; plan.before = status byte
     await pedal.set_loopback(False, experimental=True)
 
     # Persistent: unsafe=True is mandatory, a backup is always taken first
@@ -49,6 +52,7 @@ Every `plan_*` and every write method also accepts `sleep=` (injectable, for tes
 | `protocol.section_raw`, `protocol.SECTION_FIELDS` | function, data | section input |
 | `WriteTarget.bypass`, `.loopback`, `.stored_slot`, `.commit`, `.stored_image` | constructors | closed; `.persistent` property |
 | `WriteRefusedError.reason` | values | + `unsafe_required`, `bypassed`, `tuner_mode`, `edit_mode`, `unrecognised_state`, `not_bypassed`, `firmware_mismatch` |
+| `WriteResult.return_index` | field | `bypass_on` only: the preset `bypass_off` should select (M1) |
 
 `WriteNakError`, `ConnectionLostError`, `RequestTimeoutError` and `WriteNotAppliedError` raised
 from `save_preset` / `restore` carry `.sequence` (the partial `SequenceResult`).

@@ -42,6 +42,7 @@ def test_required_rows_exist() -> None:
     keys = {(row.kind, row.argument) for row in load_write_rows()}
     expected = {("knob_block", None), ("led_colour", None), ("preset_select", None), ("ack", None)}
     expected |= {("block_switch", k) for k in range(4)}
+    expected |= {("bypass", None), ("loopback", None)}  # spec 004 M1
     assert expected <= keys
 
 
@@ -59,6 +60,18 @@ def test_targets_match_the_allowlist() -> None:
         3,
     )
     assert rows[("preset_select", None)].address == 0xE0000000
+    bypass, loopback = rows[("bypass", None)], rows[("loopback", None)]
+    assert (bypass.type, bypass.address, bypass.length) == (4, 0xE1000000, 1)
+    assert (loopback.type, loopback.address, loopback.length) == (4, 0xD0000000, 1)
+
+
+def test_bypass_and_loopback_start_as_hypothesis() -> None:
+    # spec 004 R7: check 2 was a poc send, not openvave's own; the gate (M3) promotes them
+    rows = {(row.kind, row.argument): row for row in load_write_rows()}
+    for key, note in ((("bypass", None), "check 2"), (("loopback", None), "app")):
+        row = rows[key]
+        assert (row.confidence, row.evidence, row.firmware) == ("hypothesis", (), frozenset({96}))
+        assert note in row.notes
 
 
 def _evidence_rule(row: WriteRow) -> list[str]:

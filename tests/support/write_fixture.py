@@ -17,6 +17,7 @@ from tests.support.mutations import with_payload
 CAP = load_capture(FW96_CONNECT)
 EDIT_BUFFER = 0x10000000
 GLOBAL = 0x20000000
+STATUS = 0xD0000000
 ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
 EDIT, NORMAL, TUNER = 0, 1, 2
 FW97_QUERY_RX = with_payload(CAP.rx(QUERY), b"TANK-Gv2_097" + CAP.rx(QUERY)[18:-1])
@@ -48,10 +49,12 @@ def make_fake(
     query_rx: bytes | None = None,
     cls: type[FakeTransport] = FakeTransport,
     glob: bytes | None = None,
+    status: bytes | None = None,
 ) -> FakeTransport:
     """A fake pedal on 1B: stored image at 0, edit buffer, global block; ACKs allowlisted writes.
 
-    ``glob`` replaces the whole global block (e.g. slot ``ff`` for bypass, spec 004).
+    ``glob`` replaces the whole global block (e.g. slot ``ff`` for bypass, spec 004). ``status``
+    adds the 1-byte status block at ``0xD0000000`` (the loopback flag, spec 004 US5).
     """
     full: dict[str, tuple[bytes, Replies]] = {QUERY: (CAP.tx(QUERY), query_rx or CAP.rx(QUERY))}
     full.update(script or {})
@@ -60,6 +63,8 @@ def make_fake(
         EDIT_BUFFER: buffer,
         GLOBAL: global_block(mode) if glob is None else glob,
     }
+    if status is not None:
+        memory[STATUS] = status
     return cls(full, memory=memory, apply_writes=apply_writes, select_transient=select_transient)
 
 

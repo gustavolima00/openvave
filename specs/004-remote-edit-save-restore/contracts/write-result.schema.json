@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:openvave:cli:write:v2:004",
-  "title": "openvave set / preset select / preset reload --json (plan and result parts); spec 004 extension of the 003 schema, schema_version 2",
+  "title": "openvave set / preset select / preset reload / bypass / loopback --json (plan and result parts); spec 004 extension of the 003 schema, schema_version 2",
   "type": "object",
   "required": [
     "schema_version",
@@ -20,7 +20,11 @@
       "enum": [
         "set",
         "preset select",
-        "preset reload"
+        "preset reload",
+        "bypass on",
+        "bypass off",
+        "loopback on",
+        "loopback off"
       ]
     },
     "read_at": {
@@ -47,7 +51,10 @@
           "examples": [
             "set gain",
             "select 2C",
-            "reload 1B"
+            "reload 1B",
+            "bypass on 1B",
+            "bypass off 1B",
+            "loopback off"
           ]
         },
         "target": {
@@ -65,7 +72,9 @@
                 "knob_block",
                 "block_switch",
                 "led_colour",
-                "preset_select"
+                "preset_select",
+                "bypass",
+                "loopback"
               ]
             },
             "type": {
@@ -104,7 +113,7 @@
         },
         "before": {
           "$ref": "#/$defs/hex",
-          "description": "edit buffer, 21 bytes"
+          "description": "edit buffer, 21 bytes; the status byte (1 byte) for loopback"
         },
         "global_before": {
           "$ref": "#/$defs/hex",
@@ -124,7 +133,9 @@
             "tuner_mode",
             "bypassed",
             "unrecognised_state",
-            "type_required"
+            "type_required",
+            "edit_mode",
+            "not_bypassed"
           ],
           "description": "not_edit_mode is no longer produced since spec 004 (kept for 0.3.0 documents)"
         },
@@ -158,7 +169,8 @@
           "const": true
         },
         "after": {
-          "$ref": "#/$defs/hex"
+          "$ref": "#/$defs/hex",
+          "description": "edit buffer, 21 bytes; the status byte (1 byte) for loopback"
         },
         "global_after": {
           "$ref": "#/$defs/hex"
@@ -177,7 +189,8 @@
               "region": {
                 "enum": [
                   "global",
-                  "preset"
+                  "preset",
+                  "status"
                 ]
               },
               "offset": {
@@ -200,6 +213,17 @@
         },
         "applied": {
           "type": "boolean"
+        },
+        "return_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 35,
+          "description": "bypass on only: the preset bypass off should select (the pedal does not report its slot while bypassed)"
+        },
+        "return_position": {
+          "type": "string",
+          "pattern": "^[1-9][A-D]$",
+          "description": "return_index as 1A–9D"
         }
       }
     }

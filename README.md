@@ -257,6 +257,31 @@ block (every knob and selector) and preset select. The block switches and `led_c
 `led_colour` changes the preset's LED has not been seen yet: the bytes it writes are documented as
 a hypothesis.
 
+### Bypass and loopback (experimental): `openvave bypass`, `openvave loopback`
+
+`bypass on` turns the whole pedal off (clean sound, LEDs off), as the app's BYPASS button does;
+`bypass off <position>` leaves bypass by selecting that preset. While bypassed the pedal does not
+report which slot was loaded, so `bypass on` prints the command to come back, and `bypass off`
+needs the position. Both messages are not confirmed on the pedal by openvave yet, so `bypass on`
+needs `--experimental` (`bypass off` is the confirmed preset select). `bypass on` works in normal
+mode only; with unsaved edits it needs `--discard-edits`.
+
+```text
+$ openvave bypass on --experimental
+Bypass on   (was 1B, normal mode)
+  write  00 59 22 09 00 00 04 01 00 00 e1 01 00 00 01 17
+  reply  00 59 00 01 00 00 00 ff   ACK
+  now    bypass (slot ff, buffer all 00)   applied
+Leave bypass: openvave bypass off 1B
+```
+
+`loopback on|off` switches the status byte the app calls Loopback (`0xD0000000`, `01` in every
+session so far). What it does on the Tank-G, and whether it survives a power cycle, is not known
+yet, so it needs `--experimental`. It reads the flag, writes one byte, reads it back, and is never
+followed by a commit; an equal value sends nothing (`loopback is already on; nothing sent`).
+
+Neither command saves anything. Both support `--dry-run`, `--json` and `--trace`.
+
 ### Options
 
 `--json`, `--device ID`, `--scan-timeout SECONDS` (default 5: the most a scan waits; it stops 1 s
@@ -274,7 +299,7 @@ Schemas: [`info`](specs/001-readonly-ble-connection/contracts/info.schema.json),
 [`preset dump`](specs/001-readonly-ble-connection/contracts/preset-dump.schema.json), each
 decoded field [`fields[]`](specs/002-preset-byte-map/contracts/decoded-field.schema.json),
 [`preset backup`](specs/003-preset-backup-edit-writes/contracts/backup.schema.json) and the
-[`set` / `preset select` / `preset reload` result](specs/004-remote-edit-save-restore/contracts/write-result.schema.json).
+[`set` / `preset select` / `preset reload` / `bypass` / `loopback` result](specs/004-remote-edit-save-restore/contracts/write-result.schema.json).
 `info` and `preset dump` add a top-level `pedal_state` (`normal`, `edit`, `tuner`, `bypass`,
 `loading`, `unrecognised`), and so do `watch --json` start and change events. Bytes
 are lowercase, space-separated hex.
@@ -287,7 +312,9 @@ bumps `schema_version`.
 ### Exit codes
 
 `0` success · `1` internal error, or a write refused (tuner mode, bypassed or unrecognised pedal
-state, out of range, untested firmware, `--experimental` needed, edits would be discarded) · `2` usage error · `3` no pedal
+state, edit mode for `bypass on`, not bypassed for `bypass off`, out of range, untested firmware,
+`--experimental` needed, edits would be discarded) · `2` usage error (also `bypass off` without a
+position) · `3` no pedal
 found · `4` more than one pedal (use `--device`) · `5` Bluetooth unavailable or permission denied ·
 `6` connection lost or timed out · `7` protocol error, NAK or backup cross-check mismatch · `8`
 write acknowledged but not applied. Details in the
@@ -314,8 +341,10 @@ asyncio.run(main())
 ```
 
 `TankG.watch()` yields the same events as `openvave watch`; `backup()`, `plan_set()` /
-`set_field()` and `plan_select()` / `select_preset()` do what `preset backup`, `set` and
-`preset select` do (writes take `experimental=True` where the CLI needs `--experimental`). See the
+`set_field()`, `plan_select()` / `select_preset()`, `plan_reload()` / `reload_preset()`,
+`plan_bypass_on()` / `bypass_on()` (its result's `return_index` is the preset to return to),
+`plan_bypass_off(i)` / `bypass_off(i)` and `plan_loopback(on)` / `set_loopback(on)` do what the
+matching commands do (writes take `experimental=True` where the CLI needs `--experimental`). See the
 library contracts ([0.1.0](specs/001-readonly-ble-connection/contracts/library-api.md),
 [0.2.0](specs/002-preset-byte-map/contracts/library-api.md) and
 [0.3.0](specs/003-preset-backup-edit-writes/contracts/library-api.md) additions), including how to

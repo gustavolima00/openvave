@@ -524,6 +524,205 @@ class TankG:
         assert index is not None
         return await self._run_select(plan, index, wait)
 
+    # -- bypass and loopback (spec 004 US2, US5) ------------------------------------------------
+
+    async def plan_bypass_on(
+        self,
+        *,
+        discard_edits: bool = False,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> WritePlan:
+        """Plan bypassing the pedal: reads global, the edit buffer and the loaded stored preset.
+
+        Allowed in normal mode only (``edit_mode``, ``tuner_mode``, ``unrecognised_state``
+        otherwise). Unsaved edits (buffer ≠ stored preset) need ``discard_edits``
+        (``edits_would_be_discarded``). Already bypassed: ``no_change`` with an empty frame (the
+        target is then a placeholder for slot A of the reported bank, since the loaded slot is
+        not reported). The bypass message is ``hypothesis``, so ``experimental`` is needed.
+        """
+        state, glob, buffer, reads = await self._read_state(sleep)
+        if state.kind == "bypass":
+            target = WriteTarget.bypass(4 * (state.bank or 0))
+            return WritePlan(
+                action="bypass on",
+                target=target,
+                data=b"",
+                frame=b"",
+                reads=reads,
+                before=buffer,
+                global_before=glob,
+                no_change=True,
+                refusal=None,
+                confidence=message_for(target.kind, target.argument).confidence,
+            )
+        if state.index is None or state.kind == "tuner":
+            reason = STATE_REFUSALS.get(state.kind, "unrecognised_state")
+            raise WriteRefusedError(reason, f"refused ({reason}): {self._refusal_text(reason)}")
+        index = state.index
+        target = WriteTarget.bypass(index)
+        stored_target = StorageRead.preset(index)
+        stored_frame = build_storage_read(stored_target)
+        stored = parse_storage_reply(stored_target, await self._request(stored_frame))
+        refusal: str | None = None
+        if state.kind == "edit":
+            refusal = "edit_mode"
+        elif buffer.data != stored and not discard_edits:
+            refusal = "edits_would_be_discarded"
+        else:
+            refusal = self._gate(target, experimental)
+        data = b"\x01"
+        return WritePlan(
+            action=f"bypass on {position(index)}",
+            target=target,
+            data=data,
+            frame=build_write(target, data),
+            reads=(*reads, stored_frame),
+            before=buffer,
+            global_before=glob,
+            no_change=False,
+            refusal=refusal,
+            confidence=message_for(target.kind, target.argument).confidence,
+        )
+
+    async def bypass_on(
+        self,
+        *,
+        discard_edits: bool = False,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> WriteResult:
+        """Bypass the pedal (spec 004 US2, FR-007…FR-010): ``01`` to ``0xE1000000 + i``.
+
+        Builds :meth:`plan_bypass_on`'s plan and raises :class:`WriteRefusedError` if it is
+        refused. Already bypassed: returns at once, nothing sent. Otherwise sends the one write,
+        checks the ACK, re-reads global and the edit buffer, and is applied iff the slot reads
+        ``ff`` and the buffer is all zero (else :class:`WriteNotAppliedError`). The result's
+        ``return_index`` is the preset to give :meth:`bypass_off`. Volatile; never retried.
+        """
+        plan = await self.plan_bypass_on(
+            discard_edits=discard_edits, experimental=experimental, sleep=sleep
+        )
+        self._raise_refusal(plan)
+        if plan.no_change:
+            return WriteResult(plan, b"", plan.before, plan.global_before, (), applied=True)
+        reply = await self._send_once(plan)
+        glob = await self.read(Region.GLOBAL)
+        after = await self.read(Region.CURRENT_PRESET)
+        applied = classify(glob.data, after.data).kind == "bypass"
+        result = WriteResult(
+            plan,
+            reply,
+            after,
+            glob,
+            diff(plan.global_before, glob) + diff(plan.before, after),
+            applied,
+            return_index=plan.target.argument,
+        )
+        if not applied:
+            raise WriteNotAppliedError(
+                result, f"{plan.action}: acknowledged but the pedal does not read as bypassed"
+            )
+        return result
+
+    async def plan_bypass_off(
+        self, index: int, *, experimental: bool = False, sleep: Sleep | None = None
+    ) -> WritePlan:
+        """Plan leaving bypass by selecting preset ``index`` (0–35): reads global and the buffer.
+
+        Allowed only when the pedal is bypassed (confirmed by a second read); otherwise
+        ``not_bypassed`` (normal), ``edit_mode``, ``tuner_mode`` or ``unrecognised_state``. The
+        write is the confirmed preset select. Raises :class:`ValueError` for an index outside
+        0–35.
+        """
+        target = WriteTarget.preset_select(index)
+        state, glob, buffer, reads = await self._read_state(sleep)
+        refusals = {**STATE_REFUSALS, "normal": "not_bypassed", "edit": "edit_mode"}
+        refusal = None if state.kind == "bypass" else refusals[state.kind]
+        if refusal is None:
+            refusal = self._gate(target, experimental)
+        data = b"\x01"
+        return WritePlan(
+            action=f"bypass off {position(index)}",
+            target=target,
+            data=data,
+            frame=build_write(target, data),
+            reads=reads,
+            before=buffer,
+            global_before=glob,
+            no_change=False,
+            refusal=refusal,
+            confidence=message_for(target.kind, target.argument).confidence,
+        )
+
+    async def bypass_off(
+        self,
+        index: int,
+        *,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> WriteResult:
+        """Leave bypass by selecting preset ``index`` (spec 004 FR-007, FR-009, FR-010).
+
+        Only when the pedal is bypassed (:meth:`plan_bypass_off`); then the select path of
+        :meth:`select_preset`, verified by the pedal showing ``index`` with the buffer equal to
+        the stored preset. The index is required: the pedal does not report its slot while
+        bypassed. ``sleep`` is injectable for tests.
+        """
+        plan = await self.plan_bypass_off(index, experimental=experimental, sleep=sleep)
+        self._raise_refusal(plan)
+        return await self._run_select(plan, index, sleep or SELECT_SLEEP)
+
+    async def plan_loopback(
+        self, on: bool, *, experimental: bool = False, sleep: Sleep | None = None
+    ) -> WritePlan:
+        """Plan setting the loopback flag: reads global, the edit buffer and the status byte.
+
+        ``plan.before`` is the status byte (``0xD0000000`` × 1). Allowed in every recognised
+        state; refused in an unrecognised one. ``no_change`` when the flag already has the value.
+        The message is ``hypothesis``, so ``experimental`` is needed.
+        """
+        target = WriteTarget.loopback()
+        state, glob, _, reads = await self._read_state(sleep)
+        status, status_frame = await self._read_with_frame(Region.STATUS)
+        data = b"\x01" if on else b"\x00"
+        refusal = (
+            "unrecognised_state"
+            if state.kind == "unrecognised"
+            else self._gate(target, experimental)
+        )
+        return WritePlan(
+            action=f"loopback {'on' if on else 'off'}",
+            target=target,
+            data=data,
+            frame=build_write(target, data),
+            reads=(*reads, status_frame),
+            before=status,
+            global_before=glob,
+            no_change=status.data == data,
+            refusal=refusal,
+            confidence=message_for(target.kind, target.argument).confidence,
+        )
+
+    async def set_loopback(
+        self, on: bool, *, experimental: bool = False, sleep: Sleep | None = None
+    ) -> WriteResult:
+        """Set the loopback flag (spec 004 US5, FR-026): one 1-byte write to ``0xD0000000``.
+
+        Builds :meth:`plan_loopback`'s plan and raises :class:`WriteRefusedError` if refused.
+        Equal value: returns at once, nothing sent. Otherwise sends the write, checks the ACK and
+        re-reads the status byte (``result.after``) and global; applied iff the byte now equals
+        the request (else :class:`WriteNotAppliedError`). Never followed by a commit or a retry.
+        """
+        plan = await self.plan_loopback(on, experimental=experimental, sleep=sleep)
+        self._raise_refusal(plan)
+        if plan.no_change:
+            return WriteResult(plan, b"", plan.before, plan.global_before, (), applied=True)
+        reply = await self._send_once(plan)
+        glob = await self.read(Region.GLOBAL)
+        after = await self.read(Region.STATUS)
+        return self._finish(plan, reply, after, glob, after.data == plan.data)
+
     def _gate(self, target: WriteTarget, experimental: bool) -> str | None:
         """Firmware and confidence gate (FR-014/015, research R4)."""
         if experimental:
@@ -561,8 +760,15 @@ class TankG:
                 "(--type, or (type, position) in the library)"
             ),
             "bypassed": (
-                "the pedal is bypassed and does not report its loaded slot; select a preset to "
-                "leave bypass (openvave preset select <position>)"
+                "the pedal is bypassed and does not report its loaded slot; leave bypass with "
+                "openvave bypass off <position> (bypass_off(index) in the library)"
+            ),
+            "edit_mode": (
+                "the pedal is in edit mode; leave edit mode on the pedal first (bypass works "
+                "in normal mode only)"
+            ),
+            "not_bypassed": (
+                "the pedal is not bypassed; to load a preset use openvave preset select <position>"
             ),
             "unrecognised_state": (
                 "the pedal reports a state openvave does not recognise (global block / edit "
