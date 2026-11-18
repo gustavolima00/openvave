@@ -27,7 +27,8 @@ async with openvave.TankG.connect() as pedal:
     result = await pedal.save_preset(
         to=None, unsafe=True, experimental=True,
         on_backup=store,                              # called with the Backup before the first write;
-    )                                                 # if it raises, nothing is written
+        on_plan=show,                                 # optional: the plan, before the backup (M2)
+    )                                                 # if either raises, nothing is written
     backup = openvave.Backup.from_document(document)
     plan = await pedal.plan_restore(backup, slot=2)   # or all=True
     result = await pedal.restore(backup, all=True, unsafe=True, experimental=True,
@@ -62,7 +63,9 @@ from `save_preset` / `restore` carry `.sequence` (the partial `SequenceResult`).
 - `encode_frame` accepts `0x22` only for the nine target kinds (four of 0.3.0, five new). `0x21`,
   type 6, the global block, the whole edit buffer and `0x15` are never encodable.
 - A persistent target is sent only by `save_preset` and `restore`, only with `unsafe=True`, and
-  only after `on_backup` returned. `on_backup` is a required argument.
+  only after `on_backup` returned. `on_backup` is a required argument; it and the optional
+  `on_plan` (added in M2 so the CLI can show what will be overwritten before the backup, FR-030)
+  may be plain or coroutine functions.
 - `state`, `read`, `snapshot`, `watch`, `backup` and every `plan_*` send no write.
 - `set_field`, `reload_preset`, `bypass_on`, `bypass_off`, `set_loopback` send at most one write.
   `save_preset` and `restore` send at most three, in the documented order.

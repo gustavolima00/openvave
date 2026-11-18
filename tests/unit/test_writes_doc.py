@@ -43,6 +43,7 @@ def test_required_rows_exist() -> None:
     expected = {("knob_block", None), ("led_colour", None), ("preset_select", None), ("ack", None)}
     expected |= {("block_switch", k) for k in range(4)}
     expected |= {("bypass", None), ("loopback", None)}  # spec 004 M1
+    expected |= {("stored_slot", None), ("commit", None), ("stored_image", None)}  # spec 004 M2
     assert expected <= keys
 
 
@@ -72,6 +73,35 @@ def test_bypass_and_loopback_start_as_hypothesis() -> None:
         row = rows[key]
         assert (row.confidence, row.evidence, row.firmware) == ("hypothesis", (), frozenset({96}))
         assert note in row.notes
+
+
+def test_persistent_rows_match_the_allowlist() -> None:
+    rows = {(row.kind, row.argument): row for row in load_write_rows()}
+    slot, commit, image = (rows[(k, None)] for k in ("stored_slot", "commit", "stored_image"))
+    assert (slot.type, slot.address, slot.length) == (4, 0x2, 21)
+    assert (commit.type, commit.address, commit.length) == (4, 0xF0000000, 0)
+    assert (image.type, image.address, image.length) == (4, 0x0, 758)
+
+
+def test_persistent_rows_start_as_hypothesis() -> None:
+    # spec 004 R7: checks 3 and 4 were poc sends (cited in Notes); the gate (M3) promotes them
+    rows = {(row.kind, row.argument): row for row in load_write_rows()}
+    for kind, note in (("stored_slot", "check 4"), ("commit", "check 3"), ("stored_image", "app")):
+        row = rows[(kind, None)]
+        assert (row.confidence, row.evidence, row.firmware) == ("hypothesis", (), frozenset({96}))
+        assert note in row.notes
+        assert "persistent" in row.notes.lower()
+
+
+def test_slot_address_cell_parses() -> None:
+    from tests.support.writes_doc import parse_row
+
+    cells = [
+        "`stored_slot(i)`", "4", "`0x00000002 + 21·i`", "21", "21 bytes", "ACK",
+        "hypothesis", "96", "—", "persistent",
+    ]  # fmt: skip
+    row = parse_row(cells)
+    assert (row.kind, row.argument, row.address) == ("stored_slot", None, 2)
 
 
 def _evidence_rule(row: WriteRow) -> list[str]:

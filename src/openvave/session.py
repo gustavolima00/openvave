@@ -12,11 +12,17 @@ Writes (spec 003) go through one guarded path: :meth:`~TankG.set_field` and
 :meth:`~TankG.plan_set` / :meth:`~TankG.plan_select` (reads only), refuse unless every check
 passes, send at most one allowlisted ``0x22`` frame, check the ACK and re-read to verify. A write
 is never retried.
+
+Persistent writes (spec 004) have one path only: :meth:`~TankG.save_preset` and
+:meth:`~TankG.restore` run a fixed :class:`~openvave.models.SequencePlan` through the sequence
+runner, which refuses without ``unsafe=True``, takes and hands over a full backup before the first
+write, checks every ACK, and attaches the step report to any error raised mid-sequence.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
@@ -26,6 +32,7 @@ from types import TracebackType
 from openvave.errors import (
     ConnectionLostError,
     HandshakeError,
+    OpenvaveError,
     ProtocolError,
     RequestTimeoutError,
     WriteNotAppliedError,
@@ -40,6 +47,11 @@ from openvave.models import (
     PedalState,
     Region,
     RegionRead,
+    SequenceAction,
+    SequencePlan,
+    SequenceResult,
+    SequenceStep,
+    StepOutcome,
     WatchChange,
     WatchEvent,
     WatchStart,
@@ -65,7 +77,14 @@ from openvave.protocol.bytemap import REVERB_SECTION_STEPS, TYPED_FIELDS, type_p
 from openvave.protocol.frame import QUERY
 from openvave.protocol.identity import TESTED_FIRMWARE
 from openvave.protocol.state import EDIT
-from openvave.protocol.storage import EXPECTED_HEADER, PRESET_COUNT, StorageRead, position
+from openvave.protocol.storage import (
+    EXPECTED_HEADER,
+    PRESET_COUNT,
+    PRESET_SIZE,
+    STORE_OFFSET,
+    StorageRead,
+    position,
+)
 from openvave.protocol.writes import (
     LED_LENGTH,
     WRITABLE_FIELDS,
@@ -111,6 +130,20 @@ STATE_SLEEP: Sleep = asyncio.sleep
 
 STATE_REFUSALS = {"tuner": "tuner_mode", "bypass": "bypassed", "unrecognised": "unrecognised_state"}
 """Refusal reason of a write attempted in a state that allows none (spec 004 data-model)."""
+SEQUENCE_REFUSALS = {**STATE_REFUSALS, "edit": "edit_mode"}
+"""Save and restore run in normal mode only (spec 004 data-model)."""
+SLOT_WAIT = 0.3
+"""Seconds between the slot or image write and the commit (the app's save path, R8)."""
+COMMIT_WAIT = 0.1
+"""Seconds between the commit and the select (the app's save path, R8)."""
+SEQUENCE_SLEEP: Sleep = asyncio.sleep
+"""Default sleep of the save/restore waits (patched by tests)."""
+
+OnBackup = Callable[[Backup], object]
+"""Called with the automatic backup before the first persistent write; may be a coroutine
+function. If it raises, nothing is written."""
+OnPlan = Callable[[SequencePlan], object]
+"""Called with the plan right before the automatic backup (only when the sequence will run)."""
 
 FieldValue = int | bool | str | tuple[int, int, int] | tuple[str | None, int]
 """A value for :meth:`TankG.set_field`: int (knob/selector raw value), bool or ``on``/``off``
@@ -723,6 +756,409 @@ class TankG:
         after = await self.read(Region.STATUS)
         return self._finish(plan, reply, after, glob, after.data == plan.data)
 
+    # -- save and restore (spec 004 US3, US4): the only path to persistent writes --------------
+
+    async def plan_save(
+        self,
+        to: int | None = None,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        sleep: Sleep | None = None,
+    ) -> SequencePlan:
+        """Plan storing the edit buffer in slot ``to`` (default: the loaded slot). Reads only.
+
+        Reads global, the edit buffer and the target slot. ``no_change`` when the slot already
+        holds the buffer. ``plan.refusal`` is what :meth:`save_preset` would refuse with the same
+        opt-ins: ``edit_mode`` / ``tuner_mode`` / ``bypassed`` / ``unrecognised_state`` (normal
+        mode only), then ``unsafe_required``, then ``untested_firmware`` /
+        ``experimental_required``. When there is no target (bypassed or unrecognised, ``to``
+        not given) raises :class:`WriteRefusedError`. :class:`ValueError` for ``to`` outside
+        0–35.
+        """
+        if to is not None:
+            WriteTarget.stored_slot(to)  # validates the index
+        state, _, buffer, reads = await self._read_state(sleep)
+        index = to if to is not None else state.index
+        if index is None:
+            self._refuse_state(state)
+        assert index is not None
+        current, frame = await self._stored_with_frame(index)
+        return self._slot_plan(
+            "save", state, index, current, buffer.data, (*reads, frame), unsafe, experimental
+        )
+
+    async def save_preset(
+        self,
+        to: int | None = None,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None = None,
+        sleep: Sleep | None = None,
+    ) -> SequenceResult:
+        """Store the edit buffer in slot ``to`` (default: the loaded slot). **Persistent.**
+
+        Builds :meth:`plan_save`'s plan and raises :class:`WriteRefusedError` if it is refused
+        (``unsafe=True`` is always required). Nothing to save: returns at once, nothing sent, no
+        backup. Otherwise runs the sequence (spec 004 R8, R9): ``on_plan(plan)`` → full backup
+        (:meth:`backup`, cross-checked) → ``on_backup(backup)`` → slot write → read the slot
+        back (a mismatch stops before the commit) → 300 ms → commit → 100 ms → select → verify
+        (slot = bytes written, pedal on the target, buffer = slot). Every write's ACK is checked;
+        nothing is retried. Errors raised after the first write carry ``.sequence`` (the step
+        report); a failed verification raises :class:`WriteNotAppliedError`.
+        """
+        plan = await self.plan_save(to, unsafe=unsafe, experimental=experimental, sleep=sleep)
+        return await self._run_sequence(plan, experimental, on_backup, on_plan, sleep)
+
+    async def plan_restore(
+        self,
+        backup: Backup,
+        *,
+        slot: int | None = None,
+        all: bool = False,  # the contract's name: restore(backup, all=True)
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        sleep: Sleep | None = None,
+    ) -> SequencePlan:
+        """Plan restoring slot ``slot`` or ``all`` presets from ``backup``. Reads only.
+
+        Pass exactly one of ``slot`` (0–35) and ``all=True`` (else :class:`ValueError`, as for a
+        backup whose header is not ``a5 5a``). Slot: reads global, the buffer, the slot and the
+        loaded slot; the sequence is the save sequence with the file's bytes. All: reads global,
+        the buffer and the whole image; the sequence writes the file's image, commits and selects
+        the preset that was loaded. ``changed_slots`` lists the slots that differ;
+        ``no_change`` when none does. Refusals, in order: pedal state (normal mode only),
+        ``edits_would_be_discarded`` (unsaved edits and no ``discard_edits``: every restore ends
+        with a select), ``firmware_mismatch`` (file from another firmware, no ``experimental``),
+        ``unsafe_required``, then the confidence gate.
+        """
+        if (slot is None) == (not all):
+            raise ValueError("pass exactly one of slot=<index> or all=True")
+        if slot is not None:
+            WriteTarget.stored_slot(slot)  # validates the index
+        if backup.header != EXPECTED_HEADER:
+            raise ValueError(
+                f"backup header {backup.header.hex(' ')} is not {EXPECTED_HEADER.hex(' ')}"
+            )
+        state, _, buffer, reads = await self._read_state(sleep)
+        if state.index is None:
+            self._refuse_state(state)
+        assert state.index is not None
+        loaded = state.index
+        mismatch = backup.identity.firmware != self.identity.firmware
+        if slot is not None:
+            current, frame = await self._stored_with_frame(slot)
+            reads = (*reads, frame)
+            loaded_stored = current
+            if loaded != slot:
+                loaded_stored, frame = await self._stored_with_frame(loaded)
+                reads = (*reads, frame)
+            return self._slot_plan(
+                "restore_slot",
+                state,
+                slot,
+                current,
+                backup.presets[slot].data,
+                reads,
+                unsafe,
+                experimental,
+                edits_pending=buffer.data != loaded_stored and not discard_edits,
+                firmware_mismatch=mismatch,
+            )
+        image_read = StorageRead.image()
+        image_frame = build_storage_read(image_read)
+        image = parse_storage_reply(image_read, await self._request(image_frame))
+        start = STORE_OFFSET + PRESET_SIZE * loaded
+        changed = tuple(
+            i for i in range(PRESET_COUNT) if _slot_bytes(image, i) != _slot_bytes(backup.image, i)
+        )
+        no_change = image == backup.image
+        image_target = WriteTarget.stored_image()
+        steps = _sequence_steps(_write_step(image_target, backup.image), loaded)
+        return SequencePlan(
+            action="restore_all",
+            state=state,
+            target_index=None,
+            return_index=loaded,
+            before=image,
+            after=backup.image,
+            changed_slots=changed,
+            diff=(),
+            steps=() if no_change else steps,
+            no_change=no_change,
+            refusal=self._sequence_refusal(
+                state,
+                [s.target for s in steps if s.target is not None],
+                no_change=no_change,
+                unsafe=unsafe,
+                experimental=experimental,
+                edits_pending=buffer.data != image[start : start + PRESET_SIZE]
+                and not discard_edits,
+                firmware_mismatch=mismatch,
+            ),
+            reads=(*reads, image_frame),
+        )
+
+    async def restore(
+        self,
+        backup: Backup,
+        *,
+        slot: int | None = None,
+        all: bool = False,  # the contract's name
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None = None,
+        sleep: Sleep | None = None,
+    ) -> SequenceResult:
+        """Restore slot ``slot`` or ``all`` presets from ``backup``. **Persistent.**
+
+        Builds :meth:`plan_restore`'s plan and raises :class:`WriteRefusedError` if it is
+        refused (``unsafe=True`` is always required). Nothing differs: returns at once, nothing
+        sent, no backup. Otherwise runs the sequence as :meth:`save_preset` does (automatic
+        backup first). A full restore is verified by a full backup read compared with the file;
+        mismatching slots are in ``result.mismatched_slots`` of the
+        :class:`WriteNotAppliedError`'s ``.sequence``.
+        """
+        plan = await self.plan_restore(
+            backup,
+            slot=slot,
+            all=all,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            sleep=sleep,
+        )
+        return await self._run_sequence(plan, experimental, on_backup, on_plan, sleep)
+
+    def _slot_plan(
+        self,
+        action: SequenceAction,
+        state: PedalState,
+        index: int,
+        before: bytes,
+        after: bytes,
+        reads: tuple[bytes, ...],
+        unsafe: bool,
+        experimental: bool,
+        *,
+        edits_pending: bool = False,
+        firmware_mismatch: bool = False,
+    ) -> SequencePlan:
+        no_change = before == after
+        steps = _sequence_steps(_write_step(WriteTarget.stored_slot(index), after), index)
+        changes = diff(
+            RegionRead(Region.CURRENT_PRESET, before), RegionRead(Region.CURRENT_PRESET, after)
+        )
+        return SequencePlan(
+            action=action,
+            state=state,
+            target_index=index,
+            return_index=index,
+            before=before,
+            after=after,
+            changed_slots=() if no_change else (index,),
+            diff=changes,
+            steps=() if no_change else steps,
+            no_change=no_change,
+            refusal=self._sequence_refusal(
+                state,
+                [s.target for s in steps if s.target is not None],
+                no_change=no_change,
+                unsafe=unsafe,
+                experimental=experimental,
+                edits_pending=edits_pending,
+                firmware_mismatch=firmware_mismatch,
+            ),
+            reads=reads,
+        )
+
+    def _sequence_refusal(
+        self,
+        state: PedalState,
+        targets: list[WriteTarget],
+        *,
+        no_change: bool,
+        unsafe: bool,
+        experimental: bool,
+        edits_pending: bool,
+        firmware_mismatch: bool,
+    ) -> str | None:
+        """Refusal of a save/restore plan (spec 004 R6): state first; nothing else when nothing
+        would be sent."""
+        reason = SEQUENCE_REFUSALS.get(state.kind)
+        if reason is not None or no_change:
+            return reason
+        if edits_pending:
+            return "edits_would_be_discarded"
+        if firmware_mismatch and not experimental:
+            return "firmware_mismatch"
+        if not unsafe:
+            return "unsafe_required"
+        for target in targets:
+            gate = self._gate(target, experimental)
+            if gate is not None:
+                return gate
+        return None
+
+    def _refuse_state(self, state: PedalState) -> None:
+        reason = SEQUENCE_REFUSALS.get(state.kind, "unrecognised_state")
+        raise WriteRefusedError(reason, f"refused ({reason}): {self._refusal_text(reason)}")
+
+    def _raise_sequence_refusal(self, plan: SequencePlan, experimental: bool) -> None:
+        reason = plan.refusal
+        if reason is None:
+            return
+        targets = [s.target for s in plan.steps if s.target is not None]
+        pending = [t for t in targets if not experimental and self._gate(t, False) is not None]
+        kinds = ", ".join(sorted({t.kind for t in pending}))
+        if reason == "unsafe_required":
+            text = (
+                f"{_ACTION_NAMES[plan.action]} overwrites "
+                f"{'stored presets' if plan.action == 'restore_all' else 'a stored preset'}; "
+                "pass --unsafe (unsafe=True) to accept that"
+            )
+            if pending:
+                text += (
+                    f", and --experimental (experimental=True): {kinds} "
+                    "are not confirmed in the protocol docs yet"
+                )
+        elif reason == "experimental_required":
+            text = (
+                f"{kinds} are not confirmed in the protocol docs (Write messages) yet; "
+                "pass --experimental (experimental=True) to send them"
+            )
+        else:
+            text = self._refusal_text(reason)
+        raise WriteRefusedError(reason, f"refused ({reason}): {text}")
+
+    async def _run_sequence(
+        self,
+        plan: SequencePlan,
+        experimental: bool,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None,
+        sleep: Sleep | None,
+    ) -> SequenceResult:
+        """The sequence runner (spec 004 R8, R9, R15): the only sender of persistent writes."""
+        self._raise_sequence_refusal(plan, experimental)
+        if plan.no_change:
+            unchanged = plan.before if plan.action != "restore_all" else None
+            return SequenceResult(plan, (), False, True, unchanged, None)
+        assert plan.refusal is None and plan.steps
+        if on_plan is not None:
+            await _maybe_await(on_plan(plan))
+        backup = await self.backup()
+        await _maybe_await(on_backup(backup))
+        wait = sleep or SEQUENCE_SLEEP
+        outcomes: list[StepOutcome] = []
+        may_change = False
+        read_back: bytes | None = None
+
+        def result(verified: bool = False, mismatched: tuple[int, ...] = ()) -> SequenceResult:
+            rest = [StepOutcome(s, "not_sent") for s in plan.steps[len(outcomes) :]]
+            return SequenceResult(
+                plan, (*outcomes, *rest), may_change, verified, read_back, backup, mismatched
+            )
+
+        try:
+            for step in plan.steps:
+                if step.kind == "wait":
+                    assert step.seconds is not None
+                    await wait(step.seconds)
+                    outcomes.append(StepOutcome(step, "waited"))
+                    continue
+                target = step.target
+                assert target is not None
+                may_change = may_change or target.persistent
+                try:
+                    reply = await self._request(step.frame)
+                except (ConnectionLostError, RequestTimeoutError):
+                    outcomes.append(StepOutcome(step, "no_reply"))
+                    raise
+                try:
+                    parse_write_reply(reply)
+                except ProtocolError:
+                    outcomes.append(StepOutcome(step, "nak", reply))
+                    raise
+                outcomes.append(StepOutcome(step, "acked", reply))
+                if target.kind == "stored_slot":
+                    assert target.argument is not None
+                    read_back = await self._storage_read(StorageRead.preset(target.argument))
+                    if read_back != step.data:
+                        raise WriteNotAppliedError(
+                            None,
+                            f"{_ACTION_NAMES[plan.action]}: slot {position(target.argument)} "
+                            "reads back different bytes after the slot write; stopped before "
+                            "the commit",
+                        )
+            verified, mismatched, read_back, problem = await self._verify_sequence(plan, sleep)
+            if not verified:
+                raise WriteNotAppliedError(
+                    None, problem, sequence=result(verified=False, mismatched=mismatched)
+                )
+        except OpenvaveError as err:
+            if err.sequence is None:
+                err.sequence = result()
+            raise
+        return result(verified=True)
+
+    async def _verify_sequence(
+        self, plan: SequencePlan, sleep: Sleep | None
+    ) -> tuple[bool, tuple[int, ...], bytes, str]:
+        """``(verified, mismatched slots, read-back, problem)`` after the select step."""
+        index = plan.return_index
+        assert index is not None
+        wait = sleep or SELECT_SLEEP
+        glob = await self.read(Region.GLOBAL)
+        for _ in range(SELECT_TRIES):
+            await wait(SELECT_WAIT)
+            glob = await self.read(Region.GLOBAL)
+            if glob.data[2] != LOADING_SLOT:
+                break
+        buffer = await self.read(Region.CURRENT_PRESET)
+        bank, slot = divmod(index, 4)
+        on_target = glob.data[1] == bank and glob.data[2] == slot
+        name = _ACTION_NAMES[plan.action]
+        if plan.action == "restore_all":
+            after = await self.backup()
+            mismatched = tuple(
+                i
+                for i in range(PRESET_COUNT)
+                if _slot_bytes(after.image, i) != _slot_bytes(plan.after, i)
+            )
+            image_ok = after.image == plan.after
+            loaded_ok = buffer.data == _slot_bytes(after.image, index)
+            problems = []
+            if not image_ok:
+                where = ", ".join(position(i) for i in mismatched) or "the header"
+                problems.append(f"the stored image differs from the file at {where}")
+            if not on_target:
+                problems.append(f"the pedal is not on {position(index)}")
+            elif not loaded_ok:
+                problems.append("the edit buffer differs from the stored preset")
+            ok = image_ok and on_target and loaded_ok
+            return ok, mismatched, after.image, f"{name}: acknowledged, but " + "; ".join(problems)
+        stored = await self._storage_read(StorageRead.preset(index))
+        problems = []
+        if stored != plan.after:
+            problems.append(f"stored {position(index)} differs from the bytes written")
+        if not on_target:
+            problems.append(f"the pedal is not on {position(index)}")
+        elif buffer.data != stored:
+            problems.append("the edit buffer differs from the stored preset")
+        ok = not problems
+        return ok, (), stored, f"{name}: acknowledged, but " + "; ".join(problems)
+
+    async def _stored_with_frame(self, index: int) -> tuple[bytes, bytes]:
+        target = StorageRead.preset(index)
+        frame = build_storage_read(target)
+        return parse_storage_reply(target, await self._request(frame)), frame
+
     def _gate(self, target: WriteTarget, experimental: bool) -> str | None:
         """Firmware and confidence gate (FR-014/015, research R4)."""
         if experimental:
@@ -750,7 +1186,7 @@ class TankG:
                 "pass --experimental (experimental=True) to send anyway"
             ),
             "edits_would_be_discarded": (
-                "the pedal is in edit mode and selecting a preset discards its unsaved edits; "
+                "the pedal has unsaved edits and selecting a preset discards them; "
                 "pass --discard-edits (discard_edits=True) to go on anyway"
             ),
             "tuner_mode": "the pedal is in tuner mode; leave the tuner on the pedal first",
@@ -764,8 +1200,8 @@ class TankG:
                 "openvave bypass off <position> (bypass_off(index) in the library)"
             ),
             "edit_mode": (
-                "the pedal is in edit mode; leave edit mode on the pedal first (bypass works "
-                "in normal mode only)"
+                "the pedal is in edit mode; leave edit mode on the pedal first (bypass, save "
+                "and restore work in normal mode only)"
             ),
             "not_bypassed": (
                 "the pedal is not bypassed; to load a preset use openvave preset select <position>"
@@ -773,6 +1209,13 @@ class TankG:
             "unrecognised_state": (
                 "the pedal reports a state openvave does not recognise (global block / edit "
                 "buffer); check it with openvave info"
+            ),
+            "firmware_mismatch": (
+                "the backup file comes from another firmware version than the pedal's; pass "
+                "--experimental (experimental=True) to restore it anyway"
+            ),
+            "unsafe_required": (
+                "this overwrites stored presets; pass --unsafe (unsafe=True) to accept that"
             ),
         }
         if reason == "experimental_required" and plan is not None:
@@ -1048,3 +1491,35 @@ def _field_bytes(spec: WritableField, value: FieldValue) -> bytes | None:
         raise ValueError(f"{spec.name} takes an integer, got {value!r}")
     assert entry.min is not None and entry.max is not None
     return bytes([value]) if entry.min <= value <= entry.max else None
+
+
+_ACTION_NAMES = {
+    "save": "preset save",
+    "restore_slot": "preset restore",
+    "restore_all": "preset restore",
+}
+
+
+def _slot_bytes(image: bytes, index: int) -> bytes:
+    start = STORE_OFFSET + PRESET_SIZE * index
+    return image[start : start + PRESET_SIZE]
+
+
+def _write_step(target: WriteTarget, data: bytes) -> SequenceStep:
+    return SequenceStep("write", target, data, build_write(target, data))
+
+
+def _sequence_steps(first: SequenceStep, select: int) -> tuple[SequenceStep, ...]:
+    """``first`` → 300 ms → commit → 100 ms → select ``select`` (the app's save path, R8)."""
+    return (
+        first,
+        SequenceStep("wait", seconds=SLOT_WAIT),
+        _write_step(WriteTarget.commit(), b""),
+        SequenceStep("wait", seconds=COMMIT_WAIT),
+        _write_step(WriteTarget.preset_select(select), b"\x01"),
+    )
+
+
+async def _maybe_await(value: object) -> None:
+    if inspect.isawaitable(value):
+        await value

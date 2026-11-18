@@ -19,6 +19,9 @@ from openvave.models import (
     PedalState,
     Region,
     RegionRead,
+    SequencePlan,
+    SequenceResult,
+    SequenceStep,
     WatchChange,
     WatchStart,
     WritePlan,
@@ -28,7 +31,7 @@ from openvave.protocol.bytemap import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field, decode_region
 from openvave.protocol.state import classify
 from openvave.protocol.storage import EXPECTED_HEADER, position
-from openvave.protocol.writes import WRITABLE_FIELDS
+from openvave.protocol.writes import WRITABLE_FIELDS, sendable_by_default
 
 SCHEMA_VERSION = 2
 """JSON contract version; 2 since 0.2.0 (field renames, CHANGELOG)."""
@@ -449,7 +452,11 @@ def json_line(document: dict[str, Any]) -> str:
 
 # -- writes (contracts/cli.md "openvave set" / "openvave preset select") ------------------------
 
-NOT_SAVED = "Not saved. Discard: openvave preset reload"
+NOT_SAVED = (
+    "Not saved. Discard: openvave preset reload   "
+    "Keep: openvave preset save --unsafe --experimental"
+)
+"""After a write in normal mode. ``--experimental`` goes once the save messages are confirmed."""
 NOT_SAVED_EDIT = (
     "Not saved. Discard: openvave preset reload --discard-edits "
     "(or leave edit mode on the pedal without saving)"
@@ -467,6 +474,8 @@ REFUSAL_TEXT = {
     "edits_would_be_discarded": "unsaved edits would be discarded; needs --discard-edits",
     "edit_mode": "the pedal is in edit mode",
     "not_bypassed": "the pedal is not bypassed; use preset select",
+    "unsafe_required": "overwrites stored presets; needs --unsafe",
+    "firmware_mismatch": "the file comes from another firmware; needs --experimental",
 }
 
 
@@ -712,4 +721,265 @@ def write_json(
         if result.return_index is not None:
             document["result"]["return_index"] = result.return_index
             document["result"]["return_position"] = position(result.return_index)
+    return document
+
+
+# -- save and restore (contracts/cli.md "preset save" / "preset restore") -----------------------
+
+POWER_WARNING = "A power loss during the next second has an unknown outcome."
+IMAGE_HEAD = 16
+"""Bytes of the image write shown before the ellipsis in a real run (a dry run shows all)."""
+STEP_LABEL_WIDTH = 16
+
+
+def _pending_messages(plan: SequencePlan, identity: DeviceIdentity) -> list[str]:
+    """Write kinds of the plan that are not sendable without ``--experimental``."""
+    kinds = []
+    for step in plan.steps:
+        target = step.target
+        if target is not None and not sendable_by_default(
+            target.kind, target.argument, identity.firmware
+        ):
+            kinds.append(target.kind)
+    return sorted(set(kinds))
+
+
+def _sequence_refusal_line(
+    plan: SequencePlan, identity: DeviceIdentity, experimental: bool
+) -> list[str]:
+    reason = plan.refusal
+    if reason is None:
+        return []
+    detail = REFUSAL_TEXT.get(reason, reason)
+    pending = [] if experimental else _pending_messages(plan, identity)
+    if reason == "unsafe_required" and pending:
+        detail += f" and --experimental ({', '.join(pending)} not confirmed yet)"
+    elif reason == "experimental_required":
+        detail = f"{', '.join(pending)} not confirmed yet; needs --experimental"
+    return [f"  refused: {reason} ({detail})"]
+
+
+def _diff_line(change: ByteChange) -> str:
+    entry = change.field
+    if entry is None:
+        return f"  [{change.offset}] {change.old} → {change.new}"
+    old = _with_reading(decode_field(entry, change.old))
+    new = _with_reading(decode_field(entry, change.new))
+    return f"  [{change.offset}] {entry.name} {old} → {new}"
+
+
+def human_sequence_header(plan: SequencePlan, source: str | None) -> str:
+    """``Save current sound to 1C (index 2)   UNSAFE: …`` and what changes (FR-030)."""
+    if plan.action == "restore_all":
+        differ = " ".join(position(i) for i in plan.changed_slots) or "header only"
+        count = len(plan.changed_slots)
+        return "\n".join(
+            [
+                f"Restore all presets from {source}   UNSAFE: overwrites stored presets",
+                f"  differ: {differ} ({count} of {len(plan.after) // 21})",
+            ]
+        )
+    index = plan.target_index
+    assert index is not None
+    if plan.action == "save":
+        head = f"Save current sound to {position(index)} (index {index})"
+    else:
+        head = f"Restore {position(index)} from {source}"
+    lines = [f"{head}   UNSAFE: overwrites a stored preset"]
+    lines += [_diff_line(c) for c in plan.diff]
+    return "\n".join(lines)
+
+
+def human_sequence_no_change(plan: SequencePlan, source: str | None) -> str:
+    """The ``nothing sent`` line of a save / restore with nothing to change."""
+    if plan.action == "save":
+        assert plan.target_index is not None
+        return f"{position(plan.target_index)} already holds this sound; nothing sent"
+    return f"pedal already matches {source}; nothing sent"
+
+
+def _step_note(step: SequenceStep) -> str:
+    target = step.target
+    assert target is not None
+    if target.kind == "commit":
+        return "   (commit)"
+    if target.kind == "preset_select":
+        assert target.argument is not None
+        return f"   (select {position(target.argument)})"
+    return ""
+
+
+def _write_cell(step: SequenceStep, *, full: bool) -> str:
+    target = step.target
+    if target is not None and target.kind == "stored_image" and not full:
+        frame = step.frame
+        return f"{hex_bytes(frame[:IMAGE_HEAD])} …({len(step.data)} bytes)… {frame[-1]:02x}"
+    return hex_bytes(step.frame)
+
+
+def human_sequence_plan(
+    plan: SequencePlan, source: str | None, identity: DeviceIdentity, *, experimental: bool
+) -> str:
+    """Dry run: header, every step with its exact frame (the image in full), refusal."""
+    if plan.no_change and plan.refusal is None:
+        return human_sequence_no_change(plan, source)
+    lines = [human_sequence_header(plan, source)]
+    for step in plan.steps:
+        if step.kind == "wait":
+            lines.append(f"  wait   {round((step.seconds or 0) * 1000)} ms")
+        else:
+            lines.append(f"  write  {_write_cell(step, full=True)}{_step_note(step)}")
+    lines += _sequence_refusal_line(plan, identity, experimental)
+    lines.append("  dry run: nothing sent, no backup taken")
+    return "\n".join(lines)
+
+
+def _verify_line(plan: SequencePlan, source: str | None, verified: bool) -> str:
+    if plan.action == "restore_all":
+        count = len(plan.after) // 21
+        status = "restored" if verified else "NOT restored"
+        return f"  verify {count} of {count} presets and header equal {source}   {status}"
+    index = plan.target_index
+    assert index is not None
+    where = position(index)
+    if plan.action == "save":
+        return f"  verify stored {where} = written bytes, pedal on {where}, buffer = stored   " + (
+            "saved" if verified else "NOT saved"
+        )
+    return f"  verify stored {where} = {source} {where}, pedal on {where}, buffer = stored   " + (
+        "restored" if verified else "NOT restored"
+    )
+
+
+def human_sequence_steps(result: SequenceResult, source: str | None) -> str:
+    """After the backup: one line per step with its reply, then the verification."""
+    plan = result.plan
+    lines = []
+    for outcome in result.steps:
+        step = outcome.step
+        if step.kind == "wait":
+            lines.append(f"  wait   {round((step.seconds or 0) * 1000)} ms")
+            continue
+        status = {"acked": "ACK", "nak": "NAK"}.get(outcome.status, outcome.status)
+        cell = _write_cell(step, full=False)
+        note = _step_note(step)
+        if step.target is not None and step.target.kind == "stored_image":
+            note = f"   ({len(step.frame)} bytes)"
+        lines.append(f"  write  {cell}   {status}{note}")
+    lines.append(_verify_line(plan, source, result.verified))
+    return "\n".join(lines)
+
+
+def _step_label(step: SequenceStep) -> str:
+    target = step.target
+    assert target is not None
+    if target.kind == "stored_slot":
+        assert target.argument is not None
+        return f"slot write {position(target.argument)}"
+    if target.kind == "stored_image":
+        return "image write"
+    if target.kind == "preset_select":
+        assert target.argument is not None
+        return f"select {position(target.argument)}"
+    return target.kind
+
+
+STEP_STATUS = {"acked": "ACK", "nak": "NAK", "no_reply": "no reply", "not_sent": "not sent"}
+
+
+def sequence_failure_lines(
+    message: str, result: SequenceResult, backup_path: str | None, identity: DeviceIdentity
+) -> list[str]:
+    """The stderr report of a save / restore that stopped (contracts/cli.md, FR-031)."""
+    lines = [f"error: {message}"]
+    for outcome in result.steps:
+        if outcome.step.kind == "write":
+            label = _step_label(outcome.step)
+            lines.append(f"  {label:<{STEP_LABEL_WIDTH}}{STEP_STATUS[outcome.status]}")
+    plan = result.plan
+    acked = all(o.status in ("acked", "waited") for o in result.steps)
+    if acked or (result.read_back is not None and plan.action != "restore_all"):
+        if plan.action == "restore_all":
+            if result.mismatched_slots:
+                lines.append("  differ:  " + " ".join(position(i) for i in result.mismatched_slots))
+        elif result.read_back is not None and result.read_back != plan.after:
+            lines.append(f"  expected {hex_bytes(plan.after)}")
+            lines.append(f"  read     {hex_bytes(result.read_back)}")
+    if result.stored_may_have_changed:
+        lines.append("Stored presets may have changed. Nothing was retried.")
+    else:
+        lines.append("Stored presets did not change. Nothing was retried.")
+    lines.append("Check:   openvave preset backup")
+    if backup_path is not None:
+        flags = "--all --unsafe"
+        if not all(
+            sendable_by_default(kind, None, identity.firmware)
+            for kind in ("stored_image", "commit", "preset_select")
+        ):
+            flags += " --experimental"
+        lines.append(f"Undo:    openvave preset restore {backup_path} {flags}")
+    return lines
+
+
+def _sequence_step_json(step: SequenceStep) -> dict[str, Any]:
+    if step.kind == "wait":
+        return {"kind": "wait", "seconds": step.seconds}
+    assert step.target is not None
+    return {"kind": "write", "target": step.target.kind, "frame": hex_bytes(step.frame)}
+
+
+def sequence_json(
+    command: str,
+    plan: SequencePlan,
+    result: SequenceResult | None,
+    *,
+    dry_run: bool,
+    read_at: datetime,
+    device: DeviceInfo | None,
+    identity: DeviceIdentity,
+    source: str | None,
+    backup_saved_to: str | None,
+) -> dict[str, Any]:
+    """``preset save`` / ``preset restore --json`` (``sequence-result.schema.json``)."""
+    document = envelope(command, read_at, device, identity)
+    document["backup_saved_to"] = backup_saved_to
+    document["plan"] = {
+        "action": plan.action,
+        "pedal_state": plan.state.kind,
+        "target_index": plan.target_index,
+        "return_index": plan.return_index,
+        "source": source,
+        "changed_slots": [position(i) for i in plan.changed_slots],
+        "diff": [
+            {
+                "offset": c.offset,
+                "before": c.old,
+                "after": c.new,
+                "name": c.field.name if c.field is not None else None,
+            }
+            for c in plan.diff
+        ],
+        "steps": [_sequence_step_json(s) for s in plan.steps],
+        "reads": [hex_bytes(r) for r in plan.reads],
+        "no_change": plan.no_change,
+        "refusal": plan.refusal,
+        "dry_run": dry_run,
+    }
+    if result is not None and not dry_run and result.steps:
+        part: dict[str, Any] = {
+            "steps": [
+                {
+                    "target": "wait" if o.step.target is None else o.step.target.kind,
+                    "status": o.status,
+                    **({"reply": hex_bytes(o.reply)} if o.reply else {}),
+                }
+                for o in result.steps
+            ],
+            "stored_may_have_changed": result.stored_may_have_changed,
+            "verified": result.verified,
+            "mismatched_slots": [position(i) for i in result.mismatched_slots],
+        }
+        if plan.action != "restore_all" and result.read_back is not None:
+            part["read_back"] = hex_bytes(result.read_back)
+        document["result"] = part
     return document

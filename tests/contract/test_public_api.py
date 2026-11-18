@@ -47,6 +47,10 @@ CONTRACT_EXPORTS = {
     "WritePlan",
     "WriteResult",
     "PedalState",  # spec 004
+    "SequencePlan",  # spec 004 M2
+    "SequenceStep",
+    "SequenceResult",
+    "StepOutcome",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -82,6 +86,10 @@ DATACLASSES = (
     "WritePlan",
     "WriteResult",
     "PedalState",
+    "SequencePlan",
+    "SequenceStep",
+    "SequenceResult",
+    "StepOutcome",
 )
 FORBIDDEN = ("write", "erase", "address", "commit", "raw")
 """No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""
@@ -98,6 +106,10 @@ WRITE_ACTIONS = {
     "bypass_off",
     "plan_loopback",
     "set_loopback",
+    "plan_save",  # spec 004 M2: persistent, unsafe=True required
+    "save_preset",
+    "plan_restore",
+    "restore",
 }
 
 

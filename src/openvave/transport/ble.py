@@ -35,6 +35,24 @@ NOTIFY_UUID = "0000ae42-0000-1000-8000-00805f9b34fb"
 """Replies: notifications."""
 
 
+DEFAULT_ATT_MTU = 23
+"""BLE's minimum ATT MTU, used when the platform does not report the negotiated one."""
+ATT_WRITE_OVERHEAD = 3
+"""ATT header bytes of a write-without-response: one write carries ``MTU − 3`` bytes."""
+
+
+def split_frame(frame: bytes, mtu: int) -> list[bytes]:
+    """``frame`` as consecutive chunks of at most ``mtu − 3`` bytes, in order (spec 004 R11).
+
+    A frame that fits is returned as one chunk. Raises :class:`ValueError` for an MTU that leaves
+    no room for data.
+    """
+    size = mtu - ATT_WRITE_OVERHEAD
+    if size < 1:
+        raise ValueError(f"ATT MTU {mtu} leaves no room for data")
+    return [frame[i : i + size] for i in range(0, len(frame), size)] or [frame]
+
+
 def select_device(found: Sequence[DeviceInfo], wanted_id: str | None) -> DeviceInfo:
     """Pick the pedal to connect to from a scan result (pure).
 
@@ -181,13 +199,16 @@ class BleakTransport:
             raise _map_bleak_error(err, "connect") from err
 
     async def write(self, frame: bytes) -> None:
+        """Write one frame; a frame longer than ``ATT MTU − 3`` goes out as consecutive chunks
+        (:func:`split_frame`, spec 004 R11). Only the 773-byte image write is that long."""
         from bleak.exc import BleakError
 
         client = self._client
         if client is None or not client.is_connected:
             raise ConnectionLostError("not connected")
         try:
-            await client.write_gatt_char(WRITE_UUID, frame, response=False)
+            for chunk in split_frame(frame, self.att_mtu or DEFAULT_ATT_MTU):
+                await client.write_gatt_char(WRITE_UUID, chunk, response=False)
         except (BleakError, OSError) as err:
             raise ConnectionLostError(f"write failed: {error_message(err)}") from err
 

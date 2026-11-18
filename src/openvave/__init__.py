@@ -13,6 +13,8 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         plan = await pedal.plan_set("gain", 90)          # reads only: the exact write frame
         result = await pedal.set_field("gain", 90, experimental=True)   # edit buffer, unsaved
         result = await pedal.select_preset(6, experimental=True)        # load stored 2C
+        result = await pedal.save_preset(unsafe=True, experimental=True,  # PERSISTENT: backup
+                                         on_backup=store)                 # first, then save
 
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
@@ -22,9 +24,11 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         async for event in pedal.watch(interval=0.5):    # WatchStart, then WatchChange
             ...
 
-Only ``0x11`` (query), ``0x23`` (read) and ``0x22`` (write) to a closed allowlist (knob block,
-block switches, LED colour, preset select: volatile edit buffer and preset selection only) can
-ever be sent; erase, the save commit and stored-area writes cannot be encoded. The pure codec and
+Only ``0x11`` (query), ``0x23`` (read) and ``0x22`` (write) to a closed allowlist can ever be
+sent: the volatile edit buffer, preset select, bypass and loopback writes, and three persistent
+writes (stored slot, commit, stored image) that only ``save_preset`` / ``restore`` send, only with
+``unsafe=True`` and after a verified backup. Erase, the global block and any other address cannot
+be encoded. The pure codec and
 the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``, ``WRITE_MESSAGES``) live in
 :mod:`openvave.protocol`. Everything not exported here is internal.
 """
@@ -57,6 +61,10 @@ from openvave.models import (
     PedalState,
     Region,
     RegionRead,
+    SequencePlan,
+    SequenceResult,
+    SequenceStep,
+    StepOutcome,
     StoredPreset,
     WatchChange,
     WatchStart,
@@ -93,6 +101,10 @@ __all__ = [
     "Region",
     "RegionRead",
     "RequestTimeoutError",
+    "SequencePlan",
+    "SequenceResult",
+    "SequenceStep",
+    "StepOutcome",
     "StoredPreset",
     "TESTED_FIRMWARE",
     "TankG",

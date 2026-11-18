@@ -36,10 +36,38 @@ All notable changes to this project are documented here. The format follows
   writes `01`/`00`, and reads it back; never followed by a commit; an equal value sends nothing.
   Library: `TankG.plan_loopback(on)` / `set_loopback(on)`, `WriteTarget.loopback()`. Message
   `hypothesis` (app code only); what loopback does on the Tank-G is not known yet.
-- `WriteTarget.persistent` (false for every target so far) and refusal reasons `edit_mode` and
-  `not_bypassed`. The write allowlist grows by exactly these two volatile kinds; bypass data other
-  than `01`, an index above 35, loopback data other than `00`/`01` or any other length stay
-  unencodable.
+- `WriteTarget.persistent` and refusal reasons `edit_mode` and `not_bypassed`. The write
+  allowlist grows by the two volatile kinds above; bypass data other than `01`, an index above 35,
+  loopback data other than `00`/`01` or any other length stay unencodable.
+- **Save** (UNSAFE, experimental): `openvave preset save [--to POSITION] --unsafe` stores the edit
+  buffer in the loaded slot (or `--to`), normal mode only, with the phone app's sequence: slot
+  write to `2 + 21·i` (21 bytes), read back (a mismatch stops before the commit), 300 ms, the
+  empty commit write to `0xF0000000`, 100 ms, select, then verifies stored slot, position and
+  buffer. Nothing to save: `1C already holds this sound; nothing sent`. Library:
+  `TankG.plan_save(to)` / `save_preset(to, unsafe=True, on_backup=…)`.
+- **Restore** (UNSAFE, experimental): `openvave preset restore FILE (--slot POSITION | --all)
+  --unsafe` writes back an openvave backup file, checked before connecting
+  (`openvave.backup.restore_problems`). `--slot` uses the save sequence with the file's bytes;
+  `--all` writes the whole 758-byte image to `0x0` in one message (split over several Bluetooth
+  writes by the transport), commits, selects the preset that was loaded and verifies with a full
+  read. Lists the slots that differ; nothing differs → nothing sent. A file from another firmware
+  needs `--experimental` (`firmware_mismatch`); unsaved edits need `--discard-edits`. Library:
+  `TankG.plan_restore(backup, slot=i | all=True)` / `restore(...)`.
+- Both take an **automatic backup** before the first write
+  (`tankg-backup-<time>-before-save|restore.json` in `--backup-dir`, never overwriting) and stop
+  if it fails its cross-check or cannot be written. A failure mid-sequence prints every step
+  (ACK / NAK / no reply / not sent), whether stored presets may have changed, and the recovery
+  commands; nothing is retried. Exit codes as before (1 refused, 6 lost link, 7 NAK, 8 read-back
+  differs). JSON: [`sequence-result.schema.json`](specs/004-remote-edit-save-restore/contracts/sequence-result.schema.json).
+- New opt-in `--unsafe` (`unsafe=True`), required by every command that changes stored presets and
+  never implied by `--experimental`; refusal reasons `unsafe_required` and `firmware_mismatch`.
+- Three **persistent** write targets, `WriteTarget.stored_slot(i)`, `.commit()` and
+  `.stored_image()` (`persistent` is true for them), rows in "Write messages" at `hypothesis`
+  (spec 004 checks 3–4 were `poc/` sends). Only `save_preset` / `restore` send them, only with
+  `unsafe=True`, after the backup. Library types `SequencePlan`, `SequenceStep`,
+  `SequenceResult`, `StepOutcome`; errors raised mid-sequence carry `.sequence`.
+- The BLE transport splits a request longer than one Bluetooth write (`ATT MTU − 3`) into
+  consecutive chunks (only the 773-byte image write needs it; hypothesis until gated).
 - Pedal state: `openvave.PedalState`, `openvave.protocol.classify(global, buffer)`,
   `TankG.state()` (confirms bypass with a second read 300 ms later) and
   `DeviceSnapshot.pedal_state`. `info` and `preset dump` print a `state:` line (in bypass: no
@@ -57,6 +85,9 @@ All notable changes to this project are documented here. The format follows
   Block switches and `led_colour` still need `--experimental`.
 - The "Not saved" line after a write now names the discard command
   (`Not saved. Discard: openvave preset reload`).
+- **openvave can now change stored presets**, replacing the 0.3.0 statement that it never saves or
+  overwrites one: it does so only through `preset save` and `preset restore`, only with `--unsafe`,
+  and always after an automatic, verified backup. Every other write stays volatile.
 - `openvave preset dump` now also reads the global block (to report the pedal state).
 - Connecting is faster: the Bluetooth scan stops 1 s after the pedal is seen (or as soon as the
   `--device` identifier is seen) instead of always waiting `--scan-timeout` (5 s). A second pedal

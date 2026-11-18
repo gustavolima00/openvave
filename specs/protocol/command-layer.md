@@ -495,16 +495,39 @@ answered with exactly `00 59 00 01 00 00 00 ff`, in one notification each. Confi
 session B, same day, new connection per command, starting from 1D): the knob block and two preset
 selects got the same bytes. No NAK has been seen, so non-zero status codes remain unknown.
 
+### Request chunking (spec 004 R11, hypothesis)
+
+Every request openvave sends fits in one `ae41` write (at most 36 bytes) except the stored-image
+write (773 bytes). The BLE transport splits a request longer than `ATT MTU − 3` into consecutive
+write-without-response chunks, in order, with no delay added: 5 chunks (182 × 4 + 45) at macOS's
+MTU 185, 4 at the app's 247. The protocol layer only sees whole frames; the fake pedal of the test
+suite reassembles a split request by its length field, as replies are reassembled. That the pedal
+does the same has **not** been observed: only replies have been reassembled so far, and how the
+app splits its 773-byte import is not known beyond "one command". The first stored-image write is
+therefore planned as a byte-identical no-op (the image just read), judged by one ACK after the
+last chunk, no stray reply and an unchanged backup (spec 004 M3).
+
 ### Write messages
 
 The only writes openvave can encode (spec 003, 0.3.0; `bypass(i)` and `loopback` added by spec
-004 M1). This table is authoritative; `src/openvave/protocol/writes.py` `WRITE_MESSAGES` mirrors
-it row for row, and `tests/unit/test_writes_doc.py` fails on any difference. Every write is type 4
-and carries the usual frame: `00 59 22 | len | type | address (4, LE) | length (3, LE) | data |
-checksum`. The encoder refuses every other `0x22` body, including bypass with data other than
-`01` or an index above 35, and loopback with data other than `00`/`01` or a length other than 1;
-erase (`0x21`), the commit (`0xF0000000`) and stored-area writes (`0x0`–`0x2F5`) are not
-encodable. Every row is volatile: none changes a stored preset.
+004 M1; `stored_slot(i)`, `commit` and `stored_image` added by spec 004 M2). This table is
+authoritative; `src/openvave/protocol/writes.py` `WRITE_MESSAGES` mirrors it row for row, and
+`tests/unit/test_writes_doc.py` fails on any difference. Every write is type 4 and carries the
+usual frame: `00 59 22 | len | type | address (4, LE) | length (3, LE) | data | checksum`. The
+encoder refuses every other `0x22` body, including bypass with data other than `01` or an index
+above 35, loopback with data other than `00`/`01` or a length other than 1, a stored-area write
+that does not start at a slot (`2 + 21·i`, i = 0–35) with 21 bytes, a commit with data, and an
+image that is not 758 bytes starting `a5 5a`. Erase (`0x21`), type 6, the global block
+(`0x20000000`–`0x20000003`), the whole edit buffer (`0x10000000` × 21) and `0x15` are not
+encodable.
+
+**Persistent rows.** `stored_slot(i)`, `commit` and `stored_image` change stored presets
+(`WriteTarget.persistent`). openvave sends them only from its save/restore sequence runner, only
+with `--unsafe` (`unsafe=True`), and only after a full backup was taken and handed to the caller
+(spec 004 R5, R9). Every other row is volatile. Sequences, as the app's (checks 3–4):
+save / restore one slot = `stored_slot(i)` → 300 ms → `commit` → 100 ms → `preset_select(i)`,
+with a read of slot `i` before the commit; restore all = `stored_image` → 300 ms → `commit` →
+100 ms → `preset_select(loaded)`, verified by a full backup read.
 
 Rule: a row is `observed` only when it cites a committed capture of **this project's own send**
 (a gate excerpt in `captures/fw96/`), and `confirmed` when it cites two independent sessions.
@@ -523,6 +546,9 @@ write is sent without `--experimental` only when its row is `confirmed`, the `ac
 | `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | confirmed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl`, `captures/fw96/20261117-gate-select_b_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B; gate session B (normal mode, new connection): 1D → 1A and 1A → 1D. Each: ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
 | `bypass(i)` | 4 | `0xE1000000 + i` | 1 | always `01`; i = the loaded preset (0–35) | ACK | hypothesis | 96 | — | spec 004 check 2 (2026-11-17, 1B, normal mode, sent by a `poc/` script, not by openvave): `… e1 01 00 00 01 17`, ACK; the global slot then read `ff`, the edit buffer 21 × `00`, mode stayed normal; select 1B left bypass and restored the stored bytes (`captures/fw96/20261117-check2-bypass.jsonl`). openvave sends it only for the loaded preset; leaving bypass is a `preset_select(i)` |
 | `loopback` | 4 | `0xD0000000` | 1 | `00` off / `01` on | ACK (expected) | hypothesis | 96 | — | from the app's code (the Loopback button writes this byte); never sent yet. The 1-byte read at this address is confirmed and has read `01` in every session. Meaning and persistence unknown; openvave never follows it with a commit |
+| `stored_slot(i)` | 4 | `0x00000002 + 21·i` | 21 | the 21 preset bytes; i = 0–35 | ACK | hypothesis | 96 | — | **persistent**. Spec 004 check 3 (2026-11-17, 1B, normal mode, `poc/` script): 1B rewritten with its own bytes, ACK, nothing changed (`captures/fw96/20261117-check3-noop_save.jsonl`); check 4 (same day): 1C written with gain 60 → 90, ACK, read back equal before the commit, kept across a power cycle with the commit (`captures/fw96/20261117-check4-real_save.jsonl`, `…-check4-verify_restore.jsonl`). Sent only by `preset save` / `preset restore --slot`, with `--unsafe`, after a backup |
+| `commit` | 4 | `0xF0000000` | 0 | empty | ACK | hypothesis | 96 | — | **persistent**. Spec 004 check 3 and check 4 (`poc/` script): `00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b`, ACK both times, 300 ms after the slot write; with it, the check 4 save survived a power cycle. Whether a slot write persists without it is unknown. Sent only inside a save/restore sequence |
+| `stored_image` | 4 | `0x00000000` | 758 | header `a5 5a` + 36 presets (the image of an openvave backup) | ACK (expected) | hypothesis | 96 | — | **persistent**. From the app's code ("import all" / factory restore: one 758-byte write, commit, reload); never sent. The 773-byte request spans 5 Bluetooth writes at ATT MTU 185 (see "Request chunking"); that the pedal reassembles a split request is a hypothesis. Its first send is planned as a byte-identical no-op (spec 004 R11). Sent only by `preset restore --all` |
 | `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl` | the reply to all eight gate-session-A writes and all three gate-session-B writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
 
 Normal mode (spec 004 check 1, 2026-11-17, fw 96, confirmed over two connections): the

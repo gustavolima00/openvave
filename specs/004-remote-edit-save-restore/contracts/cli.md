@@ -29,7 +29,7 @@ Set reverb_decay 5 (room 6) → 53 (spring 10)   (current preset 1B, normal mode
   write  00 59 22 16 00 00 04 04 00 00 10 0e 00 00 0f 04 3c 3c 46 32 32 00 00 00 00 35 04 07 64
   reply  00 59 00 01 00 00 00 ff   ACK
   after  [15] reverb_decay 53 (spring 10)   applied
-Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
+Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe --experimental
 ```
 
 ## `openvave preset reload`
@@ -112,15 +112,15 @@ a usage error (exit 2) naming the problem. A file from another firmware version 
 - `--all`: writes the file's 758-byte image in one message, commits, then selects the preset that
   was loaded. Verified by a full read compared with the file.
 - Lists the slots that differ first. None differs: `pedal already matches <file>; nothing sent`.
-- If the loaded preset has unsaved edits and it is among the slots written: needs
-  `--discard-edits`.
+- If the loaded preset has unsaved edits: needs `--discard-edits` (M2: every restore ends with a
+  select, which discards them, so this applies whichever slot is written).
 - Automatic backup as for save (`…-before-restore.json`).
 
 ```text
 Restore all presets from backup-a.json   UNSAFE: overwrites stored presets
   differ: 1C 3B 9D (3 of 36)
 Backup saved: ./tankg-backup-20261118-102000-before-restore.json
-  write  00 59 22 fe 02 00 04 00 00 00 00 f6 02 00 a5 5a …(758 bytes)… xx   ACK   (5 Bluetooth writes)
+  write  00 59 22 fe 02 00 04 00 00 00 00 f6 02 00 a5 5a …(758 bytes)… xx   ACK   (773 bytes)
   wait   300 ms
   write  00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b   ACK   (commit)
   wait   100 ms
@@ -159,8 +159,10 @@ error: no reply to the commit (connection lost)
   select 1C       not sent
 Stored presets may have changed. Nothing was retried.
 Check:   openvave preset backup
-Undo:    openvave preset restore ./tankg-backup-20261118-101500-before-save.json --all --unsafe
+Undo:    openvave preset restore ./tankg-backup-20261118-101500-before-save.json --all --unsafe --experimental
 ```
+
+(`--experimental` is printed while the restore messages are not `confirmed`.)
 
 With `--json` the same information is in `result.steps`, `result.stored_may_have_changed` and
 `backup_saved_to` ([`sequence-result.schema.json`](sequence-result.schema.json)).

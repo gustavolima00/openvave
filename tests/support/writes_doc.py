@@ -38,7 +38,7 @@ COLUMNS = (
 )
 NONE = "—"
 TARGET_RE = re.compile(r"^`([a-z_]+)(?:\((\d+|i)\))?`$")
-ADDRESS_RE = re.compile(r"^`0x([0-9a-fA-F]{8})(?: \+ i)?`$")
+ADDRESS_RE = re.compile(r"^`0x([0-9a-fA-F]{8})(?: \+ (?:21·)?i)?`$")
 BACKTICKED = re.compile(r"`([^`]+)`")
 CONFIDENCES = ("confirmed", "observed", "hypothesis")
 

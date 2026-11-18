@@ -33,7 +33,10 @@ NOT_SAVED = (
     "Not saved. Discard: openvave preset reload --discard-edits "
     "(or leave edit mode on the pedal without saving)"
 )
-NOT_SAVED_NORMAL = "Not saved. Discard: openvave preset reload"
+NOT_SAVED_NORMAL = (
+    "Not saved. Discard: openvave preset reload   "
+    "Keep: openvave preset save --unsafe --experimental"
+)
 
 Factory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
 
@@ -367,3 +370,12 @@ def test_not_applied_json_keeps_stdout_empty(capsys: pytest.CaptureFixture[str])
     assert code == 8
     assert out == ""
     assert "not applied" in err
+
+
+def test_keep_hint_names_the_save_opt_ins_while_unconfirmed() -> None:
+    # the hint must stay runnable: --experimental while stored_slot / commit are not confirmed
+    from openvave.protocol.writes import sendable_by_default
+
+    needs = not all(sendable_by_default(k, None, 96) for k in ("stored_slot", "commit"))
+    assert ("--experimental" in NOT_SAVED_NORMAL) is needs
+    assert "Keep: openvave preset save --unsafe" in NOT_SAVED_NORMAL

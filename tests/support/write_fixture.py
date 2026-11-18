@@ -50,11 +50,13 @@ def make_fake(
     cls: type[FakeTransport] = FakeTransport,
     glob: bytes | None = None,
     status: bytes | None = None,
+    faults: Mapping[str, str] | None = None,
 ) -> FakeTransport:
     """A fake pedal on 1B: stored image at 0, edit buffer, global block; ACKs allowlisted writes.
 
     ``glob`` replaces the whole global block (e.g. slot ``ff`` for bypass, spec 004). ``status``
-    adds the 1-byte status block at ``0xD0000000`` (the loopback flag, spec 004 US5).
+    adds the 1-byte status block at ``0xD0000000`` (the loopback flag, spec 004 US5). ``faults``
+    makes one write of a kind misbehave (``FakeTransport``, spec 004 M2).
     """
     full: dict[str, tuple[bytes, Replies]] = {QUERY: (CAP.tx(QUERY), query_rx or CAP.rx(QUERY))}
     full.update(script or {})
@@ -65,7 +67,13 @@ def make_fake(
     }
     if status is not None:
         memory[STATUS] = status
-    return cls(full, memory=memory, apply_writes=apply_writes, select_transient=select_transient)
+    return cls(
+        full,
+        memory=memory,
+        apply_writes=apply_writes,
+        select_transient=select_transient,
+        faults=faults,
+    )
 
 
 def writes(fake: FakeTransport) -> list[bytes]:

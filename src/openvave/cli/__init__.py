@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import re
@@ -19,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from openvave import __version__
+from openvave.backup import restore_problems
 from openvave.cli import files, render, watch
 from openvave.errors import (
     BluetoothUnavailableError,
@@ -26,11 +28,25 @@ from openvave.errors import (
     OpenvaveError,
     WriteNotAppliedError,
 )
-from openvave.models import DeviceInfo, WritePlan, WriteResult
+from openvave.models import (
+    Backup,
+    DeviceInfo,
+    SequencePlan,
+    SequenceResult,
+    WritePlan,
+    WriteResult,
+)
 from openvave.protocol.bytemap import REVERB_SECTION_STEPS, TYPED_FIELDS
 from openvave.protocol.storage import parse_position
 from openvave.protocol.writes import WRITABLE_FIELDS
-from openvave.session import DEFAULT_SCAN_TIMEOUT, DEFAULT_TIMEOUT, FieldValue, TankG
+from openvave.session import (
+    DEFAULT_SCAN_TIMEOUT,
+    DEFAULT_TIMEOUT,
+    FieldValue,
+    OnBackup,
+    OnPlan,
+    TankG,
+)
 from openvave.transport import Transport
 
 TransportFactory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
@@ -99,11 +115,28 @@ def _write_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _unsafe_options(parser: argparse.ArgumentParser, action: str) -> None:
+    _write_options(parser)
+    parser.add_argument(
+        "--unsafe",
+        action="store_true",
+        help="accept that stored presets are overwritten (required)",
+    )
+    parser.add_argument(
+        "--backup-dir",
+        metavar="DIR",
+        default=".",
+        help=f"where the automatic backup tankg-backup-<time>-before-{action}.json goes "
+        "(default: current directory; never overwrites)",
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openvave",
-        description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded "
-        "volatile writes (edit buffer, preset select, bypass, loopback; never saved). Unofficial. "
+        description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded writes "
+        "(edit buffer, preset select, bypass, loopback; stored presets only through preset save "
+        "and preset restore, with --unsafe and after an automatic backup). Unofficial. "
         "Not affiliated with or endorsed by M-VAVE / Cuvave.",
     )
     parser.add_argument("--version", action="version", version=f"openvave {__version__}")
@@ -150,6 +183,37 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="reload even in edit mode (the pedal's unsaved edits are lost)",
     )
+    save = preset_sub.add_parser(
+        "save",
+        parents=[common],
+        help="store the current sound in a stored preset (UNSAFE: overwrites it; needs --unsafe)",
+        description="Stores the edit buffer in the loaded slot, or in --to. Normal mode only. "
+        "Takes a full backup first (--backup-dir), then: slot write, read back, 300 ms, commit, "
+        "100 ms, select, verify. Nothing is retried.",
+    )
+    save.add_argument("--to", metavar="POSITION", default=None, help="target slot (1A–9D or 0–35)")
+    _unsafe_options(save, "save")
+    restore = preset_sub.add_parser(
+        "restore",
+        parents=[common],
+        help="restore stored presets from an openvave backup file (UNSAFE; needs --unsafe)",
+        description="--slot restores one position from the file (save sequence with the file's "
+        "bytes); --all writes the file's 758-byte image in one message, commits and selects the "
+        "preset that was loaded. Takes a full backup first. The file is checked before "
+        "connecting.",
+    )
+    restore.add_argument("file", help="an openvave backup file (format_version 1)")
+    which = restore.add_mutually_exclusive_group(required=True)
+    which.add_argument(
+        "--slot", metavar="POSITION", default=None, help="restore this position (1A–9D or 0–35)"
+    )
+    which.add_argument("--all", action="store_true", help="restore all 36 presets")
+    restore.add_argument(
+        "--discard-edits",
+        action="store_true",
+        help="restore even with unsaved edits (the final select discards them)",
+    )
+    _unsafe_options(restore, "restore")
     bypass = sub.add_parser(
         "bypass",
         parents=[common],
@@ -439,7 +503,8 @@ async def _write(
         try:
             result = await write_call(pedal)
         except WriteNotAppliedError as err:
-            if not args.json:  # 001 rule: with --json, stdout stays empty on failure
+            # 001 rule: with --json, stdout stays empty on failure
+            if not args.json and err.result is not None:
                 print(_render_write(args, command, err.result.plan, err.result, pedal))
             raise
         return _render_write(args, command, result.plan, result, pedal)
@@ -533,6 +598,130 @@ async def _loopback(args: argparse.Namespace, factory: TransportFactory) -> str:
     )
 
 
+class _Reported(Exception):
+    """An error whose report is already printed (a save / restore that stopped mid-sequence)."""
+
+    def __init__(self, error: OpenvaveError) -> None:
+        self.error = error
+        super().__init__(str(error))
+
+
+async def _sequence(
+    args: argparse.Namespace,
+    factory: TransportFactory,
+    command: str,
+    plan_call: Callable[[TankG], Awaitable[SequencePlan]],
+    run_call: Callable[[TankG, OnBackup, OnPlan], Awaitable[SequenceResult]],
+    source: str | None,
+) -> str:
+    """Run ``preset save`` / ``preset restore``: plan (dry run) or the guarded sequence."""
+    action = "save" if command == "preset save" else "restore"
+    saved: list[str] = []
+
+    async def source_() -> tuple[Transport, DeviceInfo | None]:
+        return await factory(args.device, args.scan_timeout)
+
+    def on_plan(plan: SequencePlan) -> None:
+        if not args.json:
+            print(render.human_sequence_header(plan, source), flush=True)
+
+    def on_backup(backup: Backup) -> None:
+        path = files.automatic_backup_path(args.backup_dir, action, datetime.now())
+        files.write_json_atomic(path, backup.to_document(), force=False)
+        saved.append(str(path))
+        if not args.json:
+            print(f"Backup saved: {path}", flush=True)
+            print(render.POWER_WARNING, flush=True)
+
+    async with TankG(source_, timeout=args.timeout) as pedal:
+        identity, device = pedal.identity, pedal.device
+
+        def document(plan: SequencePlan, result: SequenceResult | None) -> str:
+            return render.dumps(
+                render.sequence_json(
+                    command,
+                    plan,
+                    result,
+                    dry_run=args.dry_run,
+                    read_at=datetime.now(UTC),
+                    device=device,
+                    identity=identity,
+                    source=source,
+                    backup_saved_to=saved[0] if saved else None,
+                )
+            )
+
+        if args.dry_run:
+            plan = await plan_call(pedal)
+            if args.json:
+                return document(plan, None)
+            return render.human_sequence_plan(
+                plan, source, identity, experimental=args.experimental
+            )
+        try:
+            result = await run_call(pedal, on_backup, on_plan)
+        except OpenvaveError as err:
+            sequence = err.sequence
+            if sequence is None:
+                raise
+            if args.json:
+                print(document(sequence.plan, sequence))
+            lines = render.sequence_failure_lines(
+                str(err), sequence, saved[0] if saved else None, identity
+            )
+            print("\n".join(lines), file=sys.stderr)
+            raise _Reported(err) from err
+    if args.json:
+        return document(result.plan, result)
+    if not result.steps:
+        return render.human_sequence_no_change(result.plan, source)
+    return render.human_sequence_steps(result, source)
+
+
+async def _preset_save(args: argparse.Namespace, factory: TransportFactory) -> str:
+    to, unsafe, experimental = args.index, args.unsafe, args.experimental
+    return await _sequence(
+        args,
+        factory,
+        "preset save",
+        lambda p: p.plan_save(to, unsafe=unsafe, experimental=experimental),
+        lambda p, on_backup, on_plan: p.save_preset(
+            to, unsafe=unsafe, experimental=experimental, on_backup=on_backup, on_plan=on_plan
+        ),
+        None,
+    )
+
+
+async def _preset_restore(args: argparse.Namespace, factory: TransportFactory) -> str:
+    backup: Backup = args.backup
+    slot, everything = args.index, args.all
+    unsafe, experimental, discard = args.unsafe, args.experimental, args.discard_edits
+    return await _sequence(
+        args,
+        factory,
+        "preset restore",
+        lambda p: p.plan_restore(
+            backup,
+            slot=slot,
+            all=everything,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard,
+        ),
+        lambda p, on_backup, on_plan: p.restore(
+            backup,
+            slot=slot,
+            all=everything,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard,
+            on_backup=on_backup,
+            on_plan=on_plan,
+        ),
+        args.file,
+    )
+
+
 async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
     if args.action == "backup":
         return await _preset_backup(args, factory)
@@ -540,6 +729,10 @@ async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
         return await _preset_select(args, factory)
     if args.action == "reload":
         return await _preset_reload(args, factory)
+    if args.action == "save":
+        return await _preset_save(args, factory)
+    if args.action == "restore":
+        return await _preset_restore(args, factory)
     return await _preset_dump(args, factory)
 
 
@@ -565,6 +758,39 @@ def _prepare_write(args: argparse.Namespace) -> None:
             args.index = parse_position(args.position)
         except ValueError as err:
             raise UsageError(str(err)) from None
+
+
+def _prepare_sequence(args: argparse.Namespace) -> None:
+    """``preset save`` / ``preset restore``: position, backup directory and the restore file are
+    checked before any pedal I/O (usage errors exit 2)."""
+    args.backup_dir = Path(args.backup_dir)
+    if not args.backup_dir.is_dir():
+        raise UsageError(f"--backup-dir {args.backup_dir} is not a directory")
+    text = args.to if args.action == "save" else args.slot
+    try:
+        args.index = None if text is None else parse_position(text)
+    except ValueError as err:
+        raise UsageError(str(err)) from None
+    if args.action == "restore":
+        args.backup = load_restore_file(Path(args.file))
+
+
+def load_restore_file(path: Path) -> Backup:
+    """The backup in ``path``, checked for restore (spec 004 FR-020); :class:`UsageError` naming
+    every problem. The firmware is checked later, against the pedal's."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as err:
+        raise UsageError(f"cannot read {path}: {err.strerror or err}") from None
+    except (UnicodeDecodeError, json.JSONDecodeError) as err:
+        raise UsageError(f"{path} is not a JSON backup file ({err})") from None
+    problems = restore_problems(document)
+    if problems:
+        raise UsageError(f"{path} cannot be restored: " + "; ".join(problems))
+    try:
+        return Backup.from_document(document)
+    except (ValueError, OpenvaveError) as err:
+        raise UsageError(f"{path} cannot be restored: {err}") from None
 
 
 def _command_name(args: argparse.Namespace) -> str:
@@ -598,7 +824,7 @@ def _report(err: OpenvaveError) -> None:
             )
         else:
             print("hint: turn Bluetooth on and check this user may access it", file=sys.stderr)
-    elif isinstance(err, WriteNotAppliedError):
+    elif isinstance(err, WriteNotAppliedError) and err.result is not None:
         kind = err.result.plan.target.kind
         check = {
             "bypass": "'openvave info' shows the pedal state.",
@@ -658,6 +884,12 @@ def main(
         except UsageError as err:
             print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
+    if args.command == "preset" and args.action in ("save", "restore"):
+        try:
+            _prepare_sequence(args)
+        except UsageError as err:
+            print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
@@ -673,6 +905,10 @@ def main(
         except UsageError as err:
             print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
+        except _Reported as reported:
+            if debug:
+                traceback.print_exc()
+            return reported.error.exit_code
         except OpenvaveError as err:
             if debug:
                 traceback.print_exc()

@@ -14,6 +14,7 @@ from openvave._jsonform import field_json, hex_bytes, identity_json
 from openvave.models import Backup, DeviceIdentity, Region, RegionRead, StoredPreset
 from openvave.protocol.decode import decode_region
 from openvave.protocol.storage import (
+    EXPECTED_HEADER,
     PRESET_COUNT,
     PRESET_SIZE,
     SLOTS,
@@ -107,3 +108,71 @@ def from_document(document: Mapping[str, Any]) -> Backup:
         presets=presets,
         warnings=warnings,
     )
+
+
+def restore_problems(document: Any, firmware: int | None = None) -> list[str]:
+    """Why ``document`` cannot be restored to a pedal running ``firmware`` (spec 004 FR-020).
+
+    Checks the kind, ``format_version`` 1, 36 presets of 21 bytes with positions 1A–9D each once,
+    the header ``a5 5a`` and that the image equals header + presets. With ``firmware`` given, a
+    file from another firmware adds a problem starting ``firmware_mismatch`` (the only one the
+    experimental opt-in may override). An empty list means the file can be restored. Pure: the
+    CLI calls it with ``firmware=None`` before connecting.
+    """
+    if not isinstance(document, Mapping):
+        return ["not an openvave backup document (expected a JSON object)"]
+    problems: list[str] = []
+    if document.get("kind") != KIND:
+        problems.append(f"kind {document.get('kind')!r} is not an openvave preset backup ({KIND})")
+    if document.get("format_version") != FORMAT_VERSION:
+        problems.append(
+            f"format_version {document.get('format_version')!r} is not supported "
+            f"(expected {FORMAT_VERSION})"
+        )
+    try:
+        header = bytes.fromhex(document["header"])
+        image = bytes.fromhex(document["image"])
+        file_firmware = int(document["identity"]["firmware"])
+        entries = list(document["presets"])
+    except (KeyError, TypeError, ValueError) as err:
+        problems.append(f"malformed backup document: {err!r}")
+        return problems
+    if len(entries) != PRESET_COUNT:
+        problems.append(f"expected {PRESET_COUNT} presets, found {len(entries)}")
+    presets: dict[int, bytes] = {}
+    for n, entry in enumerate(entries):
+        try:
+            index = int(entry["index"])
+            raw = bytes.fromhex(entry["raw"])
+        except (KeyError, TypeError, ValueError) as err:
+            problems.append(f"preset entry {n} is malformed: {err!r}")
+            continue
+        if not 0 <= index < PRESET_COUNT:
+            problems.append(f"preset entry {n} has index {index} (expected 0–{PRESET_COUNT - 1})")
+            continue
+        if index in presets:
+            problems.append(f"preset index {index} (position {position(index)}) appears twice")
+        if len(raw) != PRESET_SIZE:
+            problems.append(
+                f"preset {position(index)} has {len(raw)} bytes, expected {PRESET_SIZE} bytes"
+            )
+        presets[index] = raw
+    expected_image = STORE_OFFSET + PRESET_SIZE * PRESET_COUNT
+    if len(image) != expected_image:
+        problems.append(f"image has {len(image)} bytes, expected {expected_image}")
+    if header != EXPECTED_HEADER:
+        problems.append(f"header {header.hex(' ') or '(empty)'} is not {EXPECTED_HEADER.hex(' ')}")
+    if len(image) == expected_image and len(presets) == PRESET_COUNT:
+        differing = [] if image[:STORE_OFFSET] == header else ["header"]
+        for index, raw in sorted(presets.items()):
+            start = STORE_OFFSET + PRESET_SIZE * index
+            if image[start : start + PRESET_SIZE] != raw:
+                differing.append(position(index))
+        if differing:
+            problems.append("image differs from header + presets at " + ", ".join(differing))
+    if firmware is not None and file_firmware != firmware:
+        problems.append(
+            f"firmware_mismatch: the file is from firmware {file_firmware}, "
+            f"the pedal runs {firmware}"
+        )
+    return problems

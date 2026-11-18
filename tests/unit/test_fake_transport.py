@@ -265,3 +265,113 @@ async def test_loopback_write_stores_the_byte(value: bytes) -> None:
     assert status == sf.read_reply(0xD0000000, value)
     glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
     assert glob == sf.read_reply(GLOBAL_ADDR, bytes([0, 0, 1, NORMAL]))  # nothing else moved
+
+
+# -- stored area, commit, scripted step failures (spec 004 M2, T042) ---------------------------
+
+NAK = sf.frame(0x00, b"\x01")
+GAIN_90 = sf.PUBLIC_PRESET[:6] + bytes([90]) + sf.PUBLIC_PRESET[7:]
+
+
+def _slot(index: int) -> int:
+    return 2 + 21 * index
+
+
+async def _stored(fake: FakeTransport, got: Collector, index: int) -> bytes:
+    reply = await _write_and_settle(fake, sf.read_request(_slot(index), 21), got)
+    return reply[14:-1]
+
+
+@pytest.mark.persistent_writes
+async def test_slot_write_changes_the_stored_area() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got) == ACK
+    assert await _stored(fake, got, 2) == GAIN_90
+    assert await _stored(fake, got, 1) == sf.PUBLIC_PRESET  # neighbours untouched
+    assert await _stored(fake, got, 3) == sf.synthetic_preset(3)
+    assert fake.commits == 0
+
+
+@pytest.mark.persistent_writes
+async def test_commit_is_counted_and_changes_nothing() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    image = await _write_and_settle(fake, sf.read_request(0, 758), got)
+    assert await _write_and_settle(fake, write_frame(0xF0000000, b""), got) == ACK
+    assert fake.commits == 1
+    assert await _write_and_settle(fake, sf.read_request(0, 758), got) == image
+
+
+@pytest.mark.persistent_writes
+async def test_image_write_replaces_the_stored_area() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    image = sf.synthetic_image()
+    new = image[:2] + GAIN_90 * 36
+    assert await _write_and_settle(fake, write_frame(0, new), got) == ACK
+    reply = await _write_and_settle(fake, sf.read_request(0, 758), got)
+    assert reply[14:-1] == new
+
+
+@pytest.mark.persistent_writes
+async def test_select_loads_from_the_written_stored_area() -> None:
+    fake = make_fake(NORMAL)
+    got = await _open(fake)
+    await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got)
+    await _write_and_settle(fake, write_frame(0xE0000002, b"\x01"), got)
+    buffer = await _write_and_settle(fake, sf.read_request(BUFFER_ADDR, 21), got)
+    assert buffer[14:-1] == GAIN_90
+    glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
+    assert glob[14:-1] == bytes([0, 0, 2, NORMAL])
+
+
+@pytest.mark.persistent_writes
+async def test_fault_nak_does_not_apply() -> None:
+    fake = make_fake(NORMAL, faults={"stored_slot": "nak"})
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got) == NAK
+    assert await _stored(fake, got, 2) == sf.synthetic_preset(2)
+    # a fault fires once: the next slot write is applied
+    assert await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got) == ACK
+    assert await _stored(fake, got, 2) == GAIN_90
+
+
+@pytest.mark.persistent_writes
+async def test_fault_no_reply_applies_but_answers_nothing() -> None:
+    fake = make_fake(NORMAL, faults={"commit": "no_reply"})
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(0xF0000000, b""), got) == b""
+    assert fake.commits == 1
+
+
+@pytest.mark.persistent_writes
+async def test_fault_disconnect_applies_then_drops_the_link() -> None:
+    fake = make_fake(NORMAL, faults={"stored_slot": "disconnect"})
+    lost: list[bool] = []
+    fake.on_disconnect(lambda: lost.append(True))
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got) == b""
+    assert lost == [True]
+    assert fake.closed is True
+    with pytest.raises(ConnectionLostError):
+        await fake.write(sf.read_request(_slot(2), 21))
+
+
+@pytest.mark.persistent_writes
+async def test_fault_corrupt_and_ignore() -> None:
+    fake = make_fake(NORMAL, faults={"stored_slot": "corrupt", "preset_select": "ignore"})
+    got = await _open(fake)
+    assert await _write_and_settle(fake, write_frame(_slot(2), GAIN_90), got) == ACK
+    stored = await _stored(fake, got, 2)
+    assert stored != GAIN_90 and stored[:20] == GAIN_90[:20]
+    assert await _write_and_settle(fake, write_frame(0xE0000002, b"\x01"), got) == ACK
+    glob = await _write_and_settle(fake, sf.read_request(GLOBAL_ADDR, 4), got)
+    assert glob[14:-1] == bytes([0, 0, 1, NORMAL])  # select ignored: still on 1B
+
+
+def test_unknown_fault_kind_or_action_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        make_fake(NORMAL, faults={"stored_slot": "explode"})
+    with pytest.raises(ValueError):
+        make_fake(NORMAL, faults={"erase": "nak"})

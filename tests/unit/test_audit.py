@@ -8,7 +8,7 @@ from openvave.protocol import build_query
 from openvave.transport.fake import FakeTransport
 from tests.conftest import SENT_FRAMES
 from tests.support import storage_fixture as sf
-from tests.support.audit import unsafe_frames
+from tests.support.audit import persistent_violation, persistent_write, unsafe_frames
 from tests.support.captures import FW96_CONNECT, load_capture
 from tests.support.write_fixture import write_frame
 
@@ -78,3 +78,60 @@ async def test_audit_records_fake_writes() -> None:
     await fake.open()
     await fake.write(build_query())
     assert SENT_FRAMES[before:] == [build_query()]
+
+
+# -- persistent writes (spec 004 M2, T050) ------------------------------------------------------
+
+PERSISTENT = {
+    "slot-1a": write_frame(0x02, bytes(21)),
+    "slot-1c": write_frame(0x2C, sf.PUBLIC_PRESET),
+    "slot-9d": write_frame(0x2E1, bytes(21)),
+    "commit": write_frame(0xF0000000, b""),
+    "image": write_frame(0x0, sf.synthetic_image()),
+}
+NEVER = {
+    "slot-addr-3": write_frame(0x03, bytes(21)),
+    "slot-36": write_frame(0x2F6, bytes(21)),
+    "slot-20b": write_frame(0x02, bytes(20)),
+    "commit-data": write_frame(0xF0000000, b"\x00"),
+    "image-header-0000": write_frame(0x0, bytes(758)),
+    "image-757": write_frame(0x0, sf.synthetic_image()[:757]),
+    "global-mode": write_frame(0x20000003, b"\x01"),
+    "edit-buffer-21": write_frame(0x10000000, bytes(21)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(PERSISTENT))
+def test_persistent_writes_are_unsafe_unless_allowed(name: str) -> None:
+    frame = PERSISTENT[name]
+    assert persistent_write(frame)
+    assert unsafe_frames([frame]) == [frame]
+    assert unsafe_frames([frame], allow_persistent=True) == []
+
+
+@pytest.mark.parametrize("name", sorted(NEVER))
+def test_other_stored_global_and_buffer_writes_are_never_allowed(name: str) -> None:
+    frame = NEVER[name]
+    assert not persistent_write(frame)
+    assert unsafe_frames([frame], allow_persistent=True) == [frame]
+
+
+def test_persistent_violation_needs_the_marker() -> None:
+    frame = PERSISTENT["commit"]
+    assert persistent_violation(frame, allowed=False) is True
+    assert persistent_violation(frame, allowed=True) is False
+    assert persistent_violation(write_frame(0xE0000001, b"\x01"), allowed=False) is False
+
+
+def test_this_test_is_not_marked(request: pytest.FixtureRequest) -> None:
+    from tests.conftest import _CURRENT
+
+    assert _CURRENT["allowed"] is False
+    assert request.node.get_closest_marker("persistent_writes") is None
+
+
+@pytest.mark.persistent_writes
+def test_a_marked_test_is_allowed() -> None:
+    from tests.conftest import _CURRENT
+
+    assert _CURRENT["allowed"] is True

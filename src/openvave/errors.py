@@ -6,13 +6,19 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from openvave.models import DeviceInfo, WriteResult
+    from openvave.models import DeviceInfo, SequenceResult, WriteResult
 
 
 class OpenvaveError(Exception):
-    """Base class for every error raised by openvave."""
+    """Base class for every error raised by openvave.
+
+    ``sequence`` is set on an error raised in the middle of ``save_preset`` / ``restore``: the
+    partial :class:`~openvave.models.SequenceResult` (which steps were acknowledged, not sent or
+    unanswered, and whether stored presets may have changed). ``None`` otherwise.
+    """
 
     exit_code: ClassVar[int] = 1
+    sequence: SequenceResult | None = None
 
 
 class NoDeviceFoundError(OpenvaveError):
@@ -86,9 +92,10 @@ class WriteRefusedError(UnsafeCommandError):
 
     ``reason`` is one of ``out_of_range``, ``untested_firmware``, ``experimental_required``,
     ``edits_would_be_discarded``, ``unknown_field``, and since spec 004 ``tuner_mode``,
-    ``bypassed``, ``unrecognised_state``, ``edit_mode`` (bypass in edit mode) and
-    ``not_bypassed`` (bypass off on a pedal that is not bypassed). ``not_edit_mode`` (0.3.0) is
-    no longer raised.
+    ``bypassed``, ``unrecognised_state``, ``edit_mode`` (bypass, save or restore in edit mode),
+    ``not_bypassed`` (bypass off on a pedal that is not bypassed), ``unsafe_required`` (save or
+    restore without ``unsafe=True``) and ``firmware_mismatch`` (a backup file from another
+    firmware, without ``experimental=True``). ``not_edit_mode`` (0.3.0) is no longer raised.
     """
 
     exit_code = 1
@@ -114,13 +121,22 @@ class WriteNakError(ProtocolError):
 class WriteNotAppliedError(OpenvaveError):
     """The write was acknowledged but the re-read does not show it (FR-012, exit code 8).
 
-    ``result`` is the :class:`~openvave.models.WriteResult` with ``applied`` false.
+    ``result`` is the :class:`~openvave.models.WriteResult` with ``applied`` false; ``None`` when
+    a save/restore read-back failed, whose details are in ``sequence`` instead.
     """
 
     exit_code = 8
 
-    def __init__(self, result: WriteResult, message: str | None = None) -> None:
+    def __init__(
+        self,
+        result: WriteResult | None,
+        message: str | None = None,
+        *,
+        sequence: SequenceResult | None = None,
+    ) -> None:
         self.result = result
-        super().__init__(
-            message or f"{result.plan.action}: acknowledged but not applied (re-read differs)"
-        )
+        self.sequence = sequence
+        if message is None:
+            action = result.plan.action if result is not None else "write"
+            message = f"{action}: acknowledged but not applied (re-read differs)"
+        super().__init__(message)

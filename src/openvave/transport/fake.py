@@ -21,9 +21,46 @@ EDIT_BUFFER = 0x10000000
 GLOBAL_ADDRESS = 0x20000000
 SELECT_BASE = 0xE0000000
 BYPASS_BASE = 0xE1000000
+COMMIT_ADDRESS = 0xF0000000
+LOOPBACK_ADDRESS = 0xD0000000
 PRESET_SIZE = 21
 STORE_OFFSET = 2
+IMAGE_SIZE = STORE_OFFSET + PRESET_SIZE * 36
 WRITE_ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
+WRITE_NAK = bytes.fromhex("00 59 00 01 00 00 01 fe")
+"""A write reply with status 1 (no NAK has been seen on hardware; any non-zero status is one)."""
+HEADER_LEN = 6
+FAULT_KINDS = frozenset(
+    {
+        "knob_block",
+        "block_switch",
+        "led_colour",
+        "preset_select",
+        "bypass",
+        "loopback",
+        "stored_slot",
+        "commit",
+        "stored_image",
+    }
+)
+FAULT_ACTIONS = frozenset({"nak", "no_reply", "disconnect", "corrupt", "ignore"})
+
+
+def _write_kind(address: int, length: int) -> str:
+    """The write kind of an allowlisted ``(address, length)`` (see ``protocol.writes``)."""
+    if address == COMMIT_ADDRESS:
+        return "commit"
+    if address >= BYPASS_BASE:
+        return "bypass"
+    if address >= SELECT_BASE:
+        return "preset_select"
+    if address == LOOPBACK_ADDRESS:
+        return "loopback"
+    if address >= EDIT_BUFFER:
+        if address == EDIT_BUFFER + 4:
+            return "knob_block"
+        return "led_colour" if address == EDIT_BUFFER + 18 else "block_switch"
+    return "stored_image" if length == IMAGE_SIZE else "stored_slot"
 
 
 def _label(text: str) -> str:
@@ -65,7 +102,9 @@ class FakeTransport:
     - ``chunk_size``: deliver every reply as notification chunks of at most this many bytes
       (182 = what the pedal sends at ATT MTU 185). Exclusive with ``split``.
     - ``apply_writes``: answer unscripted allowlisted writes (``0x22``) with the ACK and apply
-      them to ``memory``: edit-buffer writes change the block at ``0x10000000``; a preset select
+      them to ``memory``: edit-buffer writes change the block at ``0x10000000``; stored-slot and
+      stored-image writes change the stored area (block at address 0); a commit only increments
+      :attr:`commits`; a preset select
       ``i`` copies stored preset ``i`` (block at address 0) into the edit buffer, sets global
       bytes 0–2 (browsed bank, bank, slot) and leaves edit mode (mode 0 → 1). This models the
       pedal as the app describes it; it is not hardware evidence. A bypass write (``0xE1000000 +
@@ -75,6 +114,16 @@ class FakeTransport:
       ``apply_writes``, an unscripted write is a test error.
     - ``select_transient``: after each applied preset select, the next this-many global reads
       return slot ``ff`` (the loading state seen once on hardware).
+    - ``faults``: ``{write kind: action}`` — the first applied write of that kind (``stored_slot``,
+      ``commit``, ``stored_image``, ``preset_select``, …) misbehaves once: ``nak`` (not applied,
+      NAK reply), ``no_reply`` (applied, no reply), ``disconnect`` (applied, then the link drops:
+      the :meth:`on_disconnect` callback runs and later writes raise
+      :class:`ConnectionLostError`), ``corrupt`` (applied with its last data byte inverted, ACK)
+      or ``ignore`` (ACK, not applied). Needs ``apply_writes``.
+
+    A request split over several :meth:`write` calls (the BLE transport splits frames longer than
+    one Bluetooth write) is reassembled by its length field before it is handled; :attr:`sent`
+    holds whole requests.
 
     Every frame written is recorded in :attr:`sent`. Without ``memory``, a request that is not in
     the script raises ``AssertionError`` (the test is wrong, not the pedal). Scripted labels
@@ -93,9 +142,15 @@ class FakeTransport:
         chunk_size: int | None = None,
         apply_writes: bool = False,
         select_transient: int = 0,
+        faults: Mapping[str, str] | None = None,
     ) -> None:
         if apply_writes and memory is None:
             raise ValueError("apply_writes needs memory")
+        for kind, action in (faults or {}).items():
+            if kind not in FAULT_KINDS or action not in FAULT_ACTIONS:
+                raise ValueError(f"unknown fault {kind!r}: {action!r}")
+        if faults and not apply_writes:
+            raise ValueError("faults need apply_writes")
         if chunk_size is not None and (chunk_size < 1 or split is not None):
             raise ValueError("chunk_size must be >= 1 and cannot be combined with split")
         self._replies = {label: _reply_list(label, rx) for label, (_, rx) in script.items()}
@@ -118,8 +173,13 @@ class FakeTransport:
         self._select_transient = select_transient
         self._transient_left = 0
         self._callback: Callable[[bytes], None] | None = None
+        self._lost: Callable[[], None] | None = None
+        self._faults = dict(faults or {})
+        self._pending = b""
         self.sent: list[bytes] = []
-        """Every frame written, in order."""
+        """Every request written, in order (a split request once, reassembled)."""
+        self.commits = 0
+        """Applied commit writes (``0xF0000000``)."""
         self.opened = False
         self.closed = False
 
@@ -136,6 +196,7 @@ class FakeTransport:
         chunk_size: int | None = None,
         apply_writes: bool = False,
         select_transient: int = 0,
+        faults: Mapping[str, str] | None = None,
     ) -> FakeTransport:
         """Build a fake from a capture file (labels are whitespace-normalised).
 
@@ -171,6 +232,7 @@ class FakeTransport:
             chunk_size=chunk_size,
             apply_writes=apply_writes,
             select_transient=select_transient,
+            faults=faults,
         )
 
     async def open(self) -> None:
@@ -182,20 +244,40 @@ class FakeTransport:
         """Register the callback that receives reply chunks."""
         self._callback = callback
 
+    def on_disconnect(self, callback: Callable[[], None]) -> None:
+        """Register the callback run when a ``disconnect`` fault drops the link."""
+        self._lost = callback
+
+    def _reassemble(self, chunk: bytes) -> bytes | None:
+        """A whole request, or ``None`` while a split request is still incomplete."""
+        data = self._pending + chunk
+        if len(data) >= HEADER_LEN and data[:2] == b"\x00\x59":
+            total = HEADER_LEN + int.from_bytes(data[3:6], "little") + 1
+            if len(data) < total:
+                self._pending = data
+                return None
+        self._pending = b""
+        return data
+
     async def write(self, frame: bytes) -> None:
         """Record ``frame`` in :attr:`sent` and schedule its scripted reply (unless dropped)."""
-        frame = bytes(frame)
         if not self.opened:
             raise AssertionError("FakeTransport.write() before open()")
         if self.closed:
             raise ConnectionLostError("transport closed")
+        whole = self._reassemble(bytes(frame))
+        if whole is None:
+            return
+        frame = whole
         if self._disconnect_after is not None and len(self.sent) >= self._disconnect_after:
             self.closed = True
             raise ConnectionLostError("simulated disconnect")
         self.sent.append(frame)
         label = self._labels.get(frame)
         if label is None and self._apply_writes and frame[2:3] == bytes([WRITE]):
-            self._deliver(self._apply_write(frame))
+            reply = self._apply_write(frame)
+            if reply is not None:
+                self._deliver(reply)
             return
         if label is None and self._memory is not None:
             reply = self._memory_reply(frame)
@@ -212,8 +294,8 @@ class FakeTransport:
         self._served[label] = served + 1
         self._deliver(frames[min(served, len(frames) - 1)])
 
-    def _apply_write(self, frame: bytes) -> bytes:
-        """Apply an allowlisted write to :attr:`_memory` and return the ACK."""
+    def _apply_write(self, frame: bytes) -> bytes | None:
+        """Apply an allowlisted write to :attr:`_memory`; the reply (``None``: no reply)."""
         from openvave.protocol.writes import allowed_write_body
 
         assert self._memory is not None
@@ -222,12 +304,29 @@ class FakeTransport:
             raise AssertionError(f"FakeTransport: write outside the allowlist {frame.hex(' ')}")
         address = int.from_bytes(body[1:5], "little")
         data = body[ECHO_LEN:]
-        if address >= BYPASS_BASE:
+        fault = self._faults.pop(_write_kind(address, len(data)), None)
+        if fault == "nak":
+            return WRITE_NAK
+        if fault == "ignore":
+            return WRITE_ACK
+        if fault == "corrupt" and data:
+            data = data[:-1] + bytes([data[-1] ^ 0xFF])
+        if address == COMMIT_ADDRESS:
+            self.commits += 1
+        elif address >= BYPASS_BASE:
             self._bypass()
         elif address >= SELECT_BASE:
             self._select(address - SELECT_BASE)
         else:
             self._poke(address, data)
+        if fault == "no_reply":
+            return None
+        if fault == "disconnect":
+            self.closed = True
+            lost = self._lost
+            if lost is not None:
+                asyncio.get_running_loop().call_soon(lost)
+            return None
         return WRITE_ACK
 
     def _block_at(self, address: int, length: int) -> tuple[int, bytes]:

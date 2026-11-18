@@ -397,6 +397,96 @@ class WriteResult:
     since the pedal does not report its slot while bypassed (spec 004 FR-010)."""
 
 
+SequenceAction = Literal["save", "restore_slot", "restore_all"]
+StepStatus = Literal["acked", "nak", "no_reply", "not_sent", "waited"]
+
+
+@dataclass(frozen=True)
+class SequenceStep:
+    """One step of a persistent action: a write (exact frame) or a wait (spec 004 R8)."""
+
+    kind: Literal["write", "wait"]
+    """``write`` or ``wait``."""
+    target: WriteTarget | None = None
+    """The allowlisted target of a write; ``None`` for a wait."""
+    data: bytes = b""
+    """The bytes a write carries (empty for the commit and for waits)."""
+    frame: bytes = b""
+    """The exact ``0x22`` frame of a write (what a dry run prints); empty for a wait."""
+    seconds: float | None = None
+    """How long a wait lasts (0.3 after the slot or image write, 0.1 after the commit)."""
+
+
+@dataclass(frozen=True)
+class SequencePlan:
+    """What ``preset save`` / ``preset restore`` would send, built from reads only (spec 004).
+
+    ``TankG.plan_save`` / ``plan_restore`` return it without writing; ``save_preset`` /
+    ``restore`` build the same plan and run its :attr:`steps` (SC-006).
+    """
+
+    action: SequenceAction
+    """``save``, ``restore_slot`` or ``restore_all``."""
+    state: PedalState
+    """The pedal state as read while planning."""
+    target_index: int | None
+    """The slot written (0–35); ``None`` for ``restore_all``."""
+    return_index: int | None
+    """The preset selected at the end (the target, or the preset loaded before a full
+    restore)."""
+    before: bytes
+    """What is stored now: the slot (21 bytes) or the whole image (758 bytes)."""
+    after: bytes
+    """What would be written: the slot or the image."""
+    changed_slots: tuple[int, ...]
+    """Slots whose stored bytes would change, in index order."""
+    diff: tuple[ByteChange, ...]
+    """Byte-level changes of the slot (single-slot actions only; empty for ``restore_all``)."""
+    steps: tuple[SequenceStep, ...]
+    """The fixed steps (writes and waits); empty when :attr:`no_change`."""
+    no_change: bool
+    """Nothing differs: nothing would be sent and no backup would be taken."""
+    refusal: str | None
+    """Why the action would be refused with the caller's opt-ins
+    (``WriteRefusedError.reason``), or ``None``."""
+    reads: tuple[bytes, ...]
+    """The read frames sent to build the plan, in order."""
+
+
+@dataclass(frozen=True)
+class StepOutcome:
+    """What happened to one :class:`SequenceStep` when the sequence ran."""
+
+    step: SequenceStep
+    """The planned step."""
+    status: StepStatus
+    """``acked``, ``nak``, ``no_reply`` (link lost or timed out), ``not_sent`` or ``waited``."""
+    reply: bytes = b""
+    """The raw reply to a write (the ACK, or the NAK as received)."""
+
+
+@dataclass(frozen=True)
+class SequenceResult:
+    """Outcome of a persistent action, also attached (``.sequence``) to an error raised
+    mid-sequence (spec 004 R15)."""
+
+    plan: SequencePlan
+    """The plan that was run."""
+    steps: tuple[StepOutcome, ...]
+    """One outcome per planned step, in order (empty when nothing was sent)."""
+    stored_may_have_changed: bool
+    """True once any persistent frame was handed to the transport, whatever its reply."""
+    verified: bool
+    """The read-back equals what was written, the pedal is on :attr:`SequencePlan.return_index`
+    and its buffer equals the stored preset."""
+    read_back: bytes | None
+    """The slot or image as read back (``None`` when not read)."""
+    backup: Backup | None
+    """The automatic backup taken before the first write (``None`` when nothing was sent)."""
+    mismatched_slots: tuple[int, ...] = ()
+    """Slots whose read-back differs from what was written (full restore verification)."""
+
+
 @dataclass(frozen=True)
 class FieldSpec:
     """Deprecated (001): a known byte. Use :class:`ByteMapEntry` / ``BYTE_MAP`` instead."""

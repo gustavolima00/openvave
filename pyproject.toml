@@ -30,7 +30,10 @@ packages = ["src/openvave"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
-markers = ["hardware: needs a real Tank-G; runs only with --hardware"]
+markers = [
+  "hardware: needs a real Tank-G; runs only with --hardware",
+  "persistent_writes: the test may send stored-slot, commit and stored-image writes (spec 004)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -246,42 +246,121 @@ every step, and are fully tested offline; no persistent write is sent to the ped
 
 ### Tests for User Stories 3 and 4 (write first, must fail)
 
-- [ ] T040 [P] [US3] `tests/unit/test_writes.py`: `stored_slot(i)` (address `2+21·i`, 21 B), `commit()` (0 B, frame `00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b`), `stored_image()` (758 B, must start `a5 5a`), `persistent is True`; rejected: slot 36, address 3, 20 or 22 bytes, commit with data, image of 757 bytes, image with another header, `0x10000000`×21, `0x20000003`×1
-- [ ] T041 [P] [US3] `tests/unit/test_writes_doc.py`: rows `stored_slot(i)`, `commit`, `stored_image` present, `hypothesis`, mirrored
-- [ ] T042 [P] [US3] `tests/unit/test_fake_transport.py`: slot and image writes change the fake's stored area, the commit sets a flag, select loads from the stored area; scripted failures per step (NAK, no reply, link drop)
-- [ ] T043 [P] [US4] `tests/integration/test_tx_chunking.py`: `BleakTransport` chunking logic (pure helper `split_frame(frame, mtu)`: 773 B → 182×4 + 45; ≤ limit → one chunk; order kept) and `FakeTransport` reassembly of a chunked request by the length field
-- [ ] T044 [P] [US3] `tests/integration/test_save.py`: check 4 replay (run 1 and the restore of run 2); `--to` another slot leaves the loaded slot unchanged and ends on the target; no change; refused in edit, tuner, bypass, unrecognised; `unsafe_required`; `experimental_required` names both opt-ins when both are missing; `on_backup` called once with a valid `Backup` before the first write; `on_backup` raising or a backup mismatch → no write
-- [ ] T045 [P] [US3] `tests/integration/test_sequence_failures.py`: every failure point of the Independent test criteria, asserting error class, exit-code mapping, `steps` statuses, `stored_may_have_changed`, and that no frame follows the failure (no retry)
-- [ ] T046 [P] [US4] `tests/unit/test_restore_file.py`: `restore_problems` for wrong `format_version`, 35 presets, a 20-byte preset, image ≠ header + presets, header `00 00`, firmware mismatch; a valid synthetic backup has none
-- [ ] T047 [P] [US4] `tests/integration/test_restore.py`: restore one slot (save sequence with file bytes, verified); restore all (image write, commit, select of the previously loaded preset, full read-back equals the file); nothing sent when equal; `changed_slots` listed; `discard_edits` rule; `firmware_mismatch` needs `experimental`; verification mismatch → `WriteNotAppliedError` with `mismatched_slots`
-- [ ] T048 [P] [US3] `tests/contract/test_cli_save.py`: human output (UNSAFE header, diff, "Backup saved", power-loss warning, step lines, verify line), `--json` valid against `contracts/sequence-result.schema.json`, `--dry-run` writes no backup file, `--backup-dir`, automatic backup never overwrites (numeric suffix), exit 1 without `--unsafe`, failure report text and exit codes 6/7/8
-- [ ] T049 [P] [US4] `tests/contract/test_cli_restore.py`: `--slot` / `--all` (exactly one, else exit 2), invalid file exit 2 before any connection, differ list, nothing-to-restore line, `--json`, dry run prints the full image frame
-- [ ] T050 [P] [US3] `tests/support/audit.py` + `tests/unit/test_audit.py`: persistent frames are allowed only in tests that declare them (marker or fixture), never elsewhere; SC-005 test enumerating every public `TankG` method and CLI command with `unsafe` absent
-- [ ] T051 [P] [US3] `tests/integration/test_dry_run_frames.py`: for `set`, `preset reload`, `bypass on/off`, `loopback`, `preset save`, `preset restore --slot/--all`, the plan's frames equal the frames the fake receives in the real run (SC-006)
+- [X] T040 [P] [US3] `tests/unit/test_writes.py`: `stored_slot(i)` (address `2+21·i`, 21 B), `commit()` (0 B, frame `00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b`), `stored_image()` (758 B, must start `a5 5a`), `persistent is True`; rejected: slot 36, address 3, 20 or 22 bytes, commit with data, image of 757 bytes, image with another header, `0x10000000`×21, `0x20000003`×1
+- [X] T041 [P] [US3] `tests/unit/test_writes_doc.py`: rows `stored_slot(i)`, `commit`, `stored_image` present, `hypothesis`, mirrored
+- [X] T042 [P] [US3] `tests/unit/test_fake_transport.py`: slot and image writes change the fake's stored area, the commit sets a flag, select loads from the stored area; scripted failures per step (NAK, no reply, link drop)
+- [X] T043 [P] [US4] `tests/integration/test_tx_chunking.py`: `BleakTransport` chunking logic (pure helper `split_frame(frame, mtu)`: 773 B → 182×4 + 45; ≤ limit → one chunk; order kept) and `FakeTransport` reassembly of a chunked request by the length field
+- [X] T044 [P] [US3] `tests/integration/test_save.py`: check 4 replay (run 1 and the restore of run 2); `--to` another slot leaves the loaded slot unchanged and ends on the target; no change; refused in edit, tuner, bypass, unrecognised; `unsafe_required`; `experimental_required` names both opt-ins when both are missing; `on_backup` called once with a valid `Backup` before the first write; `on_backup` raising or a backup mismatch → no write
+- [X] T045 [P] [US3] `tests/integration/test_sequence_failures.py`: every failure point of the Independent test criteria, asserting error class, exit-code mapping, `steps` statuses, `stored_may_have_changed`, and that no frame follows the failure (no retry)
+- [X] T046 [P] [US4] `tests/unit/test_restore_file.py`: `restore_problems` for wrong `format_version`, 35 presets, a 20-byte preset, image ≠ header + presets, header `00 00`, firmware mismatch; a valid synthetic backup has none
+- [X] T047 [P] [US4] `tests/integration/test_restore.py`: restore one slot (save sequence with file bytes, verified); restore all (image write, commit, select of the previously loaded preset, full read-back equals the file); nothing sent when equal; `changed_slots` listed; `discard_edits` rule; `firmware_mismatch` needs `experimental`; verification mismatch → `WriteNotAppliedError` with `mismatched_slots`
+- [X] T048 [P] [US3] `tests/contract/test_cli_save.py`: human output (UNSAFE header, diff, "Backup saved", power-loss warning, step lines, verify line), `--json` valid against `contracts/sequence-result.schema.json`, `--dry-run` writes no backup file, `--backup-dir`, automatic backup never overwrites (numeric suffix), exit 1 without `--unsafe`, failure report text and exit codes 6/7/8
+- [X] T049 [P] [US4] `tests/contract/test_cli_restore.py`: `--slot` / `--all` (exactly one, else exit 2), invalid file exit 2 before any connection, differ list, nothing-to-restore line, `--json`, dry run prints the full image frame
+- [X] T050 [P] [US3] `tests/support/audit.py` + `tests/unit/test_audit.py`: persistent frames are allowed only in tests that declare them (marker or fixture), never elsewhere; SC-005 test enumerating every public `TankG` method and CLI command with `unsafe` absent
+- [X] T051 [P] [US3] `tests/integration/test_dry_run_frames.py`: for `set`, `preset reload`, `bypass on/off`, `loopback`, `preset save`, `preset restore --slot/--all`, the plan's frames equal the frames the fake receives in the real run (SC-006)
 
 ### Implementation for User Stories 3 and 4
 
-- [ ] T052 [US3] `src/openvave/protocol/writes.py`: the three persistent constructors, data rules, `_SHAPES`, three `WRITE_MESSAGES` rows (`hypothesis`, checks 3–4 in Notes) (T040, T041)
-- [ ] T053 [US3] `specs/protocol/command-layer.md`: the three rows, the persistent-target rule, request chunking (hypothesis), in the same commit as T052
-- [ ] T054 [US3] `src/openvave/models.py`: `SequenceStep`, `SequencePlan`, `StepOutcome`, `SequenceResult`; `src/openvave/errors.py`: new refusal reasons and `.sequence` on errors raised mid-sequence
-- [ ] T055 [US3] `src/openvave/transport/fake.py`: writable stored area, commit flag, scripted step failures, chunked-request reassembly (T042, T043)
-- [ ] T056 [US4] `src/openvave/transport/ble.py`: `split_frame` and chunked `write()` using the negotiated MTU (T043)
-- [ ] T057 [US3] `src/openvave/session.py`: the sequence runner (opt-in checks, backup + `on_backup`, per-step ACK, slot read-back before the commit, injectable waits, select verification, final read-back, step report on every failure, no retry) (T044, T045)
-- [ ] T058 [US3] `src/openvave/session.py`: `plan_save(to)` / `save_preset(to, unsafe, experimental, on_backup)` (T044)
-- [ ] T059 [US4] `src/openvave/backup.py`: `restore_problems(backup, firmware)` (T046)
-- [ ] T060 [US4] `src/openvave/session.py`: `plan_restore(backup, slot|all)` / `restore(...)` with full read-back verification (T047)
-- [ ] T061 [US3] `src/openvave/cli/files.py`: automatic backup naming `tankg-backup-<ts>-before-<action>.json`, `--backup-dir`, never overwrite (T048)
-- [ ] T062 [US3] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `preset save [--to]`, `--unsafe`, plan/diff/warning/step rendering, failure report with recovery commands, `--json` (T048)
-- [ ] T063 [US4] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `preset restore <file> (--slot|--all)`, file loading and validation before connecting, differ list (T049)
-- [ ] T064 [US3] `tests/support/audit.py` (T050), `tests/contract/test_public_api.py` (new exports), `tests/hardware/test_hw_writes.py`: persistent hardware helpers require `--hardware`, `OPENVAVE_HW_WRITES=1` and `OPENVAVE_HW_UNSAFE=1`, including the no-op image write helper (reads the image, writes the same bytes through the sequence runner, logs every frame to `captures/private/`)
-- [ ] T065 [US3] `README.md` (save, restore, the two opt-ins, the backup rule, the short mute, power-loss warning) and `CHANGELOG.md` [Unreleased]; replace the 0.3.0 "never saves or overwrites a stored preset" statement wherever it appears, including `tests/contract/test_changelog_030.py` expectations if they pin current-behaviour text (FR-038)
+- [X] T052 [US3] `src/openvave/protocol/writes.py`: the three persistent constructors, data rules, `_SHAPES`, three `WRITE_MESSAGES` rows (`hypothesis`, checks 3–4 in Notes) (T040, T041)
+- [X] T053 [US3] `specs/protocol/command-layer.md`: the three rows, the persistent-target rule, request chunking (hypothesis), in the same commit as T052
+- [X] T054 [US3] `src/openvave/models.py`: `SequenceStep`, `SequencePlan`, `StepOutcome`, `SequenceResult`; `src/openvave/errors.py`: new refusal reasons and `.sequence` on errors raised mid-sequence
+- [X] T055 [US3] `src/openvave/transport/fake.py`: writable stored area, commit flag, scripted step failures, chunked-request reassembly (T042, T043)
+- [X] T056 [US4] `src/openvave/transport/ble.py`: `split_frame` and chunked `write()` using the negotiated MTU (T043)
+- [X] T057 [US3] `src/openvave/session.py`: the sequence runner (opt-in checks, backup + `on_backup`, per-step ACK, slot read-back before the commit, injectable waits, select verification, final read-back, step report on every failure, no retry) (T044, T045)
+- [X] T058 [US3] `src/openvave/session.py`: `plan_save(to)` / `save_preset(to, unsafe, experimental, on_backup)` (T044)
+- [X] T059 [US4] `src/openvave/backup.py`: `restore_problems(backup, firmware)` (T046)
+- [X] T060 [US4] `src/openvave/session.py`: `plan_restore(backup, slot|all)` / `restore(...)` with full read-back verification (T047)
+- [X] T061 [US3] `src/openvave/cli/files.py`: automatic backup naming `tankg-backup-<ts>-before-<action>.json`, `--backup-dir`, never overwrite (T048)
+- [X] T062 [US3] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `preset save [--to]`, `--unsafe`, plan/diff/warning/step rendering, failure report with recovery commands, `--json` (T048)
+- [X] T063 [US4] `src/openvave/cli/__init__.py` + `src/openvave/cli/render.py`: `preset restore <file> (--slot|--all)`, file loading and validation before connecting, differ list (T049)
+- [X] T064 [US3] `tests/support/audit.py` (T050), `tests/contract/test_public_api.py` (new exports), `tests/hardware/test_hw_writes.py`: persistent hardware helpers require `--hardware`, `OPENVAVE_HW_WRITES=1` and `OPENVAVE_HW_UNSAFE=1`, including the no-op image write helper (reads the image, writes the same bytes through the sequence runner, logs every frame to `captures/private/`)
+- [X] T065 [US3] `README.md` (save, restore, the two opt-ins, the backup rule, the short mute, power-loss warning) and `CHANGELOG.md` [Unreleased]; replace the 0.3.0 "never saves or overwrites a stored preset" statement wherever it appears, including `tests/contract/test_changelog_030.py` expectations if they pin current-behaviour text (FR-038)
+
+  - Done 2026-11-18. Suite **1612 passed, 6 skipped** (M1 end: 1418); `ruff check`, `ruff format
+    --check`, `mypy` (strict) clean; the session audit saw no persistent frame outside tests marked
+    `persistent_writes`. Red first: 5 modules failed to import, 64 failed, 32 errors before T052.
+    Decisions: (1) the opt-in order is pedal state → nothing to change (stop, exit 0, no backup,
+    opt-ins not checked, as contracts/cli.md orders it) → `edits_would_be_discarded` →
+    `firmware_mismatch` → `unsafe_required` → confidence gate; with both opt-ins missing the reason
+    is `unsafe_required` and the message names `--experimental` too. (2) Every restore ends with a
+    select, so unsaved edits need `--discard-edits` whichever slot is written (the contract said
+    "if the loaded slot is among those written"; contract updated). (3) Library: optional
+    `on_plan` callback on `save_preset` / `restore`, so the CLI prints the header, diff, backup
+    path and power-loss warning before the first write (FR-030) without planning twice
+    (library-api.md updated). (4) `restore_problems(document, firmware)` takes the JSON document,
+    since a `Backup` object cannot hold most of the checked defects; the CLI calls it with
+    `firmware=None` before connecting. (5) Slot read-back right after the slot ACK, then the full
+    300 ms wait; restore-all has no read-back before the commit (full backup read after the
+    select). (6) The real-run image line reads `…(758 bytes)… xx   ACK   (773 bytes)` (the chunk
+    count depends on the MTU); the failure report's Undo line adds `--experimental` while the
+    restore messages are unconfirmed. (7) M0 deviation (1) closed: the "Not saved" line now ends
+    `Keep: openvave preset save --unsafe --experimental`. (8) T064's persistent hardware helper is
+    its own module, `tests/hardware/test_hw_persistent.py` (`--hardware`, `OPENVAVE_HW_WRITES=1`,
+    `OPENVAVE_HW_UNSAFE=1`, marker `persistent_writes`), so the volatile gate module keeps its one
+    skip condition. (9) Fake pedal: `faults={kind: nak|no_reply|disconnect|corrupt|ignore}`,
+    `commits`, `on_disconnect`, reassembly of split requests; the session audit records whole
+    requests. (10) T043's chunking test lives in `tests/integration/test_tx_chunking.py`; the
+    SC-005 test is `tests/integration/test_unsafe_entry_points.py` (not marked, so any persistent
+    frame there fails the session).
 
 ### Live verification (milestone gate)
 
-- [ ] T066 [US3] Owner runs the last two commands of quickstart §3 with `--trace` (`set gain 90`, `preset save --to 1C --dry-run --unsafe --experimental`, `preset restore <backup> --all --dry-run --unsafe --experimental`, then `preset reload`); researcher checks: only reads plus the confirmed knob-block and select writes in the trace, no backup file created by the dry runs, printed frames equal the offline tests' frames; outputs recorded under this task
-- [ ] T067 [US3] Owner runs `preset save` and `preset restore <backup> --all` **without** `--unsafe`: both exit 1 with `unsafe_required` and the trace holds reads only
+- [X] T066 [US3] Owner runs the last two commands of quickstart §3 with `--trace` (`set gain 90`, `preset save --to 1C --dry-run --unsafe --experimental`, `preset restore <backup> --all --dry-run --unsafe --experimental`, then `preset reload`); researcher checks: only reads plus the confirmed knob-block and select writes in the trace, no backup file created by the dry runs, printed frames equal the offline tests' frames; outputs recorded under this task
+  - Offline rehearsal 2026-11-18 (fake pedal on 1B, normal mode; not hardware; `poc/m2_gate_rehearsal.py`):
+    `set gain 90` → knob block, ACK, applied, `Keep: openvave preset save --unsafe --experimental`;
+    `preset save --to 1C --dry-run --unsafe --experimental` → reads only, no file, frames
+    `… 2c 00 00 00 15 00 00 01 00 00 01 0f 04 5a … b9` (= check 4's slot write), commit
+    `… f0 00 00 00 0b`, select 1C `… e0 01 00 00 01 17`; `preset restore <backup> --all --dry-run
+    …` with the backup of the same pedal → `pedal already matches …; nothing sent` (no frame to
+    compare: nothing differs); `preset reload` → select 1B, applied. Hardware run still to do.
+    **Note for the hardware run**: restore prints the image frame only when the file differs from
+    the pedal; use a modified copy (`poc/modified_backup.py <backup> <copy> 1C 6 90`, one byte of
+    1C changed in presets and image) for the restore dry run.
+  - Hardware run 2026-11-18 14:00–14:28 UTC, fw 96, owner's Mac, pedal on **1A** in normal mode,
+    phone app closed. Only confirmed messages were written: one knob block and one preset select.
+    Backups `captures/private/20261118-m2-gate-before.json` (14:00:05) and `…-after.json`
+    (14:27:57): **equal in every key except `created_at`**; no `tankg-backup-*-before-*` file was
+    created by any dry run or refused run.
+  - `set gain 90 --trace`: `Set gain 65 → 90   (current preset 1A, normal mode)`, knob block
+    `… 12 05 5a 37 41 37 32 00 00 0c 28 35 0f 07 08` (only byte 6 changed), ACK, `applied`, mode
+    stayed normal, `Keep: openvave preset save --unsafe --experimental` printed.
+  - `preset save --to 1C --dry-run --unsafe --experimental --trace`: reads only (query, global,
+    buffer, stored 1C `0x2C`); full diff of 1C vs the 1A buffer shown; frames slot write
+    `00 59 22 1d 00 00 04 2c 00 00 00 15 00 00 01 00 01 01 12 05 5a 37 41 37 32 00 00 0c 28 35 0f 07
+    ff f7 00 f0`, commit `… f0 00 00 00 0b`, select 1C `… e0 01 00 00 01 17`, each equal to an
+    independent encoding (`tests/support/write_fixture.write_frame`); `dry run: nothing sent, no
+    backup taken`.
+  - `preset restore <modified copy> --all --dry-run --unsafe --experimental --trace` (copy from
+    `poc/modified_backup.py`: 1C byte 6 = 90, image offset 50 the only difference): reads only,
+    including the whole-image read whose 773-byte reply came in 5 notifications (4 × 182 + 45) and
+    was reassembled; `differ: 1C (1 of 36)`; image frame 773 bytes, head `00 59 22 fe 02 00 04 00 00
+    00 00 f6 02 00 a5 5a`, checksum `8d`, equal in length, head and checksum to an independent
+    encoding of the copy's image (frame body not recorded here: it is the owner's stored image);
+    then commit and `select 1A` (`… e0 01 00 00 01 19`, the loaded preset); also `refused:
+    edits_would_be_discarded` (the gain-90 edit was unsaved), correct.
+  - `preset reload --trace`: select 1A, ACK, `now bank 1, slot A   buffer = stored 1A   applied`
+    (gain back at 65).
+- [X] T067 [US3] Owner runs `preset save` and `preset restore <backup> --all` **without** `--unsafe`: both exit 1 with `unsafe_required` and the trace holds reads only
+  - Amended procedure (contract order: "nothing to change" is checked before the opt-ins, so on a
+    pedal that matches, both exit 0 with `nothing sent`): run `preset save` **after** `set gain 90`
+    and before the reload, and `preset restore` with the modified copy above. Offline rehearsal
+    2026-11-18: `preset save` (no opt-ins) → exit 1 `unsafe_required`, message also names
+    `--experimental`; `preset save --experimental` → exit 1 `unsafe_required`; `preset restore
+    <modified> --all` and `… --experimental` → exit 1 `unsafe_required`; all reads only (`0x11`,
+    `0x23`), no backup file. The dry run with `--unsafe --experimental` printed `differ: 1C (1 of
+    36)` and the full 773-byte image frame, then the commit and select 1B. Hardware run still to do.
+  - Hardware run 2026-11-18 (same session): `preset save --trace` with the gain-90 edit unsaved →
+    `refused (unsafe_required): preset save overwrites a stored preset; pass --unsafe … and
+    --experimental …: commit, stored_slot are not confirmed …`, exit 1, reads only (query, global,
+    buffer, stored 1A), no backup file. `preset restore <modified copy> --all --experimental
+    --trace` with the edit still unsaved → `refused (edits_would_be_discarded)`, exit 1, reads only
+    (the edit check comes first).
+    After `preset reload` (no edit): the same restore command → `refused (unsafe_required): preset
+    restore overwrites stored presets; pass --unsafe (unsafe=True) to accept that`, exit 1, reads
+    only (query, global, buffer, whole image), no backup file. Both commands refused with
+    `unsafe_required` on hardware → **T067 passed**.
 
-**Checkpoint**: Milestone 2 DONE — every persistent path exists and is tested; openvave has not yet sent a persistent write
+**Checkpoint**: Milestone 2 DONE — every persistent path exists and is tested; openvave has not yet sent a persistent write ✅ (2026-11-18: suite 1612 passed; T066/T067 on hardware, only reads plus one confirmed knob block and one confirmed select, backups before/after equal)
 
 ---
 

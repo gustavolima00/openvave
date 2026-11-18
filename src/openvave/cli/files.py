@@ -6,6 +6,7 @@ import contextlib
 import json
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,3 +42,18 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp)
         raise
+
+
+def automatic_backup_path(directory: Path, action: str, when: datetime) -> Path:
+    """``directory/tankg-backup-<YYYYmmdd-HHMMSS>-before-<action>.json`` that does not exist yet.
+
+    On a name clash a numeric suffix is added (``…-before-save-1.json``, ``-2`` …): the automatic
+    backup of ``preset save`` / ``preset restore`` never overwrites a file (spec 004 R9).
+    """
+    stem = f"tankg-backup-{when.strftime('%Y%m%d-%H%M%S')}-before-{action}"
+    path = directory / f"{stem}.json"
+    n = 0
+    while path.exists():
+        n += 1
+        path = directory / f"{stem}-{n}.json"
+    return path

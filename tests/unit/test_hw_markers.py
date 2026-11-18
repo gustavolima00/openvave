@@ -40,3 +40,37 @@ def test_env_flag_unset_in_ci() -> None:
     if os.environ.get("OPENVAVE_HW_WRITES") == "1":
         pytest.skip("OPENVAVE_HW_WRITES=1 is set in this shell")
     assert _marks("skipif")[0].args[0] is True
+
+
+# -- persistent hardware helper (spec 004 T064) -------------------------------------------------
+
+
+def test_persistent_module_needs_three_opt_ins() -> None:
+    from tests.hardware import test_hw_persistent as hp
+
+    names = [getattr(getattr(m, "mark", m), "name", "") for m in hp.pytestmark]
+    assert "hardware" in names and "persistent_writes" in names
+    [skip] = [m for m in hp.pytestmark if getattr(m, "name", "") == "skipif"]
+    expected = (
+        os.environ.get("OPENVAVE_HW_WRITES") != "1" or os.environ.get("OPENVAVE_HW_UNSAFE") != "1"
+    )
+    assert skip.args[0] is expected
+
+
+def test_persistent_module_skipped_without_unsafe_flag() -> None:
+    from tests.hardware import test_hw_persistent as hp
+
+    if os.environ.get("OPENVAVE_HW_UNSAFE") == "1" and os.environ.get("OPENVAVE_HW_WRITES") == "1":
+        pytest.skip("both flags set in this shell")
+    [skip] = [m for m in hp.pytestmark if getattr(m, "name", "") == "skipif"]
+    assert skip.args[0] is True
+
+
+def test_record_path_is_private() -> None:
+    from datetime import datetime
+
+    from tests.hardware import test_hw_persistent as hp
+
+    path = hp.record_path("image_noop", datetime(2026, 11, 18, 10, 0, 0))
+    assert path.parts[-2:] == ("private", "20261118-100000-hw-image_noop.jsonl")
+    assert path.parent.name == "private" and path.parent.parent.name == "captures"

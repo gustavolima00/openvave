@@ -153,8 +153,8 @@ def test_build_write_requires_a_target() -> None:
     "body",
     [
         b"",
-        bytes.fromhex("04 00 00 00 f0 00 00 00"),  # commit
-        bytes.fromhex("04 02 00 00 00 15 00 00") + bytes(21),  # stored preset 0
+        bytes.fromhex("04 00 00 00 f0 01 00 00 00"),  # commit with a data byte
+        bytes.fromhex("04 03 00 00 00 15 00 00") + bytes(21),  # stored area, not a slot start
         bytes.fromhex("04 00 00 00 d0 01 00 00 02"),  # loopback flag, data 02
         bytes.fromhex("04 00 00 00 d0 02 00 00 01 01"),  # loopback, 2 bytes
         bytes.fromhex("05 00 00 00 d0 01 00 00 01"),  # loopback, type 5
@@ -166,8 +166,8 @@ def test_build_write_requires_a_target() -> None:
     ],
     ids=[
         "empty",
-        "commit",
-        "stored",
+        "commit-data",
+        "stored-3",
         "loopback02",
         "loopback-x2",
         "loopback-t5",
@@ -303,4 +303,153 @@ def test_replace_cannot_move_a_bypass_off_the_allowlist(changes: dict[str, objec
     ],
 )
 def test_allowed_write_body_bypass_and_loopback(body: bytes, allowed: bool) -> None:
+    assert allowed_write_body(body) is allowed
+
+
+# -- spec 004 M2: persistent targets (T040) -----------------------------------------------------
+
+COMMIT = "00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b"
+SLOT_1C_GAIN_90 = (
+    "00 59 22 1d 00 00 04 2c 00 00 00 15 00 00 "
+    "01 00 00 01 0f 04 5a 3c 46 32 32 00 00 00 00 05 04 07 43 16 43 b9"
+)
+GAIN_90_PRESET = sf.PUBLIC_PRESET[:6] + bytes([90]) + sf.PUBLIC_PRESET[7:]
+
+
+@pytest.mark.parametrize("i", [0, 1, 2, 35])
+def test_stored_slot_targets(i: int) -> None:
+    t = WriteTarget.stored_slot(i)
+    assert (t.kind, t.type, t.address, t.length, t.argument) == (
+        "stored_slot",
+        4,
+        2 + 21 * i,
+        21,
+        i,
+    )
+    assert t.persistent is True
+
+
+def test_commit_target() -> None:
+    t = WriteTarget.commit()
+    assert (t.kind, t.type, t.address, t.length, t.argument) == ("commit", 4, 0xF0000000, 0, None)
+    assert t.persistent is True
+
+
+def test_stored_image_target() -> None:
+    t = WriteTarget.stored_image()
+    assert (t.kind, t.type, t.address, t.length, t.argument) == ("stored_image", 4, 0, 758, None)
+    assert t.persistent is True
+
+
+def test_volatile_targets_stay_volatile() -> None:
+    assert not WriteTarget.bypass(0).persistent
+    assert not WriteTarget.loopback().persistent
+
+
+def test_commit_vector() -> None:
+    assert build_write(WriteTarget.commit(), b"") == bytes.fromhex(COMMIT)
+    assert build_write(WriteTarget.commit(), b"") == write_frame(0xF0000000, b"")
+
+
+def test_stored_slot_vector_check4() -> None:
+    # spec 004 check 4: slot 1C (0x2C) written with gain 60 -> 90
+    frame = build_write(WriteTarget.stored_slot(2), GAIN_90_PRESET)
+    assert frame == bytes.fromhex(SLOT_1C_GAIN_90)
+    assert frame == write_frame(0x2C, GAIN_90_PRESET)
+
+
+def test_stored_image_vector() -> None:
+    image = sf.synthetic_image()
+    frame = build_write(WriteTarget.stored_image(), image)
+    assert len(frame) == 773
+    assert frame[:16] == bytes.fromhex("00 59 22 fe 02 00 04 00 00 00 00 f6 02 00 a5 5a")
+    assert frame == write_frame(0, image)
+
+
+@pytest.mark.parametrize("i", [36, -1])
+def test_stored_slot_index_out_of_range(i: int) -> None:
+    with pytest.raises(ValueError):
+        WriteTarget.stored_slot(i)
+
+
+def test_stored_slot_index_must_be_an_int() -> None:
+    with pytest.raises(TypeError):
+        WriteTarget.stored_slot(False)
+
+
+@pytest.mark.parametrize("length", [20, 22, 0])
+def test_stored_slot_takes_21_bytes(length: int) -> None:
+    with pytest.raises(ValueError):
+        build_write(WriteTarget.stored_slot(1), bytes(length))
+
+
+def test_commit_takes_no_data() -> None:
+    with pytest.raises(ValueError):
+        build_write(WriteTarget.commit(), b"\x00")
+
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        sf.synthetic_image()[:757],
+        sf.synthetic_image() + b"\x00",
+        sf.synthetic_image(bytes.fromhex("00 00")),
+        sf.synthetic_image(bytes.fromhex("5a a5")),
+    ],
+    ids=["757", "759", "header-0000", "header-swapped"],
+)
+def test_stored_image_needs_758_bytes_starting_a5_5a(image: bytes) -> None:
+    with pytest.raises(ValueError):
+        build_write(WriteTarget.stored_image(), image)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"address": 3}, {"argument": 36}, {"length": 20}, {"kind": "stored_image"}],
+)
+def test_replace_cannot_move_a_slot_off_the_allowlist(changes: dict[str, object]) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        dataclasses.replace(WriteTarget.stored_slot(1), **changes)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("body", "allowed"),
+    [
+        (bytes.fromhex(COMMIT)[6:-1], True),
+        (bytes.fromhex(SLOT_1C_GAIN_90)[6:-1], True),
+        (bytes.fromhex("04 02 00 00 00 15 00 00") + bytes(21), True),  # slot 1A
+        (bytes.fromhex("04 e1 02 00 00 15 00 00") + bytes(21), True),  # slot 9D (0x2E1)
+        (bytes.fromhex("04 00 00 00 00 f6 02 00") + sf.synthetic_image(), True),
+        (bytes.fromhex("04 03 00 00 00 15 00 00") + bytes(21), False),  # not a slot start
+        (bytes.fromhex("04 f6 02 00 00 15 00 00") + bytes(21), False),  # slot 36 (0x2F6)
+        (bytes.fromhex("04 02 00 00 00 14 00 00") + bytes(20), False),  # 20 bytes
+        (bytes.fromhex("04 02 00 00 00 16 00 00") + bytes(22), False),  # 22 bytes
+        (bytes.fromhex("04 00 00 00 f0 01 00 00 00"), False),  # commit with data
+        (bytes.fromhex("05 00 00 00 f0 00 00 00"), False),  # commit, type 5
+        (bytes.fromhex("04 00 00 00 00 f5 02 00") + sf.synthetic_image()[:757], False),
+        (bytes.fromhex("04 00 00 00 00 f6 02 00") + bytes(758), False),  # header 00 00
+        (bytes.fromhex("04 00 00 00 10 15 00 00") + bytes(21), False),  # whole edit buffer
+        (bytes.fromhex("04 03 00 00 20 01 00 00 01"), False),  # global block (mode byte)
+        (bytes.fromhex("04 00 00 00 20 04 00 00") + bytes(4), False),  # global block
+    ],
+    ids=[
+        "commit",
+        "slot-1c",
+        "slot-1a",
+        "slot-9d",
+        "image",
+        "addr-3",
+        "slot-36",
+        "slot-20b",
+        "slot-22b",
+        "commit-data",
+        "commit-t5",
+        "image-757",
+        "image-header",
+        "edit-buffer-21",
+        "global-mode",
+        "global-4",
+    ],
+)
+def test_allowed_write_body_persistent(body: bytes, allowed: bool) -> None:
     assert allowed_write_body(body) is allowed

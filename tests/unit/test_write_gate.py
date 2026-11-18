@@ -37,11 +37,24 @@ def test_confidence_after_gate_session_b() -> None:
         ("preset_select", None): "confirmed",
         ("bypass", None): "hypothesis",  # spec 004 M1, until gate session A of 004
         ("loopback", None): "hypothesis",
+        ("stored_slot", None): "hypothesis",  # spec 004 M2, persistent
+        ("commit", None): "hypothesis",
+        ("stored_image", None): "hypothesis",
         ("ack", None): "confirmed",
     }
 
 
-@pytest.mark.parametrize(("kind", "argument"), [("bypass", 1), ("bypass", 35), ("loopback", None)])
+@pytest.mark.parametrize(
+    ("kind", "argument"),
+    [
+        ("bypass", 1),
+        ("bypass", 35),
+        ("loopback", None),
+        ("stored_slot", 2),
+        ("commit", None),
+        ("stored_image", None),
+    ],
+)
 def test_spec004_hypothesis_rows_need_the_opt_in(kind: str, argument: int | None) -> None:
     assert sendable_by_default(kind, argument, 96) is False
 
@@ -119,6 +132,6 @@ def test_preset_select_row_covers_every_index() -> None:
 
 def test_unknown_kind_raises() -> None:
     with pytest.raises(KeyError):
-        sendable_by_default("commit", None, 96)
+        sendable_by_default("erase", None, 96)
     with pytest.raises(KeyError):
         sendable_by_default("block_switch", 4, 96)
