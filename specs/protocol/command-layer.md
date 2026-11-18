@@ -159,7 +159,7 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
 | preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
 | preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): green component of the preset's LED colour. fw96: `0x16` |
 | preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): blue component of the preset's LED colour. fw96: `0x43` |
-| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. Hypothesis (app code, 2026-11-17): a loopback on/off flag, `1` = on (see "Status byte = loopback flag"). fw96: `0x01` |
+| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. The app reads it as "loopback enabled" and its toggle writes it (see "Status byte = loopback flag"). Spec 004 gate session A (2026-11-18): openvave wrote `00` (kept across a power cycle) and `01` back (`captures/fw96/20261118-gate-loopback_off.jsonl`, `…-loopback_on.jsonl`). Owner test the same day: with `01` the pedal's Bluetooth audio (phone backing track) is in the USB recording, with `00` it is heard but not recorded, so it **is** the loopback flag; it stays unnamed here until the byte map can cite a status-byte step fixture (the fixture-pair index covers global and preset bytes only). fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 
@@ -375,8 +375,8 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 
 | Address | Type | Len | Op | Meaning | Confidence |
 |---|---|---|---|---|---|
-| `0x00000000` | 4 | 758 | read (code, hardware) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17) |
-| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code; checks 3 and 4, i = 1, 2) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write observed (check 3 unchanged bytes, check 4 a changed byte that persisted after commit + power cycle) |
+| `0x00000000` | 4 | 758 | read (code, hardware), write (code; openvave, 2026-11-18) | stored-preset image: header `a5 5a` + 36 × 21 B | confirmed (read, 2026-11-17); write observed (spec 004 gate session A: no-op and restore all, one ACK for the 5-chunk request, kept across a power cycle) |
+| `0x00000002 + 21·i` | 4 | 21 | read (code, hardware), write (code; checks 3 and 4, i = 1, 2) | stored preset `i` (`i = bank·4 + slot`, 0–35) | read confirmed (2026-11-17); write observed (checks 3 and 4; openvave in spec 004 gate session A: save and restore of 1C, persisted after commit + power cycle) |
 | `0x10000000` | 4 | 21 | read (log, hardware) | current / edit preset buffer | confirmed (read) |
 | `0x10000000` | 4 | 21 | write (code) | whole edit buffer, after import all / factory restore | hypothesis |
 | `0x10000000 + k`, k = 0–3 | 4 | 1 | write (log for k = 1; openvave, 2026-11-17) | one block switch (amp, mod, delay, reverb) in the edit buffer | observed (write, all k; gate session A) |
@@ -384,10 +384,10 @@ seen in the app's logcat; "code" = only read from the app's compiled code.
 | `0x10000012` | 4 | 3 | write (code; openvave, 2026-11-17) | preset bytes 18–20 (LED colour R, G, B per app code) | write observed (gate session A); LED meaning hypothesis |
 | `0x20000000` | 4 | 4 | read (log, hardware) | global block (bank browsed, bank, slot, mode) | confirmed (read) |
 | `0xD0000000` | 5 | 32 | read (log, hardware) | device info block | confirmed (read) |
-| `0xD0000000` | 4 | 1 | read (log, hardware), write (code) | loopback flag, `1` = on | read confirmed; meaning hypothesis |
-| `0xE1000000 + i` | 4 | 1 | write `01` (code; check 2, 2026-11-17, i = 1) | BYPASS on for loaded preset `i`: buffer reads all `00`, global slot `ff`; off = select `i` again | observed (one session) |
+| `0xD0000000` | 4 | 1 | read (log, hardware), write (code; openvave, 2026-11-18) | loopback flag, `1` = on | read confirmed; write observed (spec 004 gate session A: `00` kept across a power cycle, `01` restored); meaning observed (Bluetooth audio into the USB recording) |
+| `0xE1000000 + i` | 4 | 1 | write `01` (code; check 2, 2026-11-17, i = 1) | BYPASS on for loaded preset `i`: buffer reads all `00`, global slot `ff`; off = select `i` again | observed (check 2; openvave in spec 004 gate session A) |
 | `0xE0000000 + i` | 4 | 1 | write `01` (log for i = 2, 3; openvave for i = 0, 1, 3, 2026-11-17) | load stored preset `i` | confirmed (write and meaning; gate sessions A and B) |
-| `0xF0000000` | 4 | 0 | write, empty data (code; checks 3 and 4) | commit / save stored presets | observed: after a changed slot write + commit the change survived a power cycle (check 4); whether the commit is required is not tested |
+| `0xF0000000` | 4 | 0 | write, empty data (code; checks 3 and 4) | commit / save stored presets | observed: after a changed slot or image write + commit the change survived a power cycle (check 4; spec 004 gate session A); whether the commit is required is not tested |
 
 Types 5 and 6 appear elsewhere in the app: type 5 for the device info read and for reading
 resource (model) names on other products; type 6 only together with the erase command (`0x21`,
@@ -481,7 +481,8 @@ flows:
 followed by a commit in the app; leaving edit mode without saving restores the stored preset
 (observed on hardware for pedal-side edits). Writes to the stored area at address `0…757` are
 always followed by the commit, so treat them as persistent. The loopback flag at `0xD0000000` is
-written alone, without a commit; whether it survives a power cycle is unknown.
+written alone, without a commit, and survives a power cycle anyway (spec 004 gate session A,
+2026-11-18: written `00`, read `00` after a power cycle).
 
 ### Write acknowledgement (app code, 2026-11-17)
 
@@ -495,17 +496,17 @@ answered with exactly `00 59 00 01 00 00 00 ff`, in one notification each. Confi
 session B, same day, new connection per command, starting from 1D): the knob block and two preset
 selects got the same bytes. No NAK has been seen, so non-zero status codes remain unknown.
 
-### Request chunking (spec 004 R11, hypothesis)
+### Request chunking (spec 004 R11)
 
 Every request openvave sends fits in one `ae41` write (at most 36 bytes) except the stored-image
 write (773 bytes). The BLE transport splits a request longer than `ATT MTU − 3` into consecutive
 write-without-response chunks, in order, with no delay added: 5 chunks (182 × 4 + 45) at macOS's
 MTU 185, 4 at the app's 247. The protocol layer only sees whole frames; the fake pedal of the test
 suite reassembles a split request by its length field, as replies are reassembled. That the pedal
-does the same has **not** been observed: only replies have been reassembled so far, and how the
-app splits its 773-byte import is not known beyond "one command". The first stored-image write is
-therefore planned as a byte-identical no-op (the image just read), judged by one ACK after the
-last chunk, no stray reply and an unchanged backup (spec 004 M3).
+does the same is **observed** (spec 004 gate session A, 2026-11-18, macOS, MTU 185): the first
+stored-image write, a byte-identical no-op, got exactly one ACK after the last of the 5 chunks, no
+stray reply, and the backup stayed unchanged; `preset restore --all` then behaved the same. Other
+MTUs (and how the app splits its import) are not tested.
 
 ### Write messages
 
@@ -544,11 +545,11 @@ write is sent without `--experimental` only when its row is `confirmed`, the `ac
 | `block_switch(3)` | 4 | `0x10000003` | 1 | reverb on `01` / off `00` | ACK | observed | 96 | `captures/fw96/20261117-gate-switch_reverb.jsonl` | gate session A: reverb off on 1B, ACK, only byte 3 changed, applied |
 | `led_colour` | 4 | `0x10000012` | 3 | R, G, B, 0–255 each (preset 18–20) | ACK | observed | 96 | `captures/fw96/20261117-gate-led_colour.jsonl` | gate session A: `ff 00 00` on 1B, ACK, bytes 18–20 changed, applied. The write is observed; that 18–20 drive the preset LED is not (in edit mode the LEDs show block colours) |
 | `preset_select(i)` | 4 | `0xE0000000 + i` | 1 | always `01`; i = 0–35 | ACK | confirmed | 96 | `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-select_back.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl`, `captures/fw96/20261117-gate-select_b_back.jsonl` | gate session A (normal mode): 1B → 1A (display changed) and 1A → 1B; gate session B (normal mode, new connection): 1D → 1A and 1A → 1D. Each: ACK, global bank/slot and buffer = stored preset on the first read (no `ff` transient), mode stayed normal, applied. The app's log (2026-11-16) showed i = 2, 3 and one `ff` read |
-| `bypass(i)` | 4 | `0xE1000000 + i` | 1 | always `01`; i = the loaded preset (0–35) | ACK | hypothesis | 96 | — | spec 004 check 2 (2026-11-17, 1B, normal mode, sent by a `poc/` script, not by openvave): `… e1 01 00 00 01 17`, ACK; the global slot then read `ff`, the edit buffer 21 × `00`, mode stayed normal; select 1B left bypass and restored the stored bytes (`captures/fw96/20261117-check2-bypass.jsonl`). openvave sends it only for the loaded preset; leaving bypass is a `preset_select(i)` |
-| `loopback` | 4 | `0xD0000000` | 1 | `00` off / `01` on | ACK (expected) | hypothesis | 96 | — | from the app's code (the Loopback button writes this byte); never sent yet. The 1-byte read at this address is confirmed and has read `01` in every session. Meaning and persistence unknown; openvave never follows it with a commit |
-| `stored_slot(i)` | 4 | `0x00000002 + 21·i` | 21 | the 21 preset bytes; i = 0–35 | ACK | hypothesis | 96 | — | **persistent**. Spec 004 check 3 (2026-11-17, 1B, normal mode, `poc/` script): 1B rewritten with its own bytes, ACK, nothing changed (`captures/fw96/20261117-check3-noop_save.jsonl`); check 4 (same day): 1C written with gain 60 → 90, ACK, read back equal before the commit, kept across a power cycle with the commit (`captures/fw96/20261117-check4-real_save.jsonl`, `…-check4-verify_restore.jsonl`). Sent only by `preset save` / `preset restore --slot`, with `--unsafe`, after a backup |
-| `commit` | 4 | `0xF0000000` | 0 | empty | ACK | hypothesis | 96 | — | **persistent**. Spec 004 check 3 and check 4 (`poc/` script): `00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b`, ACK both times, 300 ms after the slot write; with it, the check 4 save survived a power cycle. Whether a slot write persists without it is unknown. Sent only inside a save/restore sequence |
-| `stored_image` | 4 | `0x00000000` | 758 | header `a5 5a` + 36 presets (the image of an openvave backup) | ACK (expected) | hypothesis | 96 | — | **persistent**. From the app's code ("import all" / factory restore: one 758-byte write, commit, reload); never sent. The 773-byte request spans 5 Bluetooth writes at ATT MTU 185 (see "Request chunking"); that the pedal reassembles a split request is a hypothesis. Its first send is planned as a byte-identical no-op (spec 004 R11). Sent only by `preset restore --all` |
+| `bypass(i)` | 4 | `0xE1000000 + i` | 1 | always `01`; i = the loaded preset (0–35) | ACK | observed | 96 | `captures/fw96/20261118-gate-bypass.jsonl` | spec 004 gate session A (2026-11-18, openvave, 1B, normal mode): `… e1 01 00 00 01 17`, ACK; re-read global slot `ff`, buffer 21 × `00` → applied; `info` reported bypass; `bypass off 1B` (= `preset_select(1)`, `captures/fw96/20261118-gate-bypass_off.jsonl`) restored the stored bytes. Earlier: spec 004 check 2 (2026-11-17, `poc/` script, `captures/fw96/20261117-check2-bypass.jsonl`). openvave sends it only for the loaded preset; leaving bypass is a `preset_select(i)` |
+| `loopback` | 4 | `0xD0000000` | 1 | `00` off / `01` on | ACK | observed | 96 | `captures/fw96/20261118-gate-loopback_off.jsonl`, `captures/fw96/20261118-gate-loopback_on.jsonl` | spec 004 gate session A (2026-11-18, openvave, 1B, normal mode): off `… d0 01 00 00 00 2a` ACK, status re-read `00`; **kept across a power cycle** (read `00` after it); on `… 01 29` ACK, status `01`. No commit is sent. Meaning observed by the owner the same day: `01` mixes the pedal's Bluetooth audio into the USB recording, `00` leaves it out (still heard) |
+| `stored_slot(i)` | 4 | `0x00000002 + 21·i` | 21 | the 21 preset bytes; i = 0–35 | ACK | observed | 96 | `captures/fw96/20261118-gate-save.jsonl`, `captures/fw96/20261118-gate-restore_slot.jsonl` | **persistent**. Spec 004 gate session A (2026-11-18, openvave): `preset save --to 1C` wrote 1B + gain 90 to 1C (ACK, then commit and select 1C), read back equal, **kept across a power cycle** (backup differs from the pre-session one only at 1C byte 6); `preset restore --slot 1C` wrote the backup's bytes back, backup then equal. Earlier: checks 3 and 4 (`poc/` script, `captures/fw96/20261117-check3-noop_save.jsonl`, `…-check4-real_save.jsonl`). Sent only by `preset save` / `preset restore --slot`, with `--unsafe`, after a backup |
+| `commit` | 4 | `0xF0000000` | 0 | empty | ACK | observed | 96 | `captures/fw96/20261118-gate-save.jsonl`, `captures/fw96/20261118-gate-restore_slot.jsonl`, `captures/fw96/20261118-gate-image_noop.jsonl`, `captures/fw96/20261118-gate-restore_all.jsonl` | **persistent**. Spec 004 gate session A (2026-11-18, openvave): `00 59 22 08 00 00 04 00 00 00 f0 00 00 00 0b`, ACK in all four sequences, 300 ms after the slot or image write; owner heard a very short mute during the restore sequence. Whether a write persists without it is still unknown (T080 not run). Sent only inside a save/restore sequence |
+| `stored_image` | 4 | `0x00000000` | 758 | header `a5 5a` + 36 presets (the image of an openvave backup) | ACK | observed | 96 | `captures/fw96/20261118-gate-image_noop.jsonl`, `captures/fw96/20261118-gate-restore_all.jsonl` | **persistent**. Spec 004 gate session A (2026-11-18, openvave, macOS, ATT MTU 185): the 773-byte request, sent as 5 Bluetooth writes, got **exactly one ACK** after the last chunk and no stray reply, first as a byte-identical no-op (image unchanged), then as `preset restore --all` (1C back to the backup; 36 of 36 equal, kept across a power cycle). Sent only by `preset restore --all` |
 | `ack` | — | — | — | `00 59 00 01 00 00 00 ff` | — | confirmed | 96 | `captures/fw96/20261117-gate-knob_gain.jsonl`, `captures/fw96/20261117-gate-select.jsonl`, `captures/fw96/20261117-gate-knob_treble.jsonl`, `captures/fw96/20261117-gate-select_b.jsonl` | the reply to all eight gate-session-A writes and all three gate-session-B writes, byte for byte (byte 2 = `00`, byte 6 = `00`); any other reply is a NAK, reported raw, never retried |
 
 Normal mode (spec 004 check 1, 2026-11-17, fw 96, confirmed over two connections): the
@@ -610,8 +611,10 @@ does this; openvave refuses it, FR-009) or a stored-preset comparison.
 
 On connect the app reads type 4 `0xD0000000` × 1 and stores "loopback enabled" = (byte == 1);
 its loopback toggle writes `01` or `00` (type 4, 1 byte) to the same address. The always-`01`
-status byte is therefore most likely loopback **on** (hypothesis; what loopback does on the
-Tank-G, probably routing USB playback back into the USB recording, is not known).
+status byte is loopback **on**. What it does on the Tank-G is observed (owner, 2026-11-18): with
+`01` the pedal's Bluetooth audio (a phone playing a backing track) is mixed into the USB
+recording; with `00` it is still heard but not recorded. USB playback from a computer was not
+tested.
 
 ## Next steps
 

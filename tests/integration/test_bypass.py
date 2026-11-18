@@ -75,7 +75,7 @@ async def test_bypass_on_plan_reads_and_result() -> None:
         plan = await pedal.plan_bypass_on()
         result = await pedal.bypass_on(experimental=True, sleep=_no_sleep)
     assert plan.refusal == "experimental_required"
-    assert plan.confidence == "hypothesis"
+    assert plan.confidence == "observed"
     assert plan.action == "bypass on 1B"
     assert plan.frame == BYPASS_1B
     assert list(plan.reads) == [
@@ -97,7 +97,7 @@ async def test_bypass_on_needs_experimental() -> None:
         with pytest.raises(WriteRefusedError) as exc:
             await pedal.bypass_on(sleep=_no_sleep)
     assert exc.value.reason == "experimental_required"
-    assert "hypothesis" in str(exc.value)
+    assert "observed" in str(exc.value)
     assert writes(fake) == []
 
 

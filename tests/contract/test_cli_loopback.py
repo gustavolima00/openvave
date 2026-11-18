@@ -37,7 +37,7 @@ def test_off_human_output(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err = run(capsys, ["off", "--experimental"], fake)
     assert code == 0, err
     assert out.splitlines() == [
-        "Loopback on → off   (status byte 0xD0000000, meaning not yet observed)",
+        "Loopback on → off   (status byte 0xD0000000: Bluetooth audio in the USB recording)",
         f"  write  {LOOPBACK_OFF}",
         "  reply  00 59 00 01 00 00 00 ff   ACK",
         "  after  status 00 (loopback off)   applied",
@@ -59,7 +59,7 @@ def test_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err = run(capsys, ["off", "--dry-run", "--experimental"], fake)
     assert code == 0, err
     assert out.splitlines() == [
-        "Loopback on → off   (status byte 0xD0000000, meaning not yet observed)",
+        "Loopback on → off   (status byte 0xD0000000: Bluetooth audio in the USB recording)",
         f"  write  {LOOPBACK_OFF}",
         "  dry run: nothing sent",
     ]
@@ -71,7 +71,7 @@ def test_dry_run_without_experimental_prints_the_refusal(
 ) -> None:
     code, out, err = run(capsys, ["off", "--dry-run"], make_fake(NORMAL, status=b"\x01"))
     assert code == 0, err
-    assert "  refused: experimental_required (loopback is 'hypothesis'; needs --experimental)" in (
+    assert "  refused: experimental_required (loopback is 'observed'; needs --experimental)" in (
         out.splitlines()
     )
 
@@ -90,7 +90,7 @@ def test_refused_without_experimental(capsys: pytest.CaptureFixture[str]) -> Non
     code, out, err = run(capsys, ["off"], fake)
     assert code == 1
     assert "experimental_required" in err
-    assert "hypothesis" in err
+    assert "observed" in err
     assert "--experimental" in err
     assert writes(fake) == []
 

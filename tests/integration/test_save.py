@@ -254,7 +254,7 @@ async def test_both_opt_ins_missing_names_both() -> None:
     assert writes(fake) == []  # type: ignore[arg-type]
 
 
-async def test_experimental_required_while_rows_are_hypothesis() -> None:
+async def test_experimental_required_until_rows_are_confirmed() -> None:
     fake = make_fake(NORMAL, buffer=GAIN_90)
     async with TankG.over(fake) as pedal:  # type: ignore[arg-type]
         plan = await pedal.plan_save(to=2, unsafe=True)

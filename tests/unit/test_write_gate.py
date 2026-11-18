@@ -35,11 +35,11 @@ def test_confidence_after_gate_session_b() -> None:
         ("block_switch", 3): "observed",
         ("led_colour", None): "observed",
         ("preset_select", None): "confirmed",
-        ("bypass", None): "hypothesis",  # spec 004 M1, until gate session A of 004
-        ("loopback", None): "hypothesis",
-        ("stored_slot", None): "hypothesis",  # spec 004 M2, persistent
-        ("commit", None): "hypothesis",
-        ("stored_image", None): "hypothesis",
+        ("bypass", None): "observed",  # spec 004 gate session A; confirmed after session B
+        ("loopback", None): "observed",
+        ("stored_slot", None): "observed",  # persistent
+        ("commit", None): "observed",
+        ("stored_image", None): "observed",
         ("ack", None): "confirmed",
     }
 
@@ -55,7 +55,7 @@ def test_confidence_after_gate_session_b() -> None:
         ("stored_image", None),
     ],
 )
-def test_spec004_hypothesis_rows_need_the_opt_in(kind: str, argument: int | None) -> None:
+def test_spec004_observed_rows_need_the_opt_in(kind: str, argument: int | None) -> None:
     assert sendable_by_default(kind, argument, 96) is False
 
 

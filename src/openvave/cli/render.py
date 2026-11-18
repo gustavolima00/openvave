@@ -622,7 +622,7 @@ def human_loopback(plan: WritePlan, result: WriteResult | None, *, dry_run: bool
         return f"loopback is already {new}; nothing sent"
     old = _loopback_name(plan.before.data)
     lines = [
-        f"Loopback {old} → {new}   (status byte 0xD0000000, meaning not yet observed)",
+        f"Loopback {old} → {new}   (status byte 0xD0000000: Bluetooth audio in the USB recording)",
         f"  write  {hex_bytes(plan.frame)}",
     ]
     lines += _refusal_lines(plan)

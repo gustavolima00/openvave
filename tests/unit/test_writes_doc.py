@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from openvave.protocol.writes import WRITE_MESSAGES, WriteMessage
-from tests.integration.gate_fixtures import ALL_STEPS, RECORDED
+from tests.integration.gate_fixtures import ALL_STEPS, RECORDED, ROW_STEPS, STEPS_BY_NAME
 from tests.support.bytemap_doc import COMMAND_LAYER
 from tests.support.captures import REPO_ROOT
 from tests.support.writes_doc import HEADING, WriteRow, load_write_rows, parse_table
@@ -66,13 +66,16 @@ def test_targets_match_the_allowlist() -> None:
     assert (loopback.type, loopback.address, loopback.length) == (4, 0xD0000000, 1)
 
 
-def test_bypass_and_loopback_start_as_hypothesis() -> None:
-    # spec 004 R7: check 2 was a poc send, not openvave's own; the gate (M3) promotes them
+def test_bypass_and_loopback_are_observed_by_gate_session_a() -> None:
+    # spec 004 T083: promoted by openvave's own sends in gate session A (check 2 stays in Notes)
     rows = {(row.kind, row.argument): row for row in load_write_rows()}
-    for key, note in ((("bypass", None), "check 2"), (("loopback", None), "app")):
+    for key, steps in (
+        (("bypass", None), ("bypass",)),
+        (("loopback", None), ("loopback_off", "loopback_on")),
+    ):
         row = rows[key]
-        assert (row.confidence, row.evidence, row.firmware) == ("hypothesis", (), frozenset({96}))
-        assert note in row.notes
+        assert (row.confidence, row.firmware) == ("observed", frozenset({96}))
+        assert row.evidence == tuple(f"captures/fw96/20261118-gate-{s}.jsonl" for s in steps)
 
 
 def test_persistent_rows_match_the_allowlist() -> None:
@@ -83,13 +86,17 @@ def test_persistent_rows_match_the_allowlist() -> None:
     assert (image.type, image.address, image.length) == (4, 0x0, 758)
 
 
-def test_persistent_rows_start_as_hypothesis() -> None:
-    # spec 004 R7: checks 3 and 4 were poc sends (cited in Notes); the gate (M3) promotes them
+def test_persistent_rows_are_observed_by_gate_session_a() -> None:
+    # spec 004 T083: checks 3 and 4 (poc sends) stay in Notes; Evidence is openvave's gate
     rows = {(row.kind, row.argument): row for row in load_write_rows()}
-    for kind, note in (("stored_slot", "check 4"), ("commit", "check 3"), ("stored_image", "app")):
+    for kind, steps in (
+        ("stored_slot", ("save", "restore_slot")),
+        ("commit", ("save", "restore_slot", "image_noop", "restore_all")),
+        ("stored_image", ("image_noop", "restore_all")),
+    ):
         row = rows[(kind, None)]
-        assert (row.confidence, row.evidence, row.firmware) == ("hypothesis", (), frozenset({96}))
-        assert note in row.notes
+        assert (row.confidence, row.firmware) == ("observed", frozenset({96}))
+        assert row.evidence == tuple(f"captures/fw96/20261118-gate-{s}.jsonl" for s in steps)
         assert "persistent" in row.notes.lower()
 
 
@@ -137,3 +144,39 @@ def test_confirmed_rows_cite_two_gate_sessions() -> None:
     assert confirmed
     for row in confirmed:
         assert _sessions(row) >= {"A", "B"}, row.kind
+
+
+def _spec004_rule(row: WriteRow) -> list[str]:
+    """A spec 004 row above ``hypothesis`` must cite a committed 004 gate excerpt of its own
+    steps (T070, FR-036): a poc check capture is not openvave's own send."""
+    if row.kind not in ROW_STEPS or row.confidence not in ("observed", "confirmed"):
+        return []
+    by_file = {path: step for step, path in RECORDED.items()}
+    cited = [by_file.get(p.rsplit("/", 1)[-1]) for p in row.evidence]
+    ok = [
+        step
+        for step, path in zip(cited, row.evidence, strict=True)
+        if step is not None
+        and STEPS_BY_NAME[step].spec == "004"
+        and step in ROW_STEPS[row.kind]
+        and "-gate-" in path
+        and (REPO_ROOT / path).is_file()
+    ]
+    return [] if ok else [f"{row.kind}: {row.confidence} without a 004 gate excerpt of its steps"]
+
+
+def test_spec004_rows_cite_their_gate_excerpts() -> None:
+    problems = [p for row in load_write_rows() for p in _spec004_rule(row)]
+    assert problems == []
+
+
+def test_spec004_rule_covers_the_five_rows() -> None:
+    assert set(ROW_STEPS) == {"bypass", "loopback", "stored_slot", "commit", "stored_image"}
+    check2 = "captures/fw96/20261117-check2-bypass.jsonl"
+    poc = WriteRow("bypass", None, 4, 0xE1000000, 1, "observed", frozenset({96}), (check2,), "")
+    assert _spec004_rule(poc) == ["bypass: observed without a 004 gate excerpt of its steps"]
+    spec003 = "captures/fw96/20261117-gate-select.jsonl"
+    wrong = WriteRow("commit", None, 4, 0xF0000000, 0, "observed", frozenset({96}), (spec003,), "")
+    assert _spec004_rule(wrong)
+    hypothesis = WriteRow("loopback", None, 4, 0xD0000000, 1, "hypothesis", frozenset({96}), (), "")
+    assert _spec004_rule(hypothesis) == []

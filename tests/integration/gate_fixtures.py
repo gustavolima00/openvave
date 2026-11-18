@@ -1,4 +1,9 @@
-"""Index of the gate-session excerpts (spec 003 M2/M3, T047): one per approved hardware write.
+"""Index of the gate-session excerpts (spec 003 M2/M3, T047; spec 004 M3, T068).
+
+Spec 003 steps send one volatile write each. Spec 004 steps run one CLI command each (``openvave
+--trace``), or the no-op image helper (``tests/hardware/test_hw_persistent.py``): bypass,
+loopback and the field writes in normal mode send one write; save, restore and the image write
+run the persistent sequence (write → commit → select) after the automatic backup.
 
 Each excerpt is cut from the owner's ``--trace`` output by ``tests/support/gate_excerpt.py`` and
 lives at ``captures/fw96/<date>-gate-<step>.jsonl``. A step is listed in :data:`RECORDED` (step →
@@ -18,6 +23,8 @@ SESSION_A_DATE = "20261117"
 """Date of gate session A."""
 SESSION_B_DATE = "20261117"
 """Date of gate session B (same day as A, a new connection per command, another preset)."""
+SPEC004_SESSION_A_DATE = "20261118"
+"""Expected date of spec 004 gate session A; :data:`RECORDED` names the real files."""
 
 
 @dataclass(frozen=True)
@@ -25,11 +32,23 @@ class GateStep:
     step: str
     """Step name, as in the excerpt file name and its ``meta.step``."""
     kind: str
-    """Write kind: ``knob_block``, ``block_switch``, ``led_colour`` or ``preset_select``."""
+    """Write kind: ``knob_block``, ``block_switch``, ``led_colour`` or ``preset_select`` (spec
+    003); spec 004 adds ``bypass``, ``bypass_off``, ``loopback`` and the persistent sequences
+    ``save``, ``restore_slot``, ``restore_all`` and ``image_noop``."""
     offset: int | None = None
-    """Preset offset of the field (knob/switch/LED), ``None`` for preset select."""
+    """Preset offset of the field (knob/switch/LED), ``None`` otherwise."""
     session: str = "A"
     """Gate session (``A`` or ``B``): a ``confirmed`` row cites excerpts of two sessions."""
+    spec: str = "003"
+    """The spec whose gate sends this step."""
+
+    @property
+    def persistent(self) -> bool:
+        """True for the steps whose sequence writes stored presets (commit included)."""
+        return self.kind in PERSISTENT_KINDS
+
+
+PERSISTENT_KINDS = frozenset({"save", "restore_slot", "restore_all", "image_noop"})
 
 
 SESSION_A: tuple[GateStep, ...] = (
@@ -50,9 +69,40 @@ SESSION_B: tuple[GateStep, ...] = (
     GateStep("select_b_back", "preset_select", session="B"),
 )
 
-ALL_STEPS: tuple[GateStep, ...] = SESSION_A + SESSION_B
+SPEC003_STEPS: tuple[GateStep, ...] = SESSION_A + SESSION_B
 
-SESSION_DATES = {"A": SESSION_A_DATE, "B": SESSION_B_DATE}
+SPEC004_SESSION_A: tuple[GateStep, ...] = (
+    # spec 004 M3 (T072-T078): every new message sent once by openvave, in this order
+    GateStep("bypass", "bypass", spec="004"),
+    GateStep("bypass_off", "bypass_off", spec="004"),
+    GateStep("normal_switch_mod", "block_switch", 1, spec="004"),
+    GateStep("normal_led_colour", "led_colour", 18, spec="004"),
+    GateStep("loopback_off", "loopback", spec="004"),
+    GateStep("loopback_on", "loopback", spec="004"),
+    GateStep("save", "save", spec="004"),
+    GateStep("restore_slot", "restore_slot", spec="004"),
+    GateStep("image_noop", "image_noop", spec="004"),
+    GateStep("restore_all", "restore_all", spec="004"),
+)
+
+SPEC004_STEPS: tuple[GateStep, ...] = SPEC004_SESSION_A
+
+ALL_STEPS: tuple[GateStep, ...] = SPEC003_STEPS + SPEC004_STEPS
+
+SESSION_DATES = {
+    ("003", "A"): SESSION_A_DATE,
+    ("003", "B"): SESSION_B_DATE,
+    ("004", "A"): SPEC004_SESSION_A_DATE,
+}
+
+ROW_STEPS: dict[str, frozenset[str]] = {
+    "bypass": frozenset({"bypass"}),
+    "loopback": frozenset({"loopback_off", "loopback_on"}),
+    "stored_slot": frozenset({"save", "restore_slot"}),
+    "commit": frozenset({"save", "restore_slot", "image_noop", "restore_all"}),
+    "stored_image": frozenset({"image_noop", "restore_all"}),
+}
+"""Spec 004 write rows → the gate steps whose excerpts may back their promotion (T070)."""
 
 RECORDED: dict[str, str] = {
     "knob_gain": "20261117-gate-knob_gain.jsonl",
@@ -66,12 +116,26 @@ RECORDED: dict[str, str] = {
     "knob_treble": "20261117-gate-knob_treble.jsonl",
     "select_b": "20261117-gate-select_b.jsonl",
     "select_b_back": "20261117-gate-select_b_back.jsonl",
+    # spec 004 M3, session A (T082)
+    "bypass": "20261118-gate-bypass.jsonl",
+    "bypass_off": "20261118-gate-bypass_off.jsonl",
+    "normal_switch_mod": "20261118-gate-normal_switch_mod.jsonl",
+    "normal_led_colour": "20261118-gate-normal_led_colour.jsonl",
+    "loopback_off": "20261118-gate-loopback_off.jsonl",
+    "loopback_on": "20261118-gate-loopback_on.jsonl",
+    "save": "20261118-gate-save.jsonl",
+    "restore_slot": "20261118-gate-restore_slot.jsonl",
+    "image_noop": "20261118-gate-image_noop.jsonl",
+    "restore_all": "20261118-gate-restore_all.jsonl",
 }
-"""Step → committed excerpt file name. Filled in each evidence commit (T055, T062)."""
+"""Step → committed excerpt file name. Filled in each evidence commit (T055, T062, T082)."""
+
+STEPS_BY_NAME: dict[str, GateStep] = {s.step: s for s in ALL_STEPS}
+PERSISTENT_STEPS = frozenset(s.step for s in ALL_STEPS if s.persistent)
 
 
 def excerpt_path(step: GateStep) -> Path:
-    default = f"{SESSION_DATES[step.session]}-gate-{step.step}.jsonl"
+    default = f"{SESSION_DATES[(step.spec, step.session)]}-gate-{step.step}.jsonl"
     return FW96 / RECORDED.get(step.step, default)
 
 

@@ -227,6 +227,40 @@ One session, owner at the pedal, 1B in normal mode, phone app disconnected:
 Evidence: `captures/fw96/20261117-check2-bypass.jsonl` (not a `-gate-` excerpt: openvave cannot
 encode this write yet), checked by `tests/integration/test_bypass_capture.py`.
 
+## Spec 004 gate session A (2026-11-18, fw 96, openvave's own sends)
+
+Owner at the pedal, macOS, one CLI connection per command, each message's frames posted and checked
+before its first send, a backup before and after every step. Evidence:
+`captures/fw96/20261118-gate-<step>.jsonl` (stored presets sanitised), replayed by
+`tests/integration/test_gate_replay.py`; full record in `specs/004-remote-edit-save-restore/tasks.md`
+T071–T081.
+
+| Feature | Result |
+|---|---|
+| Bypass on / off | `bypass on` ACK, pedal read bypass (slot `ff`, buffer zeros); `bypass off 1B` restored 1B. Owner: clean sound, every LED off (as in check 2) |
+| Remote edit in normal mode | MOD switch on (MOD LED lit) and LED colour `#ff0000` (preset LED turned red) applied in normal mode; `preset reload` discarded both |
+| Loopback | off → status `00`, **kept across a power cycle**, on → `01`. Owner test after the session (phone backing track over Bluetooth audio, USB recording): on = the backing track is in the USB recording; off = still heard, not recorded |
+| Save to a slot | 1B + gain 90 saved to 1C, **kept across a power cycle**; backup differed only at 1C byte 6 |
+| Restore one slot | 1C restored from the backup; backup then equal to the pre-session one |
+| Stored-image write | the 773-byte request (5 Bluetooth writes) got one ACK and no stray reply, as a no-op and as `restore --all`; the full restore was **kept across a power cycle**; final backup equal to the pre-session one key by key |
+
+Open questions, answered or still open:
+
+- **Commit required?** Still open: the slot write without the commit (T080) was not run. openvave
+  always commits.
+- **Mute source**: a very short mute, almost unnoticed, during the restore sequence (slot write,
+  commit, select); which of the three causes it is not separated.
+- **Knob after a remote write**: not tested (T080 not run).
+- **LED colour**: in normal mode, preset bytes 18–20 do drive the preset LED (written `ff 00 00`,
+  LED turned red).
+- **Loopback**: answered. The flag decides whether the pedal's Bluetooth audio is mixed into the USB
+  recording (`01` yes, `00` no; monitoring unaffected); it persists without a commit. USB playback
+  from a computer was not tested.
+- **Unexplained preset changes**: twice the pedal was found on another preset than the last select
+  left it (1B → 1A, then 1A → 1B) with no command sent, no footswitch pressed and the app not
+  connected. Every persistent step re-reads the state first, so no write went to the wrong slot.
+  Cause unknown.
+
 ## Recommended scope for spec 004
 
 1. **Remote editing without the pedal's edit mode**: lift the `set` refusal in normal mode (check 1

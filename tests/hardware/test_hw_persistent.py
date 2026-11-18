@@ -15,7 +15,6 @@ frame shape and pass criteria, the owner approves in chat, then runs (with ``-s`
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import json
 import os
 import sys
@@ -27,10 +26,9 @@ from pathlib import Path
 import pytest
 
 from openvave import Backup, TankG
-from openvave.protocol.writes import WriteTarget
-from openvave.session import _sequence_steps, _write_step
 from openvave.trace import trace_hook
 from tests.hardware.test_hw_writes import CONFIRM_WORD, confirmed
+from tests.support.image_noop import noop_image_plan
 
 pytestmark = [
     pytest.mark.hardware,
@@ -70,16 +68,8 @@ async def image_noop(read_line: Callable[[], str] = sys.stdin.readline) -> None:
                         f"image read {current.created_at.isoformat()}: header "
                         f"{current.header.hex(' ')}"
                     )
-                    plan = await pedal.plan_restore(
-                        current, all=True, unsafe=True, experimental=True
-                    )
-                    assert plan.no_change and plan.refusal is None, (plan.no_change, plan.refusal)
-                    assert plan.return_index is not None
-                    steps = _sequence_steps(
-                        _write_step(WriteTarget.stored_image(), current.image), plan.return_index
-                    )
-                    forced = dataclasses.replace(plan, no_change=False, steps=steps)
-                    for step in steps:
+                    forced = await noop_image_plan(pedal, current)
+                    for step in forced.steps:
                         if step.kind == "wait":
                             print(f"  wait   {step.seconds} s")
                         else:

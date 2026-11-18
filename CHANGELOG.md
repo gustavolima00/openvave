@@ -30,12 +30,12 @@ All notable changes to this project are documented here. The format follows
   pedal is bypassed (refusal `not_bypassed` otherwise); without a position it exits 2 and names
   the bank the pedal reports. Library: `TankG.plan_bypass_on()` / `bypass_on()` (result
   `return_index`), `plan_bypass_off(i)` / `bypass_off(i)`, `WriteTarget.bypass(i)`. The message is
-  `hypothesis` (seen once from a `poc/` script, spec 004 check 2; openvave has not sent it), so
-  `bypass on` needs `--experimental`.
+  `observed` (spec 004 gate session A), so `bypass on` still needs `--experimental`.
 - **Loopback** (experimental): `openvave loopback on|off` reads the status byte (`0xD0000000`),
   writes `01`/`00`, and reads it back; never followed by a commit; an equal value sends nothing.
   Library: `TankG.plan_loopback(on)` / `set_loopback(on)`, `WriteTarget.loopback()`. Message
-  `hypothesis` (app code only); what loopback does on the Tank-G is not known yet.
+  `observed`: `on` mixes the pedal's Bluetooth audio (e.g. a phone backing track) into the USB
+  recording, `off` leaves it out (still heard); the flag persists across a power cycle.
 - `WriteTarget.persistent` and refusal reasons `edit_mode` and `not_bypassed`. The write
   allowlist grows by the two volatile kinds above; bypass data other than `01`, an index above 35,
   loopback data other than `00`/`01` or any other length stay unencodable.
@@ -62,12 +62,12 @@ All notable changes to this project are documented here. The format follows
 - New opt-in `--unsafe` (`unsafe=True`), required by every command that changes stored presets and
   never implied by `--experimental`; refusal reasons `unsafe_required` and `firmware_mismatch`.
 - Three **persistent** write targets, `WriteTarget.stored_slot(i)`, `.commit()` and
-  `.stored_image()` (`persistent` is true for them), rows in "Write messages" at `hypothesis`
-  (spec 004 checks 3–4 were `poc/` sends). Only `save_preset` / `restore` send them, only with
+  `.stored_image()` (`persistent` is true for them), rows in "Write messages" at `observed`
+  (spec 004 gate session A). Only `save_preset` / `restore` send them, only with
   `unsafe=True`, after the backup. Library types `SequencePlan`, `SequenceStep`,
   `SequenceResult`, `StepOutcome`; errors raised mid-sequence carry `.sequence`.
 - The BLE transport splits a request longer than one Bluetooth write (`ATT MTU − 3`) into
-  consecutive chunks (only the 773-byte image write needs it; hypothesis until gated).
+  consecutive chunks (only the 773-byte image write needs it; observed at MTU 185: one ACK).
 - Pedal state: `openvave.PedalState`, `openvave.protocol.classify(global, buffer)`,
   `TankG.state()` (confirms bypass with a second read 300 ms later) and
   `DeviceSnapshot.pedal_state`. `info` and `preset dump` print a `state:` line (in bypass: no
@@ -105,6 +105,14 @@ All notable changes to this project are documented here. The format follows
   `5 (room 6) → 64 (spring 21)` in watch changes. JSON is unchanged (`schema_version` 2, raw value
   only). Library: `openvave.cli.render.type_reading()`. `REVERB_SECTIONS` /
   `reverb_decay_parts` (0.3.0) still give the app's colour reading.
+
+### Tested
+
+- Spec 004 gate session A on a TANK-G v2, fw 96 (2026-11-18), each message sent once by openvave
+  with a backup before and after: bypass on/off, MOD switch and LED colour in normal mode, loopback
+  off/on (persists across a power cycle; on = Bluetooth audio in the USB recording), save to 1C (persists across a power cycle), restore of
+  one slot, the stored-image write as a no-op and as restore all (persists across a power cycle).
+  The pedal ended equal to its pre-session backup. Excerpts: `captures/fw96/20261118-gate-*.jsonl`.
 
 ### Documentation
 

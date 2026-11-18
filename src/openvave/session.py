@@ -572,7 +572,8 @@ class TankG:
         otherwise). Unsaved edits (buffer ≠ stored preset) need ``discard_edits``
         (``edits_would_be_discarded``). Already bypassed: ``no_change`` with an empty frame (the
         target is then a placeholder for slot A of the reported bank, since the loaded slot is
-        not reported). The bypass message is ``hypothesis``, so ``experimental`` is needed.
+        not reported). The bypass message is ``observed`` (not ``confirmed``), so
+        ``experimental`` is needed.
         """
         state, glob, buffer, reads = await self._read_state(sleep)
         if state.kind == "bypass":
@@ -713,7 +714,7 @@ class TankG:
 
         ``plan.before`` is the status byte (``0xD0000000`` × 1). Allowed in every recognised
         state; refused in an unrecognised one. ``no_change`` when the flag already has the value.
-        The message is ``hypothesis``, so ``experimental`` is needed.
+        The message is ``observed`` (not ``confirmed``), so ``experimental`` is needed.
         """
         target = WriteTarget.loopback()
         state, glob, _, reads = await self._read_state(sleep)

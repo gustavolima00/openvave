@@ -80,10 +80,10 @@ async def test_refused_without_experimental() -> None:
         with pytest.raises(WriteRefusedError) as exc:
             await pedal.set_loopback(False, sleep=_no_sleep)
     assert plan.refusal == "experimental_required"
-    assert plan.confidence == "hypothesis"
+    assert plan.confidence == "observed"
     assert exc.value.reason == "experimental_required"
     assert "--experimental" in str(exc.value)
-    assert "hypothesis" in str(exc.value)
+    assert "observed" in str(exc.value)
     assert writes(fake) == []
 
 

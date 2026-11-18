@@ -23,6 +23,7 @@ captures/
 | `fw96/20261117-knob-types-app.jsonl` | 96 | transcribed (frame shapes of `20261116-probe-connect`) | Spec 004 T022: MOD FX (byte 11) and DLY MIX (byte 13) at the phone app's section boundaries (blue 1/40/X, orange 1/40/X, green 1/40; DLY MIX blue 1 not read), one `label` + preset read each. **Transcribed**: the owner read the edit buffer with `openvave preset dump` on 1A after setting each position; the measured byte is as printed, the other bytes are 1B from `20261116-probe-connect`. Regenerate with `uv run python -m tests.support.knob_types_fixture <out>` |
 | `fw96/20261117-gate-normal_knob_gain.jsonl`, `fw96/20261117-gate-normal_knob_gain_b.jsonl` | 96 | macOS (`poc/` script log) | Spec 004 check 1, two connections: pedal on 1B in **normal** mode, knob block gain 60 → 90 (ACK, applied, mode stayed 1), then preset select 1B (stored bytes back). **Sent by a `poc/` script**, not by openvave; replay tests: `tests/integration/test_normal_mode_write.py`, `tests/integration/test_set_normal_mode.py` |
 | `fw96/20261117-check<n>-<step>.jsonl` | 96 | macOS (`poc/` script log) | Spec 004 checks, each **sent by a `poc/` script**, not by openvave (`meta.replay.sequence` lists the writes): `check2-bypass` (bypass `0xE1000001` ← `01` on 1B, three bypass reads, select 1B); `check3-noop_save` (slot 1B written with its own bytes, commit `0xF0000000`×0, select 1B); `check4-real_save` (slot 1C written with gain 60 → 90, commit, select 1C); `check4-verify_restore` (after a power cycle: stored 1C read back, original bytes written, commit, select 1C, select 1B). Only public presets 1B/1C |
+| `fw96/20261118-gate-<step>.jsonl` | 96 | macOS (`--trace` of the CLI; `image_noop` from the `tests/hardware/test_hw_persistent.py` log) | Spec 004 gate session A (2026-11-18), sent **by openvave**, each after the frames were posted and (with the deviations recorded in `specs/004-remote-edit-save-restore/tasks.md` T072–T078) approved: volatile `bypass`, `bypass_off`, `normal_switch_mod`, `normal_led_colour`, `loopback_off`, `loopback_on`; **persistent** `save` (slot 1C, commit, select), `restore_slot` (1C back from the backup), `image_noop` (stored image written back unchanged, commit, select), `restore_all` (whole image from the backup, commit, select). Stored-preset data is **sanitised**: every preset not already public is replaced by a synthetic one (`meta.sanitized`), so the image in these files is not the pedal's. Index: `tests/integration/gate_fixtures.py` |
 
 ## JSONL format
 
@@ -113,10 +114,17 @@ Cut an excerpt from the raw `--trace` stderr kept in `captures/private/`:
 uv run python -m tests.support.gate_excerpt captures/private/<trace> <step> <date> captures/fw96/<date>-gate-<step>.jsonl set gain 90
 ```
 
-(or `... select <index> [--discard-edits]`). `tests/unit/test_gate_excerpts.py` checks every
-committed excerpt: meta (fw 96, ISO date, step = file name), only allowlisted `0x22` frames (never
-`0x21`, the commit or a stored-area write), no device-info read, and stored-preset reads only of
-presets already public in the non-gate fw96 captures.
+(or `... select <index> [--discard-edits]`; spec 004 adds `bypass_on [--discard-edits]`,
+`bypass_off POS`, `loopback on|off`, `save [POS]`, `restore_slot POS [--discard-edits]`,
+`restore_all [--discard-edits]` and `image_noop`). Spec 004 excerpts may hold up to three writes
+(slot or image write, commit, select) and the `0xD0000000` status read. The tool **sanitises**
+stored-preset data in tx and rx (buffer, slot and whole-image payloads; replies re-chunked at their
+original sizes): a preset that is public, synthetic, or a public buffer plus a field write is kept,
+any other one is replaced injectively by a synthetic preset; it refuses to write a file that still
+leaks one. `tests/unit/test_gate_excerpts.py` checks every committed excerpt: meta (fw 96, ISO date,
+step = file name), only allowlisted `0x22` frames (never `0x21`; slot, commit and image writes only
+in the persistent steps), no device-info read, and no non-public stored preset (presets public in
+the non-gate fw96 captures or in the edit buffers of other gate excerpts).
 
 ## Stored image and backups
 

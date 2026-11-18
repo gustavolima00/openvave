@@ -76,7 +76,7 @@ def test_on_dry_run_without_experimental_prints_the_refusal(
     fake = make_fake(NORMAL)
     code, out, err = run(capsys, ["on", "--dry-run"], fake)
     assert code == 0, err
-    assert "  refused: experimental_required (bypass is 'hypothesis'; needs --experimental)" in (
+    assert "  refused: experimental_required (bypass is 'observed'; needs --experimental)" in (
         out.splitlines()
     )
     assert writes(fake) == []
@@ -150,7 +150,7 @@ def test_on_json(capsys: pytest.CaptureFixture[str]) -> None:
         "argument": 1,
     }
     assert doc["plan"]["frame"] == BYPASS_1B
-    assert doc["plan"]["confidence"] == "hypothesis"
+    assert doc["plan"]["confidence"] == "observed"
     assert doc["result"]["applied"] is True
     assert doc["result"]["return_index"] == 1
     assert doc["result"]["return_position"] == "1B"

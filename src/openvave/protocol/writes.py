@@ -74,7 +74,8 @@ BYPASS_BASE = 0xE1000000
 (spec 004 check 2: slot then reads ``ff`` and the edit buffer all zero)."""
 BYPASS_DATA = b"\x01"
 LOOPBACK_ADDRESS = 0xD0000000
-"""The 1-byte status flag the app calls loopback (spec 004 US5; meaning not yet observed)."""
+"""The 1-byte status flag the app calls loopback (spec 004 US5): ``1`` mixes the pedal's Bluetooth
+audio into the USB recording, ``0`` leaves it out (owner, 2026-11-18)."""
 LOOPBACK_VALUES = (b"\x00", b"\x01")
 STORE_OFFSET = 2
 """Stored preset ``i`` starts at ``STORE_OFFSET + PRESET_SIZE·i`` (after the 2-byte header)."""
@@ -332,6 +333,7 @@ def _row(
     address: int | None,
     length: int | None,
     *evidence: str,
+    date: str = "20261117",
 ) -> WriteMessage:
     return WriteMessage(
         kind=kind,
@@ -341,11 +343,13 @@ def _row(
         length=length,
         confidence=confidence,
         firmware=_FW96,
-        evidence=tuple(f"captures/fw96/20261117-gate-{e}.jsonl" for e in evidence),
+        evidence=tuple(f"captures/fw96/{date}-gate-{e}.jsonl" for e in evidence),
     )
 
 
 _SWITCH_STEPS = ("switch_amp", "switch_mod", "switch_delay", "switch_reverb")
+_SPEC004_A = "20261118"
+"""Date of spec 004 gate session A (its excerpts are ``captures/fw96/20261118-gate-<step>``)."""
 
 WRITE_MESSAGES: tuple[WriteMessage, ...] = (
     _row(
@@ -367,18 +371,56 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
         "select_b",
         "select_b_back",
     ),
-    _row("hypothesis", "bypass", None, BYPASS_BASE, 1),
-    _row("hypothesis", "loopback", None, LOOPBACK_ADDRESS, 1),
-    _row("hypothesis", "stored_slot", None, STORE_OFFSET, PRESET_SIZE),
-    _row("hypothesis", "commit", None, COMMIT_ADDRESS, 0),
-    _row("hypothesis", "stored_image", None, IMAGE_ADDRESS, IMAGE_SIZE),
+    _row("observed", "bypass", None, BYPASS_BASE, 1, "bypass", date=_SPEC004_A),
+    _row(
+        "observed",
+        "loopback",
+        None,
+        LOOPBACK_ADDRESS,
+        1,
+        "loopback_off",
+        "loopback_on",
+        date=_SPEC004_A,
+    ),
+    _row(
+        "observed",
+        "stored_slot",
+        None,
+        STORE_OFFSET,
+        PRESET_SIZE,
+        "save",
+        "restore_slot",
+        date=_SPEC004_A,
+    ),
+    _row(
+        "observed",
+        "commit",
+        None,
+        COMMIT_ADDRESS,
+        0,
+        "save",
+        "restore_slot",
+        "image_noop",
+        "restore_all",
+        date=_SPEC004_A,
+    ),
+    _row(
+        "observed",
+        "stored_image",
+        None,
+        IMAGE_ADDRESS,
+        IMAGE_SIZE,
+        "image_noop",
+        "restore_all",
+        date=_SPEC004_A,
+    ),
     _row("confirmed", "ack", None, None, None, "knob_gain", "select", "knob_treble", "select_b"),
 )
 """Every write message and the ACK, as documented (fw 96). Gate sessions A and B confirm the
 knob block, preset select and the ACK; the block switches and LED colour stay ``observed``
 (session A only), so they still need ``--experimental``. Bypass, loopback and the three persistent
-kinds are ``hypothesis`` until openvave's own gate sends them (spec 004 R7; checks 2–4 were
-``poc/`` sends)."""
+kinds are ``observed`` since spec 004 gate session A (2026-11-18) sent them from openvave; they
+need ``--experimental`` until gate session B confirms them (spec 004 R7)."""
 
 _RANK = {"hypothesis": 0, "observed": 1, "confirmed": 2}
 
