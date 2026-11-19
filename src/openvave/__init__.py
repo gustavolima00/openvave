@@ -18,6 +18,10 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         result = await pedal.save_preset(unsafe=True, experimental=True,  # PERSISTENT: backup
                                          on_backup=store)                 # first, then save
 
+    known = openvave.KnownDevices.load()                 # known pedals (devices.json); pure ops
+    known = known.select("8F3A21C4-…", nickname="stage") # returns a new value; known.save()
+    target = openvave.resolve_target(option, environment, known)   # --device > env > default
+
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
         ...
@@ -36,8 +40,16 @@ the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``, ``WRITE_MESSAGE
 """
 
 from openvave import protocol as protocol  # submodule: the pure codec
+from openvave.devices import (
+    KnownDevice,
+    KnownDevices,
+    Target,
+    default_config_path,
+    resolve_target,
+)
 from openvave.errors import (
     BluetoothUnavailableError,
+    ConfigError,
     ConnectionLostError,
     HandshakeError,
     MultipleDevicesError,
@@ -45,6 +57,7 @@ from openvave.errors import (
     OpenvaveError,
     ProtocolError,
     RequestTimeoutError,
+    TargetNotFoundError,
     UnsafeCommandError,
     WriteNakError,
     WriteNotAppliedError,
@@ -91,6 +104,7 @@ __all__ = [
     "BluetoothUnavailableError",
     "ByteChange",
     "ByteMapEntry",
+    "ConfigError",
     "ConnectionLostError",
     "DecodedField",
     "DecodedRegion",
@@ -105,6 +119,8 @@ __all__ = [
     "FakeTransport",
     "FieldEdit",
     "HandshakeError",
+    "KnownDevice",
+    "KnownDevices",
     "MultipleDevicesError",
     "NoDeviceFoundError",
     "OpenvaveError",
@@ -120,6 +136,8 @@ __all__ = [
     "StoredPreset",
     "TESTED_FIRMWARE",
     "TankG",
+    "Target",
+    "TargetNotFoundError",
     "Transport",
     "UnsafeCommandError",
     "WatchChange",
@@ -129,5 +147,7 @@ __all__ = [
     "WritePlan",
     "WriteRefusedError",
     "WriteResult",
+    "default_config_path",
     "discover",
+    "resolve_target",
 ]

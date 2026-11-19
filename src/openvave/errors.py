@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
+    from openvave.devices import Target
     from openvave.models import DeviceInfo, EditResult, SequenceResult, WriteResult
 
 
@@ -32,6 +34,24 @@ class NoDeviceFoundError(OpenvaveError):
     exit_code = 3
 
 
+class TargetNotFoundError(NoDeviceFoundError):
+    """The chosen pedal (``--device``, ``OPENVAVE_DEVICE`` or the default) was not seen in the
+    scan (spec 005 FR-019). Nothing else is connected to instead.
+
+    ``target`` is the :class:`~openvave.devices.Target` that was looked for; ``seen`` the Tank-G
+    pedals the scan did see, strongest first (may be empty).
+    """
+
+    def __init__(self, target: Target, seen: Sequence[DeviceInfo] = ()) -> None:
+        self.target = target
+        self.seen: tuple[DeviceInfo, ...] = tuple(seen)
+        if target.nickname:
+            message = f"{target.nickname} ({target.identifier}) not found"
+        else:
+            message = f"device {target.identifier} not found"
+        super().__init__(message)
+
+
 class MultipleDevicesError(OpenvaveError):
     """More than one Tank-G was found and none was selected."""
 
@@ -40,6 +60,27 @@ class MultipleDevicesError(OpenvaveError):
     def __init__(self, candidates: Sequence[DeviceInfo]) -> None:
         self.candidates: tuple[DeviceInfo, ...] = tuple(candidates)
         super().__init__(f"{len(self.candidates)} pedals found; select one with --device")
+
+
+class ConfigError(OpenvaveError):
+    """A problem with the known pedals or their file (spec 005, exit code 2).
+
+    ``reason`` is a stable code: ``invalid_file`` (the file cannot be read or does not follow
+    ``devices-file.schema.json``), ``unknown_nickname`` (a nickname given to ``--device`` /
+    ``OPENVAVE_DEVICE`` that no known pedal has), ``bad_nickname`` (not ``[A-Za-z0-9_-]{1,32}``,
+    or shaped like an identifier), ``nickname_in_use`` (another pedal has it) and
+    ``unknown_device`` (no known pedal with that nickname or identifier). ``path`` is the file
+    concerned, when there is one; ``problem`` the message without the path. ``str(error)`` is
+    ``"<path>: <problem>"`` when ``path`` is set.
+    """
+
+    exit_code = 2
+
+    def __init__(self, problem: str, *, reason: str, path: Path | None = None) -> None:
+        self.problem = problem
+        self.reason = reason
+        self.path = path
+        super().__init__(f"{path}: {problem}" if path is not None else problem)
 
 
 class BluetoothUnavailableError(OpenvaveError):

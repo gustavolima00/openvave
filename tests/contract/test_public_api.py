@@ -23,6 +23,8 @@ ERRORS = {
     "WriteRefusedError",
     "WriteNakError",
     "WriteNotAppliedError",
+    "ConfigError",  # spec 005
+    "TargetNotFoundError",
 }
 CONTRACT_EXPORTS = {
     "discover",
@@ -56,6 +58,11 @@ CONTRACT_EXPORTS = {
     "EditPlan",
     "EditWriteOutcome",
     "EditResult",
+    "KnownDevice",  # spec 005 M0
+    "KnownDevices",
+    "Target",
+    "resolve_target",
+    "default_config_path",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -100,6 +107,9 @@ DATACLASSES = (
     "EditPlan",
     "EditWriteOutcome",
     "EditResult",
+    "KnownDevice",  # spec 005
+    "KnownDevices",
+    "Target",
 )
 FORBIDDEN = ("write", "erase", "address", "commit", "raw")
 """No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""
@@ -148,6 +158,25 @@ def test_every_public_name_documented() -> None:
 def test_errors_derive_from_base() -> None:
     for name in ERRORS:
         assert issubclass(getattr(openvave, name), openvave.OpenvaveError)
+
+
+def test_device_info_04_constructors_still_work() -> None:
+    plain = openvave.DeviceInfo("id", "name")
+    with_rssi = openvave.DeviceInfo("id", "name", -50)
+    for info in (plain, with_rssi):
+        assert info.nickname is None
+        assert info.chosen_by is None
+    assert with_rssi.rssi == -50
+    assert [f.name for f in dataclasses.fields(openvave.DeviceInfo)][-2:] == [
+        "nickname",
+        "chosen_by",
+    ]
+
+
+def test_spec005_errors() -> None:
+    assert openvave.ConfigError.exit_code == 2
+    assert issubclass(openvave.TargetNotFoundError, openvave.NoDeviceFoundError)
+    assert openvave.TargetNotFoundError.exit_code == 3
 
 
 def test_tested_firmware() -> None:

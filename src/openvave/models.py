@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 Confidence = Literal["confirmed", "observed", "hypothesis"]
 StateKind = Literal["normal", "edit", "tuner", "bypass", "unrecognised"]
+ChosenBy = Literal["device_option", "environment", "selected", "only_one_found"]
+"""Why a session connected to a pedal (spec 005 research R5)."""
 
 
 class Region(Enum):
@@ -55,6 +57,29 @@ class DeviceInfo:
     """Advertised local name (``TANK-Gv2_BLE``)."""
     rssi: int | None = None
     """Signal strength at discovery, in dBm, when known."""
+    nickname: str | None = None
+    """The owner's nickname for this pedal when it is a known pedal (spec 005), else ``None``."""
+    chosen_by: ChosenBy | None = None
+    """Why a session connected to this pedal (spec 005): ``"device_option"``, ``"environment"``,
+    ``"selected"`` or ``"only_one_found"``; ``None`` on a plain discovery result."""
+
+
+@dataclass(frozen=True)
+class ScanEntry:
+    """One row of a search for pedals (spec 005, ``openvave scan``)."""
+
+    device: DeviceInfo
+    """The advertiser, with ``nickname`` set when it is a known pedal."""
+    tank_g: bool
+    """Its advertised name is the Tank-G's (``TANK-Gv2_BLE``)."""
+    known: bool = False
+    """Its identifier is one of the known pedals."""
+    selected: bool = False
+    """It is the default pedal."""
+    firmware: int | None = None
+    """Firmware version, only after an identify pass."""
+    identify_error: str | None = None
+    """Why the identify pass failed for this row, when it did."""
 
 
 @dataclass(frozen=True)

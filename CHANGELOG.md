@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (library, spec 005 milestone 0)
+
+- `openvave.KnownDevices` and `openvave.KnownDevice`: the pedals you have selected, a default
+  pedal and their nicknames, kept in one JSON file (`devices.json`, `format_version` 1, schema in
+  `specs/005-device-selection/contracts/devices-file.schema.json`). Every operation (`select`,
+  `rename`, `forget`, `forget_all`, `find`, `record_seen`) returns a new value; `save()` writes
+  the file atomically with mode `0600`. Unknown keys in the file are kept. An invalid file is
+  refused, never guessed at.
+- `openvave.default_config_path()`: `$OPENVAVE_CONFIG`, else
+  `$XDG_CONFIG_HOME/openvave/devices.json`, else `%APPDATA%\openvave\devices.json` on Windows,
+  else `~/.config/openvave/devices.json`.
+- `openvave.resolve_target(option, environment, known)` and `openvave.Target`: the one rule that
+  chooses a pedal (`--device`, then `OPENVAVE_DEVICE`, then the default), pure. An identifier
+  (MAC or UUID shape) is used as is; anything else must be a known nickname.
+- `openvave.ConfigError` (exit code 2) and `openvave.TargetNotFoundError` (a
+  `NoDeviceFoundError`, exit code 3, with `.target` and `.seen`).
+- `DeviceInfo` gains the optional fields `nickname` and `chosen_by` (default `None`); existing
+  constructors keep working.
+
+Nothing reads the configuration unless one of these is called: `TankG.connect()` and
+`discover()` behave as in 0.4.0, and the command line does not change yet.
+
 ## [0.4.0]
 
 Remote editing without edit mode, and the first release that can **change stored presets**:

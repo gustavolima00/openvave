@@ -86,33 +86,55 @@ and tested without Bluetooth or a CLI.
 
 ### Setup
 
-- [ ] T001 Confirm the branch is rebased on `origin/main` and that `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run mypy` are green before any change; note the baseline test count under this task
-- [ ] T002 Add an autouse fixture to `tests/conftest.py` that sets `OPENVAVE_CONFIG` to a file under `tmp_path` and removes `OPENVAVE_DEVICE` from the environment for every test (monkeypatch); add `tests/unit/test_conftest_isolation.py` asserting both
+- [X] T001 Confirm the branch is rebased on `origin/main` and that `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run mypy` are green before any change; note the baseline test count under this task
+  - 2026-11-19: rebased on `origin/main` (9eaea03, docs only). Baseline: 1767 passed, 6 skipped;
+    ruff check and mypy green. `ruff format --check .` (ruff 0.17.5) flags `README.md` and
+    `docs/library.md`, Markdown that came from `main` with the docs work; out of scope here (README
+    belongs to M4), so the format check is run on `src tests` for this milestone.
+- [X] T002 Add an autouse fixture to `tests/conftest.py` that sets `OPENVAVE_CONFIG` to a file under `tmp_path` and removes `OPENVAVE_DEVICE` from the environment for every test (monkeypatch); add `tests/unit/test_conftest_isolation.py` asserting both
 
 ### Tests (write first, must fail)
 
-- [ ] T003 [P] [US5] `tests/unit/test_nickname_rules.py`: identifier shapes (MAC with `:` or `-`, UUID, case-insensitive) recognised by `is_identifier`; valid nicknames; rejected nicknames (empty, 33 chars, spaces, identifier-shaped, all-hex of length ≥ 4 such as `abcd` and `8F3A`); `beef` rejected, `stage`, `amp-2`, `a1` accepted (R3)
-- [ ] T004 [P] [US5] `tests/unit/test_known_devices.py`: every row of the data-model "Operations" table (select new, select known, select with nickname, nickname in use → `nickname_in_use`, bad nickname → `bad_nickname`, rename, rename unknown → `unknown_device`, `forget()` keeps devices, `forget(target)` removes and clears the default when it was it, `forget_all`, `find` by nickname and by identifier case-insensitively, `record_seen` on known and unknown); values are immutable (each operation returns a new `KnownDevices`); times come from the injected `now`
-- [ ] T005 [P] [US5] `tests/unit/test_devices_file.py`: missing file loads empty; save then load is equal; saved JSON validates against `specs/005-device-selection/contracts/devices-file.schema.json`; unknown top-level and per-device keys survive a rewrite; save is atomic (no partial file when the write raises, existing file intact) and creates the directory; mode is `0600` on POSIX; each invalid case (not JSON, `format_version` 2, `default` not in `devices`, duplicate identifier, duplicate nickname differing only in case, wrong field type) raises `ConfigError` with `reason == "invalid_file"` and `path` set
-- [ ] T006 [P] [US5] `tests/unit/test_config_path.py`: `default_config_path()` for `OPENVAVE_CONFIG` set / empty, `XDG_CONFIG_HOME` set, Windows (`sys.platform` and `APPDATA` monkeypatched), and the `~/.config/openvave/devices.json` fallback (R1)
-- [ ] T007 [P] [US5] `tests/unit/test_resolve_target.py`: the seven rows of the data-model `resolve_target` table, plus: option beats environment beats default; an identifier unknown to the configuration yields a `Target` with `nickname=None`; an identifier of a known pedal carries its nickname; empty environment string is unset; unknown nickname raises `ConfigError(reason="unknown_nickname")` whose message lists the known nicknames; `known=None` with an identifier works and with a nickname raises
-- [ ] T008 [P] [US5] `tests/unit/test_errors_005.py`: `ConfigError.exit_code == 2`; `TargetNotFoundError` is a `NoDeviceFoundError` with `exit_code == 3`, `.target` and `.seen`; its message is `<nickname> (<identifier>) not found` or `device <identifier> not found`
-- [ ] T009 [P] [US5] `tests/contract/test_public_api.py`: add the new exports of `contracts/library-api.md` available in this milestone (`KnownDevice`, `KnownDevices`, `Target`, `resolve_target`, `default_config_path`, `ConfigError`, `TargetNotFoundError`); `DeviceInfo("id", "name")` and `DeviceInfo("id", "name", -50)` still construct, with `nickname is None` and `chosen_by is None`
+- [X] T003 [P] [US5] `tests/unit/test_nickname_rules.py`: identifier shapes (MAC with `:` or `-`, UUID, case-insensitive) recognised by `is_identifier`; valid nicknames; rejected nicknames (empty, 33 chars, spaces, identifier-shaped, all-hex of length ≥ 4 such as `abcd` and `8F3A`); `beef` rejected, `stage`, `amp-2`, `a1` accepted (R3)
+- [X] T004 [P] [US5] `tests/unit/test_known_devices.py`: every row of the data-model "Operations" table (select new, select known, select with nickname, nickname in use → `nickname_in_use`, bad nickname → `bad_nickname`, rename, rename unknown → `unknown_device`, `forget()` keeps devices, `forget(target)` removes and clears the default when it was it, `forget_all`, `find` by nickname and by identifier case-insensitively, `record_seen` on known and unknown); values are immutable (each operation returns a new `KnownDevices`); times come from the injected `now`
+- [X] T005 [P] [US5] `tests/unit/test_devices_file.py`: missing file loads empty; save then load is equal; saved JSON validates against `specs/005-device-selection/contracts/devices-file.schema.json`; unknown top-level and per-device keys survive a rewrite; save is atomic (no partial file when the write raises, existing file intact) and creates the directory; mode is `0600` on POSIX; each invalid case (not JSON, `format_version` 2, `default` not in `devices`, duplicate identifier, duplicate nickname differing only in case, wrong field type) raises `ConfigError` with `reason == "invalid_file"` and `path` set
+- [X] T006 [P] [US5] `tests/unit/test_config_path.py`: `default_config_path()` for `OPENVAVE_CONFIG` set / empty, `XDG_CONFIG_HOME` set, Windows (`sys.platform` and `APPDATA` monkeypatched), and the `~/.config/openvave/devices.json` fallback (R1)
+- [X] T007 [P] [US5] `tests/unit/test_resolve_target.py`: the seven rows of the data-model `resolve_target` table, plus: option beats environment beats default; an identifier unknown to the configuration yields a `Target` with `nickname=None`; an identifier of a known pedal carries its nickname; empty environment string is unset; unknown nickname raises `ConfigError(reason="unknown_nickname")` whose message lists the known nicknames; `known=None` with an identifier works and with a nickname raises
+- [X] T008 [P] [US5] `tests/unit/test_errors_005.py`: `ConfigError.exit_code == 2`; `TargetNotFoundError` is a `NoDeviceFoundError` with `exit_code == 3`, `.target` and `.seen`; its message is `<nickname> (<identifier>) not found` or `device <identifier> not found`
+- [X] T009 [P] [US5] `tests/contract/test_public_api.py`: add the new exports of `contracts/library-api.md` available in this milestone (`KnownDevice`, `KnownDevices`, `Target`, `resolve_target`, `default_config_path`, `ConfigError`, `TargetNotFoundError`); `DeviceInfo("id", "name")` and `DeviceInfo("id", "name", -50)` still construct, with `nickname is None` and `chosen_by is None`
 
 ### Implementation
 
-- [ ] T010 [US5] `src/openvave/errors.py`: add `ConfigError` (exit 2; `path`, `reason`) and `TargetNotFoundError(NoDeviceFoundError)` (`target`, `seen`) (T008)
-- [ ] T011 [US5] `src/openvave/models.py`: add optional `nickname: str | None = None` and `chosen_by: str | None = None` to `DeviceInfo` (last fields); add `ScanEntry` per data-model.md (T009)
-- [ ] T012 [US5] New `src/openvave/devices.py`: `is_identifier`, `check_nickname`, frozen `KnownDevice`, frozen `KnownDevices` with `load(path=None)`, `save()`, `select`, `rename`, `forget`, `forget_all`, `find`, `record_seen`; `default_config_path()`; atomic write and file validation per R1–R3 (T003–T006)
-- [ ] T013 [US5] `src/openvave/devices.py`: `Target` and `resolve_target(option, environment, known)` per R5 (T007)
-- [ ] T014 [US5] `src/openvave/__init__.py`: export the new names and extend the module docstring's API summary; `CHANGELOG.md` [Unreleased]: library additions of this milestone (T009)
+- [X] T010 [US5] `src/openvave/errors.py`: add `ConfigError` (exit 2; `path`, `reason`) and `TargetNotFoundError(NoDeviceFoundError)` (`target`, `seen`) (T008)
+- [X] T011 [US5] `src/openvave/models.py`: add optional `nickname: str | None = None` and `chosen_by: str | None = None` to `DeviceInfo` (last fields); add `ScanEntry` per data-model.md (T009)
+- [X] T012 [US5] New `src/openvave/devices.py`: `is_identifier`, `check_nickname`, frozen `KnownDevice`, frozen `KnownDevices` with `load(path=None)`, `save()`, `select`, `rename`, `forget`, `forget_all`, `find`, `record_seen`; `default_config_path()`; atomic write and file validation per R1–R3 (T003–T006)
+- [X] T013 [US5] `src/openvave/devices.py`: `Target` and `resolve_target(option, environment, known)` per R5 (T007)
+- [X] T014 [US5] `src/openvave/__init__.py`: export the new names and extend the module docstring's API summary; `CHANGELOG.md` [Unreleased]: library additions of this milestone (T009)
 
 ### Live verification (milestone gate)
 
 - Suite, linters and type check green; the only changed pre-existing test file is `tests/contract/test_public_api.py`.
 - `uv run openvave --help` and `uv run openvave info --help` print the same text as on `main`.
 
-**Checkpoint**: Milestone 0 DONE — known pedals and the choice rule exist as tested library code; no user-visible CLI change
+**Gate evidence (2026-11-19)**:
+- `uv run pytest -q`: 1901 passed, 6 skipped (baseline 1767 + 134 new). `uv run ruff check .`:
+  all checks passed. `uv run ruff format --check src tests`: 138 files formatted. `uv run mypy`:
+  no issues in 26 source files.
+- Changed pre-existing test files: `tests/contract/test_public_api.py` and `tests/conftest.py`
+  (the latter required by T002; the fixture only sets environment variables, no test changed).
+- `openvave --help` (32 lines) and `openvave info --help` (12 lines) are byte-identical to
+  `origin/main` (compared by running `main`'s `src` with the same interpreter).
+- CLI JSON unchanged: `render.device_json` lists its keys explicitly, so the new `DeviceInfo`
+  fields do not reach any document until Milestone 2.
+- Deviations: `KnownDevices` stores the default as `default_identifier` with a `default` property
+  (the data model's `default: KnownDevice | None`); `KnownDevice` and `KnownDevices` carry an
+  `extra` mapping for unknown file keys (R2). Identifiers in the file must be non-empty strings;
+  their MAC/UUID shape is not enforced on load (an unusual identifier is unreachable by
+  `--device` but harmless). `ConfigError(problem, *, reason, path)` keeps the bare text in
+  `.problem`; `str()` is `<path>: <problem>`, which is what `contracts/cli.md` prints after
+  `error:`. `ScanEntry` exists in `models.py` but is exported in M1 (T031), as planned.
+
+**Checkpoint**: ✅ Milestone 0 DONE — known pedals and the choice rule exist as tested library code; no user-visible CLI change
 
 ---
 

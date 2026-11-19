@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "hardware" in item.keywords:
             item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never read or write the developer's own ``devices.json`` (spec 005 R13): every test gets
+    ``OPENVAVE_CONFIG`` pointing at a file under its ``tmp_path`` (not created) and no
+    ``OPENVAVE_DEVICE``."""
+    monkeypatch.setenv("OPENVAVE_CONFIG", str(tmp_path / "openvave-config" / "devices.json"))
+    monkeypatch.delenv("OPENVAVE_DEVICE", raising=False)
 
 
 SENT_FRAMES: list[bytes] = []
