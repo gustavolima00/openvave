@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 510" width="860" height="510" role="img" aria-labelledby="t d">
+<title id="t">How a typed knob splits its 0-127 range into three types</title>
+<desc id="d">MOD FX, DLY MIX and RVB DECAY each sweep raw values 0 to 127. Raw 0-39 is the first type, positions 1-40; 40-43 is off; 44-83 the second type; 84-87 off; 88-127 the third type.</desc>
+<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#eef0f2"/><line x1="0" y1="0" x2="0" y2="6" stroke="#9aa3ad" stroke-width="2"/></pattern></defs>
+<rect width="860" height="510" rx="14" fill="#f6f5f1"/>
+<text x="24" y="36" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="20" font-weight="700" fill="#1f2328">Typed knobs: one byte, three types</text>
+<text x="24" y="58" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#57606a">Turning the knob clockwise sweeps the raw byte 0 → 127. Each type takes 44 raw values: positions 1–40, then 4 values where the effect is off.</text>
+<rect x="70.0" y="110" width="239.4" height="46" fill="#3b7dd8" stroke="#ffffff" stroke-width="1"/>
+<text x="189.7" y="139" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="700" fill="#ffffff">type 1: positions 1–40</text>
+<rect x="309.4" y="110" width="23.9" height="46" fill="url(#hatch)" stroke="#ffffff" stroke-width="1"/>
+<rect x="333.3" y="110" width="239.4" height="46" fill="#e0892b" stroke="#ffffff" stroke-width="1"/>
+<text x="453.0" y="139" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="700" fill="#ffffff">type 2: positions 1–40</text>
+<rect x="572.7" y="110" width="23.9" height="46" fill="url(#hatch)" stroke="#ffffff" stroke-width="1"/>
+<rect x="596.6" y="110" width="239.4" height="46" fill="#3e9e5f" stroke="#ffffff" stroke-width="1"/>
+<text x="716.3" y="139" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="700" fill="#ffffff">type 3: positions 1–40</text>
+<text x="60" y="139" text-anchor="end" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#57606a">raw</text>
+<line x1="73.0" y1="156" x2="73.0" y2="164" stroke="#424a53"/>
+<text x="73.0" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">0</text>
+<line x1="306.4" y1="156" x2="306.4" y2="164" stroke="#424a53"/>
+<text x="306.4" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">39</text>
+<line x1="336.3" y1="156" x2="336.3" y2="164" stroke="#424a53"/>
+<text x="336.3" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">44</text>
+<line x1="569.7" y1="156" x2="569.7" y2="164" stroke="#424a53"/>
+<text x="569.7" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">83</text>
+<line x1="599.6" y1="156" x2="599.6" y2="164" stroke="#424a53"/>
+<text x="599.6" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">88</text>
+<line x1="833.0" y1="156" x2="833.0" y2="164" stroke="#424a53"/>
+<text x="833.0" y="178" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#424a53">127</text>
+<path d="M321.3,106 v-14" stroke="#57606a"/>
+<text x="321.3" y="88" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">off (40–43)</text>
+<path d="M584.7,106 v-14" stroke="#57606a"/>
+<text x="584.7" y="88" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">off (84–87)</text>
+<text x="24" y="212" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#424a53">Type names (Tank-G manual, in knob order)</text>
+<text x="24" y="248" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#0b5cad">mod_fx</text>
+<text x="24" y="263" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">MOD FX · byte 11</text>
+<rect x="170.0" y="230" width="139.4" height="32" rx="6" fill="#dbe8f9" stroke="#3b7dd8"/>
+<text x="239.7" y="251" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">chorus</text>
+<rect x="333.3" y="230" width="239.4" height="32" rx="6" fill="#fbe7d0" stroke="#e0892b"/>
+<text x="453.0" y="251" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">phaser</text>
+<rect x="596.6" y="230" width="239.4" height="32" rx="6" fill="#d7eedf" stroke="#3e9e5f"/>
+<text x="716.3" y="251" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">tremolo</text>
+<text x="24" y="292" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#0b5cad">delay_mix</text>
+<text x="24" y="307" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">DLY MIX · byte 13</text>
+<rect x="170.0" y="274" width="139.4" height="32" rx="6" fill="#dbe8f9" stroke="#3b7dd8"/>
+<text x="239.7" y="295" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">analog</text>
+<rect x="333.3" y="274" width="239.4" height="32" rx="6" fill="#fbe7d0" stroke="#e0892b"/>
+<text x="453.0" y="295" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">tape</text>
+<rect x="596.6" y="274" width="239.4" height="32" rx="6" fill="#d7eedf" stroke="#3e9e5f"/>
+<text x="716.3" y="295" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">dual</text>
+<text x="24" y="336" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#0b5cad">reverb_decay</text>
+<text x="24" y="351" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">RVB DECAY · byte 15</text>
+<rect x="170.0" y="318" width="139.4" height="32" rx="6" fill="#dbe8f9" stroke="#3b7dd8"/>
+<text x="239.7" y="339" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">room</text>
+<rect x="333.3" y="318" width="239.4" height="32" rx="6" fill="#fbe7d0" stroke="#e0892b"/>
+<text x="453.0" y="339" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">spring</text>
+<rect x="596.6" y="318" width="239.4" height="32" rx="6" fill="#d7eedf" stroke="#3e9e5f"/>
+<text x="716.3" y="339" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="600" fill="#1f2328">cloud</text>
+<rect x="24" y="376" width="812" height="114" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+<text x="40" y="402" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#424a53">Converting</text>
+<text x="40" y="426" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#1f2328">type + position → raw:  raw = 44 × type_index + position − 1</text>
+<text x="40" y="446" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#1f2328">raw → type + position:  type_index = raw // 44, position = raw % 44 + 1  (off if raw % 44 ≥ 40)</text>
+<text x="40" y="472" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#57606a">Examples: spring 10 = 44 + 9 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">53</tspan> · room 18 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">17</tspan> · phaser 20 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">63</tspan> · tape 30 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">73</tspan> · tremolo 5 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">92</tspan> · cloud 40 = <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#1f2328">127</tspan> (knob fully up)</text>
+</svg>

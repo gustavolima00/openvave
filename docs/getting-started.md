@@ -1,0 +1,185 @@
+# Getting started
+
+## Install
+
+openvave needs Python 3.11 or newer. It installs one command, `openvave`, and the `openvave`
+Python package.
+
+```bash
+uv tool install git+https://github.com/gustavolima00/openvave
+```
+
+or with pip:
+
+```bash
+pip install git+https://github.com/gustavolima00/openvave
+```
+
+From a checkout of the repository, run `uv sync` once and prefix every command with `uv run`
+(`uv run openvave info`).
+
+| Platform | Status |
+|---|---|
+| macOS | Verified on hardware (macOS 26, firmware 96) |
+| Linux, Windows | Should work through [bleak](https://github.com/hbldh/bleak); untested on hardware |
+
+## Before you connect
+
+- **Close the phone app.** The Tank-G accepts one Bluetooth LE connection at a time, and the
+  M-VAVE / M-effects app keeps it while it is open. Close the app or turn off Bluetooth on the
+  phone.
+- **macOS Bluetooth permission.** The app you run `openvave` from (Terminal, iTerm, your editor)
+  needs Bluetooth access under System Settings → Privacy & Security → Bluetooth. macOS asks the
+  first time. If access was denied, `openvave` exits with code 5 and a hint. A host app that
+  declares no Bluetooth use at all may be stopped by macOS before openvave can print anything.
+- **Power the pedal on** and keep it within a few metres.
+
+## Finding the pedal
+
+Every command scans for a device advertising the name `TANK-Gv2_BLE`, connects to it, and runs
+the pedal's handshake. With one pedal nearby you need no options.
+
+| Option | Default | What it does |
+|---|---|---|
+| `--scan-timeout SECONDS` | 5 | The longest a scan waits. It stops 1 s after the pedal is seen. |
+| `--device ID` | none | Connect to this identifier (skips the name filter, stops as soon as it is seen). |
+| `--timeout SECONDS` | 2 | How long to wait for each reply. |
+| `--trace` | off | Print the hex of every frame sent and received on stderr. |
+
+The identifier is what `info` prints on its `Address` line (`device.identifier` in `--json`). On
+macOS it is a per-computer UUID, not the pedal's MAC address. You need `--device` only when two
+pedals are in range (exit code 4). These options work before or after the command
+(`openvave --trace info` and `openvave info --trace` are the same).
+
+Device selection works this way today; how pedals are discovered and picked may change in a later
+version.
+
+## Your first commands
+
+None of these write anything to the pedal.
+
+### `openvave info`: is it there?
+
+```text
+$ openvave info
+Device     TANK-Gv2  (firmware 96)
+Address    3F1A…  (TANK-Gv2_BLE, -58 dBm)
+state: normal, preset 1B
+
+Device info   type 5 @ 0xD0000000, 32 bytes   [meaning: unknown]
+  00: 0a 30 39 36 00 00 00 00 00 00 00 00 00 00 00 00
+  10: 00 00 00 b7 43 f3 00 00 00 00 00 00 00 00 00 00
+Global        type 4 @ 0x20000000, 4 bytes    [meaning: unknown]
+  00: 00 00 01 01
+      [0]  browsed bank                   0    0–8        observed
+      [1]  bank                           0    0–8        observed
+      [2]  slot                           1    0–3        observed
+      [3]  mode                      normal    selector   confirmed
+Status        type 4 @ 0xD0000000, 1 byte     [meaning: unknown]
+  00: 01
+      unknown: 0
+```
+
+The `state:` line is the quickest summary: the pedal is in normal mode on preset 1B. Bank and slot
+in the raw lines are 0-based (bank 0, slot 1 = 1B). A firmware other than 96 still works, with a
+`warning:` line on stderr.
+
+### `openvave preset dump`: what is the current sound?
+
+```text
+$ openvave preset dump
+Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes
+state: normal, preset 1B
+  00: 01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05
+  10: 04 07 43 16 43
+      [0]  amp on                        on    on/off     confirmed
+      [1]  mod on                       off    on/off     confirmed
+      [2]  delay on                     off    on/off     confirmed
+      [3]  reverb on                     on    on/off     confirmed
+      [4]  noise gate                    15    0–127      confirmed
+      [5]  amp type                      #4    selector   confirmed
+      [6]  gain                          60    0–127      confirmed
+      [7]  treble                        60    0–127      confirmed
+      [8]  middle                        70    0–127      confirmed
+      [9]  bass                          50    0–127      confirmed
+      [10] volume                        50    0–127      confirmed
+      [11] mod fx                         0    0–127      confirmed  type: chorus 1
+      [12] mod speed                      0    0–127      confirmed
+      [13] delay mix                      0    0–127      confirmed  type: analog 1
+      [14] delay time                     0    0–127      confirmed
+      [15] reverb decay                   5    0–127      confirmed  type: room 6
+      [16] reverb mix                     4    0–127      confirmed
+      [17] IR cab                        #7    selector   confirmed
+      unknown: 18 19 20
+```
+
+Each line is `[byte]  field  value  range  confidence`. Knob values are the raw 0–127 numbers,
+with no unit. `#4` is a stepped selector position (0–8). `type: room 6` reads a typed knob as an
+effect type and a position (see [Effect types](effect-types.md)). The 21 bytes are explained in
+[The Tank-G explained](tank-g.md).
+
+A value outside its documented range is printed raw with `OUT OF RANGE`, never clamped.
+`unknown:` lists bytes whose meaning is not known (bytes 18–20 hold the preset LED colour; the
+byte map lists them as unknown until that has more evidence).
+
+### `openvave watch`: see what each control does
+
+`watch` polls the pedal (reads only) and prints every byte that changes. Type a short label and
+Enter before each step; `q` stops.
+
+```text
+$ openvave watch
+Watching TANK-Gv2 (firmware 96), every 0.5 s. Type a label and Enter before each step; q to quit.
+Recording to captures/private/20261117-101500-watch.jsonl
+  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal
+  preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43
+  status  01
+  state   normal, preset 1B
+edit mode on
+── label: edit mode on ──
+ +3.02s  global[3]   mode              normal → edit
+ +3.02s  state: edit, preset 1B
+reverb decay min→max
+── label: reverb decay min→max ──
+ +9.51s  preset[15]  reverb decay      5 (room 6) → 64 (spring 21)
++10.02s  preset[15]  reverb decay      64 (spring 21) → 127 (cloud 40)
+q
+Stopped after 34.0 s: 3 changes in 67 cycles. Record: captures/private/20261117-101500-watch.jsonl
+```
+
+The lines `edit mode on`, `reverb decay min→max` and `q` are what you type. Bytes that change in
+the same poll are marked `(co-moving: N)`. Pedal edits are not pushed to the computer; `watch` sees
+them because it re-reads.
+
+Options: `--interval SECONDS` (default 0.5, minimum 0.2), `--duration SECONDS`, `--record PATH`
+or `--no-record`, `--json` (one JSON line per event). Records go to `captures/private/` under the
+current directory, which the repository ignores; labels are stored as typed, so leave personal
+names out if you plan to share one.
+
+### Take a backup
+
+Before you change anything, save all 36 stored presets to a file. It only reads.
+
+```bash
+openvave preset backup
+```
+
+See [Recipes → Back up](recipes.md#back-up-all-36-presets).
+
+## When something goes wrong
+
+| Exit | Meaning | What to try |
+|---|---|---|
+| 0 | Success | |
+| 1 | Internal error, or a write openvave refused (the message names the reason) | Read the `error: refused (...)` line; see [Safety](safety.md). |
+| 2 | Usage error (bad option or value, invalid restore file) | `openvave COMMAND --help` |
+| 3 | No pedal found | Is it on? Is the phone app closed? Try `--scan-timeout 10`. |
+| 4 | More than one pedal | Pick one with `--device ID`. |
+| 5 | Bluetooth unavailable or permission denied | Turn Bluetooth on; grant the permission (macOS). |
+| 6 | Connection lost or timed out | Move closer; try `--timeout 4`. |
+| 7 | Protocol error, NAK, or backup cross-check mismatch | Re-run with `--trace` and report it. |
+| 8 | A write was acknowledged but the re-read does not show it | The pedal may have been touched meanwhile; check with `preset dump`. |
+
+`OPENVAVE_DEBUG=1` prints a Python traceback for unexpected errors.
+
+Next: [The Tank-G explained](tank-g.md).
