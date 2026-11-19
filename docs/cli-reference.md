@@ -3,13 +3,18 @@
 `openvave COMMAND --help` prints the same information. The formal contracts are in the specs:
 [0.1.0](../specs/001-readonly-ble-connection/contracts/cli.md),
 [0.2.0](../specs/002-preset-byte-map/contracts/cli.md),
-[0.3.0](../specs/003-preset-backup-edit-writes/contracts/cli.md) and
-[0.4.0](../specs/004-remote-edit-save-restore/contracts/cli.md) additions.
+[0.3.0](../specs/003-preset-backup-edit-writes/contracts/cli.md),
+[0.4.0](../specs/004-remote-edit-save-restore/contracts/cli.md) and
+[0.5.0](../specs/005-device-selection/contracts/cli.md) additions.
 
 ## Commands
 
 | Command | Writes? | What it does |
 |---|---|---|
+| [`scan`](#scan) | no | list every Tank-G in range; connects to nothing (unless `--identify`) |
+| [`select`](#select) | no | make a pedal the default, with a nickname |
+| [`device`](#device) | no | show the default and known pedals; `rename` a nickname |
+| [`forget`](#forget) | no | clear the default, or remove known pedals |
 | [`info`](#info) | no | identify the pedal; device info, global block, status |
 | [`preset dump`](#preset-dump) | no | the 21-byte current preset, decoded |
 | [`watch`](#watch) | no | poll and print every byte that changes |
@@ -31,10 +36,22 @@ These go before or after the command.
 | Option | Default | |
 |---|---|---|
 | `--json` | off | one JSON document on stdout (see [JSON output](#json-output)) |
-| `--device ID` | none | connect to this platform identifier; skips the name filter |
-| `--scan-timeout SECONDS` | 5 | longest scan; it stops 1 s after the pedal is seen (at once with `--device`) |
+| `--device ID\|NICKNAME` | none | use this pedal: an identifier (connected to whatever its name) or a known nickname |
+| `--scan-timeout SECONDS` | 5 | longest scan; it stops as soon as the chosen pedal is seen (1 s after the first pedal when none is chosen) |
 | `--timeout SECONDS` | 2 | per-request timeout |
 | `--trace` | off | hex of every frame on stderr |
+
+Environment: `OPENVAVE_DEVICE` (same values as `--device`; empty = unset) and `OPENVAVE_CONFIG`
+(path of the known-pedals file; default `~/.config/openvave/devices.json`).
+
+### Which pedal
+
+Every pedal command uses, first present wins: `--device`, `OPENVAVE_DEVICE`, the default
+(`openvave select`), the only Tank-G in range. It prints `pedal: <nickname>  <id>…  <rssi> dBm
+(<reason>)` on stderr before connecting (not with `--json`); the reason is `(--device)`,
+`(OPENVAVE_DEVICE)`, `(selected)` or `(only one found)`. A chosen pedal that is not seen is exit
+3, never a fallback to another pedal; the message lists the Tank-G pedals it did see. In `--json`
+the `device` object carries `nickname` and `chosen_by`.
 
 ## Options on write commands
 
@@ -47,6 +64,53 @@ These go before or after the command.
 | `--backup-dir DIR` | `preset save`, `preset restore` | where the automatic backup goes (default `.`; never overwrites) |
 
 Positions are `1A`–`9D` (case-insensitive) or an index `0`–`35`.
+
+## scan
+
+```text
+openvave scan [--all] [--identify]
+```
+
+Scans for the whole `--scan-timeout` and lists every Tank-G, strongest signal first. `*` marks the
+default pedal; known pedals show their nickname; a default that is not in range gets a `not seen`
+line. `--all` adds other Bluetooth advertisers, flagged `(not a Tank-G)`. `--identify` connects to
+each pedal in turn and adds its firmware, sending only the handshake query. Exit 0 when a Tank-G
+is listed, 3 when none. A pedal connected to the phone app or another program does not advertise
+and is not listed. `--json`:
+[`scan.schema.json`](../specs/005-device-selection/contracts/scan.schema.json).
+
+## select
+
+```text
+openvave select [TARGET] [--name NICKNAME] [--offline]
+```
+
+Makes a pedal the default. TARGET is a known nickname (no scan), a full identifier (checked by a
+scan unless `--offline`) or an identifier prefix of at least 4 hex digits matching one pedal in
+range; without TARGET, the only pedal in range. Several candidates: exit 4; none: exit 3; a bad
+or already used nickname: exit 2. Nothing is saved unless it succeeds. Never prompts.
+
+## device
+
+```text
+openvave device [--check]
+openvave device rename OLD NEW
+```
+
+Shows the default pedal, every known pedal and the configuration file's path, without Bluetooth.
+`--check` scans for the default and adds `In range: yes (-58 dBm)` (exit 3 when not in range, 2
+when there is no default). `rename` changes a nickname. `--json`:
+[`device.schema.json`](../specs/005-device-selection/contracts/device.schema.json).
+
+## forget
+
+```text
+openvave forget [TARGET | --all]
+```
+
+Without TARGET, clears the default (the pedal stays known). With TARGET (nickname or identifier),
+removes that pedal. `--all` removes every known pedal and moves an invalid configuration file
+aside (`devices.json.invalid-<time>`). No Bluetooth.
 
 ## info
 
@@ -176,9 +240,9 @@ file from another firmware needs `--experimental`.
 |---|---|
 | 0 | success (also "nothing to do; nothing sent") |
 | 1 | internal error, or a write refused before sending: tuner mode, bypassed or unrecognised state, edit mode (`bypass on`, `preset save`, `preset restore`), not bypassed (`bypass off`), out of range, untested firmware, `--experimental` or `--unsafe` needed, backup from another firmware, edits would be discarded |
-| 2 | usage error, including `bypass off` without a position, an invalid restore file, `--slot` and `--all` both or neither, an existing `--output` file without `--force` |
-| 3 | no pedal found |
-| 4 | more than one pedal (use `--device`) |
+| 2 | usage error, including an unknown nickname, a bad or duplicate nickname, an invalid configuration file, `device --check` with no default, `bypass off` without a position, an invalid restore file, `--slot` and `--all` both or neither, an existing `--output` file without `--force` |
+| 3 | no pedal found; the chosen pedal was not seen; `scan` / `select` found no Tank-G; `device --check` not in range |
+| 4 | more than one pedal and none chosen (use `openvave select` or `--device`); `select` with several candidates |
 | 5 | Bluetooth unavailable or permission denied |
 | 6 | connection lost or timed out |
 | 7 | protocol error, NAK, or backup cross-check mismatch |
@@ -197,6 +261,8 @@ removing, renaming or retyping a field bumps it.
 | `preset dump` | [`preset-dump.schema.json`](../specs/001-readonly-ble-connection/contracts/preset-dump.schema.json) |
 | each item of `fields[]` | [`decoded-field.schema.json`](../specs/002-preset-byte-map/contracts/decoded-field.schema.json) |
 | `watch --json` | [`watch-event.schema.json`](../specs/002-preset-byte-map/contracts/watch-event.schema.json) |
+| `scan` | [`scan.schema.json`](../specs/005-device-selection/contracts/scan.schema.json) |
+| `select`, `device`, `forget` | [`device.schema.json`](../specs/005-device-selection/contracts/device.schema.json) |
 | `preset backup` (and the backup file) | [`backup.schema.json`](../specs/003-preset-backup-edit-writes/contracts/backup.schema.json) |
 | `set FIELD VALUE`, `preset select`, `preset reload`, `bypass`, `loopback` | [`write-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/write-result.schema.json) |
 | `set FIELD=VALUE ...` (also when a batch stops midway) | [`set-fields-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/set-fields-result.schema.json) |

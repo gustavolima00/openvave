@@ -36,23 +36,61 @@ From a checkout of the repository, run `uv sync` once and prefix every command w
 
 ## Finding the pedal
 
-Every command scans for a device advertising the name `TANK-Gv2_BLE`, connects to it, and runs
-the pedal's handshake. With one pedal nearby you need no options.
+Every command scans for pedals advertising the name `TANK-Gv2_BLE`, connects to one, and runs the
+pedal's handshake. With one pedal nearby you need no options. To see what is in range without
+connecting:
+
+```text
+$ openvave scan
+Scanning for 5 s…
+8F3A21C4-0000-4000-8000-000000000001  TANK-Gv2_BLE  -57 dBm
+1 pedal found. Select one: openvave select 8F3A21C4-0000-4000-8000-000000000001
+```
+
+`openvave scan --identify` also connects to each pedal in turn and shows its firmware (`fw 96`).
+The identifier is what `info` prints on its `Address` line (`device.identifier` in `--json`). On
+macOS it is a per-computer UUID, not the pedal's MAC address.
+
+### Choosing a pedal
+
+`openvave select` remembers a pedal as the **default**, with an optional nickname:
+
+```bash
+openvave select --name stage        # the only pedal in range
+openvave select 8F3A --name home    # an identifier prefix (≥ 4 hex digits) or a full identifier
+openvave select stage               # a known nickname (no scan)
+openvave device                     # what is chosen, every known pedal, the file's path
+openvave device --check             # scan for the default: In range: yes (-58 dBm)
+openvave device rename home rehearsal
+openvave forget                     # clear the default; forget NAME removes one; forget --all
+```
+
+Each pedal command then picks its pedal in this order, first present wins:
+
+1. `--device ID|NICKNAME` on the command line;
+2. the `OPENVAVE_DEVICE` environment variable (same values);
+3. the default (`openvave select`);
+4. the only Tank-G in range (several: exit 4).
+
+It prints which one on stderr before connecting, e.g. `pedal: stage  8F3A21C4…  -58 dBm
+(selected)`. When a pedal is chosen, openvave **never connects to another one**: if it is not
+seen within `--scan-timeout`, the command exits 3 and lists the pedals it did see. Neither
+`--device` nor `OPENVAVE_DEVICE` changes what is saved.
+
+Known pedals are kept in `~/.config/openvave/devices.json` (`$XDG_CONFIG_HOME/openvave/` when set,
+`%APPDATA%\openvave\` on Windows); `OPENVAVE_CONFIG` points at another file. openvave holds the
+pedal only while a command runs; the default is a choice, not an open connection, so there is
+nothing to disconnect.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--scan-timeout SECONDS` | 5 | The longest a scan waits. It stops 1 s after the pedal is seen. |
-| `--device ID` | none | Connect to this identifier (skips the name filter, stops as soon as it is seen). |
+| `--scan-timeout SECONDS` | 5 | The longest a scan waits. It stops as soon as the chosen pedal is seen (1 s after the first pedal when none is chosen). |
+| `--device ID\|NICKNAME` | none | Use this pedal for one command. An identifier is connected to whatever its name. |
 | `--timeout SECONDS` | 2 | How long to wait for each reply. |
 | `--trace` | off | Print the hex of every frame sent and received on stderr. |
 
-The identifier is what `info` prints on its `Address` line (`device.identifier` in `--json`). On
-macOS it is a per-computer UUID, not the pedal's MAC address. You need `--device` only when two
-pedals are in range (exit code 4). These options work before or after the command
-(`openvave --trace info` and `openvave info --trace` are the same).
-
-Device selection works this way today; how pedals are discovered and picked may change in a later
-version.
+These options work before or after the command (`openvave --trace info` and `openvave info
+--trace` are the same).
 
 ## Your first commands
 
@@ -172,9 +210,9 @@ See [Recipes → Back up](recipes.md#back-up-all-36-presets).
 |---|---|---|
 | 0 | Success | |
 | 1 | Internal error, or a write openvave refused (the message names the reason) | Read the `error: refused (...)` line; see [Safety](safety.md). |
-| 2 | Usage error (bad option or value, invalid restore file) | `openvave COMMAND --help` |
-| 3 | No pedal found | Is it on? Is the phone app closed? Try `--scan-timeout 10`. |
-| 4 | More than one pedal | Pick one with `--device ID`. |
+| 2 | Usage error (bad option or value, invalid restore file, unknown nickname, invalid configuration file) | `openvave COMMAND --help`; `openvave forget --all` resets a broken configuration file. |
+| 3 | No pedal found, or the chosen pedal was not seen | Is it on? Is the phone app (or another `openvave`) connected to it? A connected pedal stops advertising. Try `--scan-timeout 10`. |
+| 4 | More than one pedal and none chosen | `openvave select ID`, or `--device ID` for one command. |
 | 5 | Bluetooth unavailable or permission denied | Turn Bluetooth on; grant the permission (macOS). |
 | 6 | Connection lost or timed out | Move closer; try `--timeout 4`. |
 | 7 | Protocol error, NAK, or backup cross-check mismatch | Re-run with `--trace` and report it. |

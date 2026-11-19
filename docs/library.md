@@ -8,8 +8,9 @@ internal.
 The authoritative API contracts are in the specs:
 [0.1.0](../specs/001-readonly-ble-connection/contracts/library-api.md),
 [0.2.0](../specs/002-preset-byte-map/contracts/library-api.md),
-[0.3.0](../specs/003-preset-backup-edit-writes/contracts/library-api.md) and
-[0.4.0](../specs/004-remote-edit-save-restore/contracts/library-api.md) additions. Runnable
+[0.3.0](../specs/003-preset-backup-edit-writes/contracts/library-api.md),
+[0.4.0](../specs/004-remote-edit-save-restore/contracts/library-api.md) and
+[0.5.0](../specs/005-device-selection/contracts/library-api.md) additions. Runnable
 scripts are in [`examples/`](examples/).
 
 ## Sessions
@@ -39,6 +40,54 @@ asyncio.run(main())
 One session is one Bluetooth connection: do as much as you can inside one `async with`. Requests
 are sent one at a time; do not run two operations of the same session concurrently.
 
+`TankG.connect()` also takes a `Target` or a `KnownDevice`. Without an argument it reads no
+configuration and behaves as in 0.4.0. With a chosen pedal it never connects to another one: a
+pedal that is not seen raises `TargetNotFoundError` (exit 3; `.target`, `.seen`).
+
+### Choosing a pedal
+
+```python
+import openvave
+
+entries = await openvave.scan(timeout=5.0)  # every Tank-G in range; no connection
+entries = await openvave.identify(entries)  # + firmware (handshake only)
+
+known = openvave.KnownDevices.load()  # devices.json; default_config_path()
+known = known.select(entries[0].device.identifier, nickname="stage")  # pure: returns a new value
+known.save()  # atomic, mode 0600
+
+target = openvave.resolve_target(option, environment, known)  # --device > env > default
+async with openvave.TankG.connect(target) as pedal:
+    print(pedal.device.nickname, pedal.device.chosen_by)  # stage selected
+```
+
+`KnownDevices` operations (`select`, `rename`, `forget`, `forget_all`, `find`, `record_seen`)
+never touch the file; only `save()` writes. An invalid file raises `ConfigError` (exit 2).
+
+### Long-lived connection
+
+`open()` and `close()` are what `async with` does on enter and exit, for code that keeps one
+connection for many operations:
+
+```python
+pedal = openvave.TankG.connect_selected()  # the default pedal (openvave select)
+await pedal.open()
+try:
+    for _ in range(5):
+        print((await pedal.state()).kind, pedal.is_connected)
+        await asyncio.sleep(1)
+finally:
+    await pedal.close()  # idempotent; open() scans and connects again
+```
+
+- `connect_selected(*, config_path=None, scan_timeout=…, timeout=…)` reads the file when called
+  and raises `ConfigError` when there is no default.
+- `is_connected` is true between a successful `open()` and `close()` or a lost link.
+- A lost link makes the pending operation and every later one raise `ConnectionLostError` at once,
+  without sending anything. Nothing is retried or reconnected; call `close()` then `open()`.
+- `open()` on a session that is open or lost raises `RuntimeError`; an operation on a closed
+  session raises `ConnectionLostError("session is closed")`.
+
 ## Reading
 
 ```python
@@ -46,17 +95,17 @@ from openvave import Region
 from openvave.protocol import decode_region, type_parts
 
 async with TankG.connect() as pedal:
-    state = await pedal.state()                       # PedalState(kind, index, bank, transient)
-    print(state.kind, state.index)                    # "normal" 1   (index 1 = preset 1B)
+    state = await pedal.state()  # PedalState(kind, index, bank, transient)
+    print(state.kind, state.index)  # "normal" 1   (index 1 = preset 1B)
 
     preset = await pedal.read(Region.CURRENT_PRESET)  # RegionRead: .data is the 21 bytes
     for field in decode_region(preset, pedal.identity.firmware).fields:
         print(field.entry.offset, field.entry.name, field.display, field.entry.confidence)
 
-    print(type_parts("reverb_decay", preset.data[15]))   # ("room", 6)
+    print(type_parts("reverb_decay", preset.data[15]))  # ("room", 6)
 
-    snap = await pedal.snapshot()                     # device info, global, preset, status at once
-    backup = await pedal.backup()                     # all 36 stored presets, cross-checked
+    snap = await pedal.snapshot()  # device info, global, preset, status at once
+    backup = await pedal.backup()  # all 36 stored presets, cross-checked
 ```
 
 - `Region` has `DEVICE_INFO`, `GLOBAL`, `CURRENT_PRESET` and `STATUS`.
@@ -83,13 +132,15 @@ python docs/examples/read_preset.py --fake
 from openvave import WatchChange, WatchStart
 
 async with TankG.connect() as pedal:
-    async for event in pedal.watch(interval=0.5):     # read-only polling
+    async for event in pedal.watch(interval=0.5):  # read-only polling
         if isinstance(event, WatchStart):
             print("start", event.identity.firmware)
         elif isinstance(event, WatchChange):
-            for change in event.changes:              # ByteChange
+            for change in event.changes:  # ByteChange
                 name = change.field.name if change.field else "unknown"
-                print(f"+{event.t:.1f}s {change.region.name}[{change.offset}] {name} {change.old} -> {change.new}")
+                print(
+                    f"+{event.t:.1f}s {change.region.name}[{change.offset}] {name} {change.old} -> {change.new}"
+                )
 ```
 
 `watch(interval=0.5, *, regions=…, cycles=None)` yields a `WatchStart`, then one `WatchChange`
@@ -136,9 +187,9 @@ public API; [`examples/backup_and_save.py`](examples/backup_and_save.py) has a t
 ```python
 from openvave.protocol import TYPED_FIELDS, type_parts, type_raw
 
-TYPED_FIELDS["mod_fx"]              # ("chorus", "phaser", "tremolo")
-type_raw("reverb_decay", "spring", 10)   # 53
-type_parts("delay_mix", 73)         # ("tape", 30); (None, None) in an off zone
+TYPED_FIELDS["mod_fx"]  # ("chorus", "phaser", "tremolo")
+type_raw("reverb_decay", "spring", 10)  # 53
+type_parts("delay_mix", 73)  # ("tape", 30); (None, None) in an off zone
 ```
 
 ### One field
@@ -146,12 +197,14 @@ type_parts("delay_mix", 73)         # ("tape", 30); (None, None) in an off zone
 ```python
 async with TankG.connect() as pedal:
     plan = await pedal.plan_set("reverb_decay", ("spring", 10))
-    print(plan.frame.hex(" "), plan.refusal, plan.no_change)   # what would be sent
+    print(plan.frame.hex(" "), plan.refusal, plan.no_change)  # what would be sent
 
     result = await pedal.set_field("reverb_decay", ("spring", 10))
-    for change in result.changes:                               # ByteChange
-        print(change.offset, change.field.name, change.old, "->", change.new)   # 15 reverb_decay 5 -> 53
-    print(result.applied)                                        # True
+    for change in result.changes:  # ByteChange
+        print(
+            change.offset, change.field.name, change.old, "->", change.new
+        )  # 15 reverb_decay 5 -> 53
+    print(result.applied)  # True
 ```
 
 `WritePlan` has `action`, `target`, `data`, `frame`, `reads`, `before`, `global_before`,
@@ -165,14 +218,14 @@ async with TankG.connect() as pedal:
 CHANGES = {"gain": 95, "treble": 58, "reverb_decay": ("room", 18), "delay_on": True}
 
 async with TankG.connect() as pedal:
-    plan = await pedal.plan_set_fields(CHANGES, experimental=True)   # EditPlan
+    plan = await pedal.plan_set_fields(CHANGES, experimental=True)  # EditPlan
     if plan.refusal:
-        print(plan.refusal, plan.refused_field)                       # the whole batch is refused
-    for write in plan.writes:                                         # EditWrite: target, data, frame
+        print(plan.refusal, plan.refused_field)  # the whole batch is refused
+    for write in plan.writes:  # EditWrite: target, data, frame
         print(write.target.kind, write.frame.hex(" "))
 
-    result = await pedal.set_fields(CHANGES, experimental=True)       # EditResult
-    print(dict(result.field_status))   # {"gain": "applied", …}
+    result = await pedal.set_fields(CHANGES, experimental=True)  # EditResult
+    print(dict(result.field_status))  # {"gain": "applied", …}
 ```
 
 All knob fields go in one knob-block write (rebuilt from the read just before it), then one write
@@ -189,19 +242,19 @@ import json
 from openvave import Backup
 
 
-def keep(backup: Backup) -> None:          # called with the automatic backup, before any write
+def keep(backup: Backup) -> None:  # called with the automatic backup, before any write
     with open("before-save.json", "x") as fh:
         json.dump(backup.to_document(), fh, indent=2)
 
 
 async with TankG.connect() as pedal:
-    plan = await pedal.plan_save(to=2)                     # SequencePlan; refusal "unsafe_required"
+    plan = await pedal.plan_save(to=2)  # SequencePlan; refusal "unsafe_required"
     result = await pedal.save_preset(to=2, unsafe=True, on_backup=keep)
     print(result.verified)
 
     with open("backup-a.json") as fh:
         backup = Backup.from_document(json.load(fh))
-    result = await pedal.restore(backup, all=True, unsafe=True, on_backup=keep)   # or slot=2
+    result = await pedal.restore(backup, all=True, unsafe=True, on_backup=keep)  # or slot=2
 ```
 
 - `unsafe=True` is always required; without it the call raises `WriteRefusedError`
@@ -223,7 +276,9 @@ Every error derives from `OpenvaveError` and carries the CLI's exit code as `exi
 
 | Error | Exit | When |
 |---|---|---|
+| `ConfigError` | 2 | unknown nickname, invalid nickname, invalid configuration file, no default for `connect_selected()`; `.reason`, `.path` |
 | `NoDeviceFoundError` | 3 | no pedal found while scanning |
+| `TargetNotFoundError` (a `NoDeviceFoundError`) | 3 | the chosen pedal was not seen; `.target`, `.seen` |
 | `MultipleDevicesError` | 4 | more than one pedal and no `device` |
 | `BluetoothUnavailableError` | 5 | Bluetooth off or permission denied |
 | `ConnectionLostError`, `RequestTimeoutError` | 6 | link dropped, no reply in `timeout` |
@@ -271,8 +326,8 @@ from openvave import FakeTransport, TankG
 
 fake = FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
 async with TankG.over(fake) as pedal:
-    print(pedal.identity.firmware)                    # 96
-    print((await pedal.state()).kind)                 # normal
+    print(pedal.identity.firmware)  # 96
+    print((await pedal.state()).kind)  # normal
 ```
 
 `FakeTransport.from_capture(path, *, replies=…, memory=…, apply_writes=False, …)` can also serve

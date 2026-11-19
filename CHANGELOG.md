@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0]
+
+Finding and choosing a pedal. `openvave scan` lists every Tank-G in range without connecting,
+`openvave select` makes one the default (with a nickname), `openvave device` shows the choice and
+`openvave forget` clears it. Every pedal command then uses the chosen pedal, in one order
+(`--device`, `OPENVAVE_DEVICE`, the default, the only one in range), says which one on a `pedal:`
+line, and **never falls back** to another pedal. The library gains the same pieces
+(`KnownDevices`, `resolve_target`, `scan`, `identify`) and a long-lived connection
+(`TankG.open()` / `close()` / `is_connected`, `TankG.connect_selected()`). No new pedal message:
+`scan --identify` sends only the confirmed handshake query. stdout and exit codes of existing
+commands are unchanged, and JSON only gains keys.
+
 ### Added (library, spec 005 milestone 3): long-lived connection
 
 - `TankG.open()` and `TankG.close()`: what `async with` does on enter and exit, for code that
@@ -101,6 +113,11 @@ All notable changes to this project are documented here. The format follows
 
 Nothing reads the configuration unless one of these is called: `TankG.connect()` and
 `discover()` behave as in 0.4.0, and the command line does not change yet.
+
+### Tested
+
+- On the owner's pedal (fw 96, macOS), reads only: see "Hardware check" under Milestone 4 in
+  `specs/005-device-selection/tasks.md`.
 
 ## [0.4.0]
 

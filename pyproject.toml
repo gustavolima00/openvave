@@ -1,7 +1,7 @@
 [project]
 name = "openvave"
-version = "0.4.0"
-description = "Read-only client library and CLI for the M-VAVE Tank-G pedal (BLE). Unofficial. Not affiliated with or endorsed by M-VAVE / Cuvave."
+version = "0.5.0"
+description = "Client library and CLI for the M-VAVE Tank-G pedal (BLE). Unofficial. Not affiliated with or endorsed by M-VAVE / Cuvave."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

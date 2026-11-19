@@ -478,9 +478,20 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
 ### Documentation and release
 
 - [ ] T063 [P] `specs/protocol/command-layer.md` (connection notes) and `specs/protocol/ble-gatt.md`: record what T058–T061 observed with date, firmware and confidence (a second openvave process does not see a connected pedal; the identifier is per computer on macOS; the Bluetooth off/on result if run)
-- [ ] T064 `README.md` (after rebasing on `main`): new "Finding and choosing a pedal" section (scan, select, device, rename, forget, choice order, `OPENVAVE_DEVICE`, `OPENVAVE_CONFIG`, identifiers are per computer on macOS, "openvave holds the pedal only while a command runs; there is nothing to disconnect"); Options and Exit codes updated; Library section shows `connect_selected()` and the `open()` / `close()` lifecycle; links to the 0.5.0 contracts and schemas; "Before you connect" mentions that a connected pedal is invisible to `scan`
-- [ ] T065 [P] `CHANGELOG.md`: move [Unreleased] to `[0.5.0]` with a summary paragraph; `tests/contract/test_changelog_050.py` in the style of `test_changelog_040.py` (commands, variables, library names, "no fallback", schema_version unchanged)
-- [ ] T066 `pyproject.toml` version `0.5.0` (and the package description if it still says read-only); `src/openvave/__init__.py` docstring; `uv run openvave --version`
+- [X] T064 `README.md` (after rebasing on `main`): new "Finding and choosing a pedal" section (scan, select, device, rename, forget, choice order, `OPENVAVE_DEVICE`, `OPENVAVE_CONFIG`, identifiers are per computer on macOS, "openvave holds the pedal only while a command runs; there is nothing to disconnect"); Options and Exit codes updated; Library section shows `connect_selected()` and the `open()` / `close()` lifecycle; links to the 0.5.0 contracts and schemas; "Before you connect" mentions that a connected pedal is invisible to `scan`
+- [X] T065 [P] `CHANGELOG.md`: move [Unreleased] to `[0.5.0]` with a summary paragraph; `tests/contract/test_changelog_050.py` in the style of `test_changelog_040.py` (commands, variables, library names, "no fallback", schema_version unchanged)
+- [X] T066 `pyproject.toml` version `0.5.0` (and the package description if it still says read-only); `src/openvave/__init__.py` docstring; `uv run openvave --version`
+  - Deviation (T064): the README now links to `docs/` for options and exit codes, so the
+    "Options and Exit codes updated" part landed in `docs/cli-reference.md` (four new command
+    sections, `--device ID|NICKNAME`, environment, "Which pedal", exit codes 2/3/4, JSON schemas)
+    and `docs/getting-started.md` ("Finding the pedal" rewritten with "Choosing a pedal", exit
+    table). `docs/library.md` gains "Choosing a pedal", "Long-lived connection" and the two new
+    errors. `origin/main` had nothing new to rebase on (checked 2026-11-19).
+  - T065: `tests/contract/test_changelog_040.py` no longer checks the package version (moved to
+    `test_changelog_050.py`, as 0.4.0 did for 0.3.0). The `### Tested` entry points at the
+    hardware evidence below.
+  - T066: `uv run openvave --version` → `openvave 0.5.0`; the package description drops
+    "Read-only" (writes exist since 0.3.0).
 - [ ] T067 Review SC-001…SC-006 and record each result under this task; run the full quickstart once more end to end
 
 **Checkpoint**: Milestone 4 DONE — 0.5.0 released

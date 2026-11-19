@@ -13,7 +13,8 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 ## Status
 
-Version 0.4.0 identifies a connected pedal, decodes every byte of the current preset and global
+Version 0.5.0 finds and remembers pedals (`scan`, `select`, `device`, `forget`) and never connects
+to a pedal you did not choose. It identifies a connected pedal, decodes every byte of the current preset and global
 settings that is understood (all but 4 of 26) and **backs up** the 36 stored presets. It edits the
 current preset **remotely in normal mode**, as the phone app does (one field, or several over one
 connection), discards those edits with `preset reload`, selects presets, switches **bypass** and
@@ -65,10 +66,39 @@ From a checkout, `uv sync` then prefix the commands below with `uv run`.
 ### Before you connect
 
 - **Close the M-VAVE / M-effects phone app** (or turn off Bluetooth on the phone). The pedal accepts
-  one BLE connection at a time, and the app holds it.
+  one BLE connection at a time, and the app holds it. A connected pedal also stops advertising, so
+  `openvave scan` does not list it (the same holds while another `openvave` command is connected).
 - **macOS**: the app you run `openvave` from (Terminal, iTerm, your IDE) needs Bluetooth permission
   under System Settings → Privacy & Security → Bluetooth. macOS asks the first time; if you denied
   it, `openvave` exits with code 5 and a hint.
+
+## Finding and choosing a pedal
+
+```bash
+openvave scan                     # every Tank-G in range, strongest first; connects to nothing
+openvave scan --identify          # ...and each one's firmware (handshake only)
+openvave select --name stage      # make the only pedal in range the default, nicknamed "stage"
+openvave select 8F3A              # or pick one by identifier prefix (≥ 4 hex digits) or nickname
+openvave device                   # the default, the known pedals, the configuration file
+openvave device --check           # is the default in range?
+openvave device rename stage live
+openvave forget                   # clear the default (forget NAME removes one, --all every one)
+```
+
+Every pedal command chooses its pedal in this order: `--device ID|NICKNAME`, then the
+`OPENVAVE_DEVICE` environment variable, then the default (`openvave select`), then the only Tank-G
+in range. It says which one on stderr (`pedal: stage  8F3A21C4…  -58 dBm  (selected)`) and
+**never falls back**: if the chosen pedal is not seen it exits 3 and lists what it did see.
+Known pedals live in `~/.config/openvave/devices.json` (`$XDG_CONFIG_HOME`, `%APPDATA%` on
+Windows; `OPENVAVE_CONFIG` sets another path). On macOS the identifier is a per-computer UUID,
+not the pedal's MAC address, so a selection does not carry over to another computer.
+
+openvave holds the pedal only while a command runs; there is nothing to disconnect. Details:
+[Getting started](docs/getting-started.md#finding-the-pedal), and the 0.5.0
+[CLI contract](specs/005-device-selection/contracts/cli.md) with its
+[`scan`](specs/005-device-selection/contracts/scan.schema.json),
+[`device`](specs/005-device-selection/contracts/device.schema.json) and
+[configuration file](specs/005-device-selection/contracts/devices-file.schema.json) schemas.
 
 ## Quick tour
 
@@ -114,13 +144,29 @@ async def main() -> None:
         preset = await pedal.read(Region.CURRENT_PRESET)
         for field in decode_region(preset, pedal.identity.firmware).fields:
             print(field.entry.name, field.display, field.entry.confidence)
-        await pedal.set_fields({"gain": 95, "reverb_decay": ("spring", 10)})   # not saved
+        await pedal.set_fields({"gain": 95, "reverb_decay": ("spring", 10)})  # not saved
 
 
 asyncio.run(main())
 ```
 
-See the [library guide](docs/library.md), including how to test against `FakeTransport` without a
+To keep one connection for many operations, open and close it yourself; `connect_selected()`
+uses the pedal chosen with `openvave select`:
+
+```python
+pedal = TankG.connect_selected()
+await pedal.open()
+try:
+    while pedal.is_connected:  # False once the link is lost
+        print((await pedal.state()).kind)
+        await asyncio.sleep(1)
+finally:
+    await pedal.close()  # idempotent; open() reconnects
+```
+
+A lost link makes every later operation raise `ConnectionLostError`; nothing is retried or
+reconnected for you. See the [library guide](docs/library.md) and the 0.5.0
+[library contract](specs/005-device-selection/contracts/library-api.md), including how to test against `FakeTransport` without a
 pedal.
 
 ## Development
