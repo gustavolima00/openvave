@@ -470,9 +470,9 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
 ### Hardware (owner)
 
 - [X] T058 [US1] Owner runs quickstart §4 `scan`, `scan --identify`, `select --name stage`, `info`, `device --check`, the `--json` check; researcher pastes outputs and times under this task (SC-002: time of `info` with a default vs the 0.4.0 figure of 2.5 s; SC-005: the pedal is listed within 5 s)
-- [ ] T059 [US1] (two-commands step done above; phone-app step needs the owner) Owner runs the phone-app-connected steps and the two-commands-at-once step of quickstart §4; researcher records exit codes and texts (expected: exit 3 with the "stops advertising" hint)
+- [X] T059 [US1] Owner runs the phone-app-connected steps and the two-commands-at-once step of quickstart §4; researcher records exit codes and texts (expected: exit 3 with the "stops advertising" hint)
 - [X] T060 [US4] Owner runs `forget` then `info` (expects `(only one found)`); optional: the Bluetooth off/on observation; if a second Tank-G is available, the two-pedal steps
-- [ ] T061 [US6] (to-completion run done above; pedal-off run needs the owner) Owner runs the quickstart §5 script on the pedal, once to completion and once switching the pedal off mid-loop; researcher records the output
+- [X] T061 [US6] Owner runs the quickstart §5 script on the pedal, once to completion and once switching the pedal off mid-loop; researcher records the output
 - [X] T062 Any behaviour that differs from the contracts becomes a failing test first, then a fix, in this PR
 - Hardware check (2026-11-19, owner's pedal on, fw 96, phone app closed, macOS 26, temporary
   `OPENVAVE_CONFIG`, reads only; identifier redacted as `<UUID>`). Run from the Terminal panel by
@@ -494,13 +494,24 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
       one found`, the 0.4.0 path with its 1 s grace) 4.01 / 3.12 / 2.81 s.
   - T060: `forget` → `Forgot the default (stage <UUID>…). It is still a known pedal; …`;
     `info` → `pedal: stage  <UUID>…  -53 dBm  (only one found)` (the nickname shows because the
-    pedal is still known), exit 0. Bluetooth off/on: not run. Second Tank-G: none available.
+    pedal is still known), exit 0. Bluetooth off/on: see below. Second Tank-G: none available.
   - T059 (part): two commands at once. `watch --duration 15` in the background, `info` 6 s later:
     `error: stage (<UUID>) not found`, the "connected pedal stops advertising" hint and the
     `--device` / `select` hint, exit 3; no `seen:` line. `watch` finished normally (exit 0, 30
     cycles). A second openvave process does not see a pedal the first one is connected to.
   - T061 (part): quickstart §5 to completion: `device: stage selected`, five `normal True` lines
     (0.11–0.12 s per `state()` over the one connection), `closed; is_connected False`, exit 0.
+  - T059 (phone app, 2026-11-19, owner connected the M-VAVE app): `scan` → stderr hint "a pedal
+    that is connected to the app or to another program stops advertising", stdout `No Tank-G
+    found.`, exit 3 (5.27 s); `info` → `error: stage (<UUID>) not found` with both hints, exit 3
+    (5.15 s). App closed: `info` → `(selected)`, exit 0, 1.33 s.
+  - T060 Bluetooth off/on (owner): afterwards `device --check` → `In range: yes (-57 dBm)`, exit 0,
+    0.34 s: the same identifier is seen after Bluetooth is turned off and on (macOS 26).
+  - T061 (owner switched the pedal off after line 9, phone app force-quit): ten `normal True` lines
+    (0.10–0.17 s each), then `10 raised ConnectionLostError the pedal disconnected is_connected
+    False`, `closed; is_connected False`, exit 0. A first attempt right after closing the app
+    found no pedal at `open()` (`TargetNotFoundError`, correct for a pedal that is not
+    advertising; the app had likely reconnected in the background).
   - T062: nothing differed from the contracts; no fix needed.
 
 ### Documentation and release
@@ -520,8 +531,8 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
     hardware evidence below.
   - T066: `uv run openvave --version` → `openvave 0.5.0`; the package description drops
     "Read-only" (writes exist since 0.3.0).
-- [ ] T067 Review SC-001…SC-006 and record each result under this task; run the full quickstart once more end to end
-  - Reviewed 2026-11-19 (partial: T059 and T061 still need the owner):
+- [X] T067 Review SC-001…SC-006 and record each result under this task; run the full quickstart once more end to end
+  - Reviewed 2026-11-19 after T058–T061:
     - SC-001 (two pedals, at most three commands): hardware-free only. Exit 4 lists both pedals
       with the `openvave select ID` hint, then `select <prefix>` and the command
       (`tests/unit/test_scan.py`, choice matrix). Not checked on hardware: one pedal available.
@@ -541,7 +552,7 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
       0.4.0); `info` stdout on hardware matched 0.4.0's layout.
     - The three files above: 523 passed. Full suite at the docs commit: 2602 passed, 6 skipped.
 
-**Checkpoint**: Milestone 4 DONE — 0.5.0 released
+**Checkpoint**: ✅ Milestone 4 DONE — 0.5.0 ready to release (hardware check passed on fw 96; tag after the PR merges)
 
 ---
 

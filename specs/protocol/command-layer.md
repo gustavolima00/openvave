@@ -707,6 +707,9 @@ tested.
 - A long-lived session (`TankG.open()` … `close()`) answers a `state()` read in 0.11–0.12 s over
   one connection, versus a fresh scan + connect + handshake per command (observed, 2026-11-19,
   fw 96).
+- Switching the pedal off during a long-lived session: the next `state()` raises
+  `ConnectionLostError` ("the pedal disconnected") within one 1 s poll and `is_connected` turns
+  false (observed, 2026-11-19, fw 96, macOS 26).
 - With a pedal chosen, the scan ends when it is seen (no 1 s grace): `info` with a default took
   1.60–3.55 s against 2.81–4.01 s without one, three runs each (observed, 2026-11-19, fw 96,
   macOS 26).

@@ -22,7 +22,7 @@ pedal's MAC address; the same pedal has another identifier on another Mac (by de
 CoreBluetooth; the same UUID was reported by `scan`, `info` and `select` throughout a session,
 observed 2026-11-19, fw 96). The pedal stops advertising while any central is connected,
 including another openvave process on the same computer (observed, 2026-11-16 and 2026-11-19).
-Whether the identifier survives turning Bluetooth off and on was not checked.
+The identifier survived turning the Mac's Bluetooth off and on (`device --check` saw it, observed 2026-11-19, macOS 26).
 
 ## GATT
 
