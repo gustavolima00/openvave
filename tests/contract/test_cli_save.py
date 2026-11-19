@@ -234,6 +234,7 @@ def test_failure_report_on_lost_link(capsys: pytest.CaptureFixture[str], tmp_pat
     assert code == 6
     [saved] = backups(tmp_path)
     lines = err.splitlines()
+    assert lines.pop(0).startswith("pedal: ")  # spec 005: which pedal, before connecting
     assert lines[0].startswith("error: ")
     assert lines[1:] == [
         "  slot write 1C   ACK",
@@ -283,7 +284,7 @@ def test_failure_json_carries_the_steps(capsys: pytest.CaptureFixture[str], tmp_
     ]
     assert doc["result"]["stored_may_have_changed"] is True
     assert doc["result"]["verified"] is False
-    assert err.startswith("error: ")
+    assert err.startswith("error: ")  # no pedal line with --json
 
 
 def test_bad_position_is_a_usage_error(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:

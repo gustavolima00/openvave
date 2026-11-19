@@ -73,6 +73,21 @@
             "integer",
             "null"
           ]
+        },
+        "nickname": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chosen_by": {
+          "enum": [
+            "device_option",
+            "environment",
+            "selected",
+            "only_one_found",
+            null
+          ]
         }
       }
     },

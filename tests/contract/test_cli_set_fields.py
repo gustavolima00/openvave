@@ -187,6 +187,7 @@ def test_nak_mid_batch_reports_applied_fields(capsys: pytest.CaptureFixture[str]
     assert code == 7
     assert out == ""
     lines = err.splitlines()
+    assert lines.pop(0).startswith("pedal: ")  # spec 005: which pedal, before connecting
     assert lines[0].startswith("error: write not acknowledged")
     assert lines[1:7] == [
         "  gain          applied",

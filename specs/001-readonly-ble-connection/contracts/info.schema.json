@@ -31,7 +31,9 @@
       "properties": {
         "identifier": { "type": "string" },
         "name": { "type": "string" },
-        "rssi": { "type": ["integer", "null"] }
+        "rssi": { "type": ["integer", "null"] },
+        "nickname": { "type": ["string", "null"] },
+        "chosen_by": { "enum": ["device_option", "environment", "selected", "only_one_found", null] }
       }
     },
     "identity": {

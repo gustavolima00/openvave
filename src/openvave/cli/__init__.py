@@ -21,12 +21,14 @@ from pathlib import Path
 
 from openvave import __version__
 from openvave.backup import restore_problems
-from openvave.cli import files, pedals, render, watch
+from openvave.cli import choice, files, pedals, render, watch
+from openvave.devices import Target
 from openvave.errors import (
     BluetoothUnavailableError,
     ConfigError,
     MultipleDevicesError,
     OpenvaveError,
+    TargetNotFoundError,
     WriteNotAppliedError,
 )
 from openvave.models import (
@@ -52,19 +54,22 @@ from openvave.session import (
 )
 from openvave.transport import Transport
 
-TransportFactory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
-"""``(device_id, scan_timeout) -> (transport, device)``; injectable for tests."""
+TransportFactory = choice.TransportFactory
+"""``(target, scan_timeout) -> (transport, device)``; injectable for tests."""
 
 EXIT_INTERNAL = 1
 EXIT_USAGE = 2
 
 
-async def _ble_factory(
-    device_id: str | None, scan_timeout: float
-) -> tuple[Transport, DeviceInfo | None]:
-    from openvave.transport.ble import open_ble
+def _ble_factory(scanner_factory: Callable[..., object] | None = None) -> TransportFactory:
+    """The real factory: scan for the target (or the only Tank-G) and build its BLE transport."""
 
-    return await open_ble(device_id, scan_timeout)
+    async def factory(target: Target | None, scan_timeout: float) -> tuple[Transport, DeviceInfo]:
+        from openvave.transport.ble import open_ble
+
+        return await open_ble(target, scan_timeout, scanner_factory=scanner_factory)
+
+    return factory
 
 
 def _global_options(parser: argparse.ArgumentParser, *, suppress: bool) -> None:
@@ -81,9 +86,10 @@ def _global_options(parser: argparse.ArgumentParser, *, suppress: bool) -> None:
     )
     parser.add_argument(
         "--device",
-        metavar="ID",
+        metavar="ID|NICKNAME",
         default=default(None),
-        help="connect to this platform identifier (skips the name filter)",
+        help="the pedal to use: a platform identifier (connected to whatever its name) or a "
+        "known nickname; default: OPENVAVE_DEVICE, then the selected pedal (openvave select)",
     )
     parser.add_argument(
         "--scan-timeout",
@@ -359,10 +365,7 @@ def _logging(trace: bool) -> Iterator[None]:
 
 
 async def _info(args: argparse.Namespace, factory: TransportFactory) -> str:
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         snapshot = await pedal.snapshot()
     if args.json:
         return render.dumps(render.info_json(snapshot))
@@ -370,10 +373,7 @@ async def _info(args: argparse.Namespace, factory: TransportFactory) -> str:
 
 
 async def _preset_dump(args: argparse.Namespace, factory: TransportFactory) -> str:
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         state, _, read, _ = await pedal._read_state()
         identity, device = pedal.identity, pedal.device
     if args.json:
@@ -384,10 +384,7 @@ async def _preset_dump(args: argparse.Namespace, factory: TransportFactory) -> s
 
 
 async def _preset_backup(args: argparse.Namespace, factory: TransportFactory) -> str:
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         backup = await pedal.backup()
         device = pedal.device
     if "unexpected_header" in backup.warnings:
@@ -546,10 +543,7 @@ async def _write(
     plan_call: Callable[[TankG], Awaitable[WritePlan]],
     write_call: Callable[[TankG], Awaitable[WriteResult]],
 ) -> str:
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         if args.dry_run:
             return _render_write(args, command, await plan_call(pedal), None, pedal)
         try:
@@ -579,10 +573,7 @@ async def _set_fields(args: argparse.Namespace, factory: TransportFactory) -> st
     """``set FIELD=VALUE ...``: plan (dry run) or the batch, all over one connection."""
     pairs, experimental = args.pairs, args.experimental
 
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
 
         def document(plan: EditPlan, result: EditResult | None) -> str:
             return render.dumps(
@@ -637,10 +628,7 @@ async def _preset_reload(args: argparse.Namespace, factory: TransportFactory) ->
 async def _bypass_position_missing(args: argparse.Namespace, factory: TransportFactory) -> str:
     """``bypass off`` without a position: read the state, then a usage error naming the bank."""
 
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
-    async with TankG(source, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         state = await pedal.state()
     if state.kind == "bypass" and state.bank is not None:
         bank = state.bank + 1
@@ -709,9 +697,6 @@ async def _sequence(
     action = "save" if command == "preset save" else "restore"
     saved: list[str] = []
 
-    async def source_() -> tuple[Transport, DeviceInfo | None]:
-        return await factory(args.device, args.scan_timeout)
-
     def on_plan(plan: SequencePlan) -> None:
         if not args.json:
             print(render.human_sequence_header(plan, source), flush=True)
@@ -724,7 +709,7 @@ async def _sequence(
             print(f"Backup saved: {path}", flush=True)
             print(render.POWER_WARNING, flush=True)
 
-    async with TankG(source_, timeout=args.timeout) as pedal:
+    async with choice.pedal_session(args, factory) as pedal:
         identity, device = pedal.identity, pedal.device
 
         def document(plan: SequencePlan, result: SequenceResult | None) -> str:
@@ -905,16 +890,40 @@ def _prepare_backup(args: argparse.Namespace) -> None:
     files.check_target(args.output, force=args.force)
 
 
+def _device_row(device: DeviceInfo) -> str:
+    """``<identifier>  <name>  <rssi>`` (``  <nickname>`` at the end for a known pedal)."""
+    row = f"{device.identifier}  {device.name}  {render.rssi_text(device.rssi)}"
+    return f"{row}  {device.nickname}" if device.nickname else row
+
+
 def _report(err: OpenvaveError) -> None:
-    print(f"error: {err}", file=sys.stderr)
+    if isinstance(err, MultipleDevicesError):
+        print(f"error: {len(err.candidates)} pedals found", file=sys.stderr)
+    else:
+        print(f"error: {err}", file=sys.stderr)
     if isinstance(err, ConfigError):
         if err.reason == "invalid_file":
             print("hint: fix the file or reset it with: openvave forget --all", file=sys.stderr)
+    elif isinstance(err, TargetNotFoundError):
+        for seen in err.seen:
+            print(f"  seen: {_device_row(seen)}", file=sys.stderr)
+        print(
+            "hint: switch it on and close the M-VAVE phone app (a connected pedal stops "
+            "advertising).",
+            file=sys.stderr,
+        )
+        print(
+            "hint: use another pedal once with --device ID, or make it the default with: "
+            "openvave select ID",
+            file=sys.stderr,
+        )
     elif isinstance(err, MultipleDevicesError):
         for c in err.candidates:
-            rssi = f"{c.rssi} dBm" if c.rssi is not None else "? dBm"
-            print(f"  {c.identifier}  {c.name}  {rssi}", file=sys.stderr)
-        print("hint: re-run with --device <identifier>", file=sys.stderr)
+            print(f"  {_device_row(c)}", file=sys.stderr)
+        print(
+            "hint: use one once with --device ID, or remember one with: openvave select ID",
+            file=sys.stderr,
+        )
     elif isinstance(err, BluetoothUnavailableError):
         if sys.platform == "darwin":
             print(
@@ -1043,7 +1052,7 @@ def main(
             return EXIT_USAGE
     if args.command in PEDAL_COMMANDS:
         return _run_pedal_command(args, scanner_factory, transport_factory)
-    factory = transport_factory or _ble_factory
+    factory = transport_factory or _ble_factory(scanner_factory)
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
         try:

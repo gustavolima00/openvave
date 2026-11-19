@@ -161,7 +161,7 @@ def test_two_runs_identical_except_read_at(capsys: pytest.CaptureFixture[str]) -
 def test_human_region_blocks(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err, _ = run(capsys, ["info"])
     assert code == 0
-    assert err == ""
+    assert err == "pedal: 3F1A-UUID  -58 dBm  (only one found)\n"  # spec 005 pedal line
     lines = out.splitlines()
     assert lines[0] == "Device     TANK-Gv2  (firmware 96)"
     assert "Device info   type 5 @ 0xD0000000, 32 bytes   [meaning: unknown]" in lines

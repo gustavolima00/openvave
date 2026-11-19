@@ -19,18 +19,17 @@ import signal
 import sys
 import threading
 import time
-from collections.abc import Awaitable, Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 from openvave import __version__
-from openvave.cli import render
+from openvave.cli import choice, render
 from openvave.errors import ConnectionLostError, OpenvaveError, RequestTimeoutError
 from openvave.models import (
     DecodedRegion,
     DeviceIdentity,
-    DeviceInfo,
     PedalState,
     Region,
     WatchChange,
@@ -53,7 +52,7 @@ TICK = 0.05
 PLATFORMS = {"darwin": "macOS", "linux": "Linux", "win32": "Windows"}
 RECORD_DIR = Path("captures") / "private"
 
-TransportFactory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
+TransportFactory = choice.TransportFactory
 """``(device_id, scan_timeout) -> (transport, device)``, as in :mod:`openvave.cli`."""
 
 
@@ -523,14 +522,9 @@ async def run(
     )
     transport: list[Transport] = []
 
-    async def source() -> tuple[Transport, DeviceInfo | None]:
-        opened, device = await factory(args.device, args.scan_timeout)
-        transport.append(opened)
-        return opened, device
-
     loop = asyncio.get_running_loop()
     with trace_hook(watch.on_frame):
-        async with TankG(source, timeout=args.timeout) as pedal:
+        async with choice.pedal_session(args, factory, on_transport=transport.append) as pedal:
             watch.begin(pedal.identity, transport[0] if transport else None)
             _start_reader(stdin, loop, watch.on_line)
             with _sigint(loop, lambda: watch.stop("interrupt")):

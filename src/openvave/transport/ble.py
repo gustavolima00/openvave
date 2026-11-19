@@ -17,6 +17,7 @@ from openvave.errors import (
     ConnectionLostError,
     MultipleDevicesError,
     NoDeviceFoundError,
+    TargetNotFoundError,
 )
 from openvave.models import DeviceInfo, ScanEntry
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
     from bleak.backends.scanner import AdvertisementData
 
-    from openvave.devices import KnownDevices
+    from openvave.devices import KnownDevices, Target
     from openvave.transport import Transport
 
 logger = logging.getLogger("openvave")
@@ -337,9 +338,50 @@ class BleakTransport:
             self._lost()
 
 
-async def open_ble(device_id: str | None, scan_timeout: float) -> tuple[BleakTransport, DeviceInfo]:
-    """Scan, select the pedal and build (not yet open) its transport."""
-    devices = await _scan(scan_timeout, wanted_id=device_id, stop_early=True)
-    chosen = select_device([info for _, info in devices.values()], device_id)
-    ble_device = devices[chosen.identifier][0]
+async def locate(
+    target: Target | str | None,
+    scan_timeout: float,
+    *,
+    scanner_factory: Callable[..., Any] | None = None,
+) -> tuple[BLEDevice, DeviceInfo]:
+    """Scan for the pedal a command acts on (spec 005 R5, data model "Scan outcome").
+
+    With a :class:`~openvave.devices.Target` (a plain identifier string counts as ``--device``)
+    the scan stops when that identifier is seen, whatever its advertised name; when it is not
+    seen within ``scan_timeout`` :class:`TargetNotFoundError` carries the Tank-G pedals that were
+    seen, strongest first, and nothing else is chosen instead. Without a target the 0.4.0 rules
+    apply: exactly one Tank-G (``chosen_by="only_one_found"``), else
+    :class:`NoDeviceFoundError` or :class:`MultipleDevicesError` (candidates strongest first).
+    The returned :class:`DeviceInfo` carries ``nickname`` and ``chosen_by``.
+    """
+    from openvave.devices import Target
+
+    if isinstance(target, str):
+        target = Target(target, None, "device_option")
+    devices = await _scan(
+        scan_timeout,
+        wanted_id=target.identifier if target is not None else None,
+        stop_early=True,
+        scanner_factory=scanner_factory,
+    )
+    found = strongest_first([info for _, info in devices.values()])
+    if target is None:
+        chosen = replace(select_device(found, None), chosen_by="only_one_found")
+    else:
+        wanted = target.identifier.casefold()
+        match = next((d for d in found if d.identifier.casefold() == wanted), None)
+        if match is None:
+            raise TargetNotFoundError(target, [d for d in found if d.name == BLE_NAME])
+        chosen = replace(match, nickname=target.nickname, chosen_by=target.chosen_by)
+    return devices[chosen.identifier][0], chosen
+
+
+async def open_ble(
+    target: Target | str | None,
+    scan_timeout: float,
+    *,
+    scanner_factory: Callable[..., Any] | None = None,
+) -> tuple[BleakTransport, DeviceInfo]:
+    """Scan, choose the pedal (:func:`locate`) and build (not yet open) its transport."""
+    ble_device, chosen = await locate(target, scan_timeout, scanner_factory=scanner_factory)
     return BleakTransport(ble_device), chosen

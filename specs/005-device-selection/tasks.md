@@ -289,28 +289,73 @@ they used, and keep their 0.4.0 output.
 
 ### Tests (write first, must fail)
 
-- [ ] T034 [P] [US2] `tests/unit/test_scan.py`: `open_ble(target, scan_timeout)` with a `Target`: stops at first sight; target absent and other Tank-G pedals seen → `TargetNotFoundError` with `.seen` strongest first and Tank-G only; target absent and nothing seen → `TargetNotFoundError` with empty `.seen`; `target=None` keeps the 0.4.0 rules (one → chosen with `chosen_by="only_one_found"`, none → `NoDeviceFoundError`, several → `MultipleDevicesError`); the returned `DeviceInfo` carries `nickname` and `chosen_by`; passing a plain identifier string still works (`chosen_by="device_option"`)
-- [ ] T035 [P] [US2] `tests/integration/test_choice_matrix.py`: parametrised over option (absent / identifier / known nickname / unknown nickname), environment (absent / identifier / nickname), configuration (none / default A / default A with B known / invalid file) and scan result (A only / B only / A and B / none); asserts the connected identifier or the error class and exit code from the data-model tables; asserts the transport of any other identifier is never opened (SC-004); runs once with `info` and once with `set gain=90` on a fake pedal
-- [ ] T036 [P] [US3] `tests/contract/test_cli_pedal_line.py`: parametrised over **every** pedal command in `COMMANDS` (`info`, `preset dump`, `preset backup`, `preset select`, `preset reload`, `preset save --dry-run`, `preset restore --dry-run`, `set`, `set FIELD=VALUE`, `bypass on/off`, `loopback on/off`, `watch --duration`) × four `chosen_by`: stderr has exactly one `pedal:` line in the `contracts/cli.md` format (nickname first when known, UUID shortened to 8 characters + `…`, MAC in full, the right reason), none with `--json`; the test fails if a command exists in `COMMANDS` that it does not cover (SC-003)
-- [ ] T037 [P] [US3] `tests/contract/test_cli_stdout_unchanged.py`: for the same commands, stdout with a default selected equals stdout with no configuration (golden comparison within the test, human mode), and exit codes are equal (SC-006); JSON documents differ only by `device.nickname` and `device.chosen_by`
-- [ ] T038 [P] [US3] `tests/contract/test_cli_info_identity.py` and the JSON contract tests that validate a `device` object: assert `nickname` and `chosen_by` are present; the 001 `info.schema.json` `device` definition still validates (added keys)
-- [ ] T039 [P] [US2] `tests/contract/test_cli_target_errors.py`: exit 3 text for a default not seen with and without other pedals, and for an identifier unknown to the configuration; exit 4 text with both hints and nicknames of known pedals at the end of their rows; exit 2 for `--device nobody` before any scan (scanner raises if used); invalid file → exit 2 for `info`, but `info --device <identifier>` runs with the warning; a non-Tank advertised name with `--device ID` adds `name: <name> (not a Tank-G name)` to the pedal line
-- [ ] T040 [P] [US4] `tests/contract/test_cli_last_seen.py`: after a successful command on a known pedal the file's `last_name`, `last_firmware`, `last_seen_at` are updated; on an unknown pedal the file is untouched (not created); with `--device` / `OPENVAVE_DEVICE` the `default` is unchanged; a read-only configuration directory does not fail the command (FR-023, FR-026)
+- [X] T034 [P] [US2] `tests/unit/test_scan.py`: `open_ble(target, scan_timeout)` with a `Target`: stops at first sight; target absent and other Tank-G pedals seen → `TargetNotFoundError` with `.seen` strongest first and Tank-G only; target absent and nothing seen → `TargetNotFoundError` with empty `.seen`; `target=None` keeps the 0.4.0 rules (one → chosen with `chosen_by="only_one_found"`, none → `NoDeviceFoundError`, several → `MultipleDevicesError`); the returned `DeviceInfo` carries `nickname` and `chosen_by`; passing a plain identifier string still works (`chosen_by="device_option"`)
+- [X] T035 [P] [US2] `tests/integration/test_choice_matrix.py`: parametrised over option (absent / identifier / known nickname / unknown nickname), environment (absent / identifier / nickname), configuration (none / default A / default A with B known / invalid file) and scan result (A only / B only / A and B / none); asserts the connected identifier or the error class and exit code from the data-model tables; asserts the transport of any other identifier is never opened (SC-004); runs once with `info` and once with `set gain=90` on a fake pedal
+- [X] T036 [P] [US3] `tests/contract/test_cli_pedal_line.py`: parametrised over **every** pedal command in `COMMANDS` (`info`, `preset dump`, `preset backup`, `preset select`, `preset reload`, `preset save --dry-run`, `preset restore --dry-run`, `set`, `set FIELD=VALUE`, `bypass on/off`, `loopback on/off`, `watch --duration`) × four `chosen_by`: stderr has exactly one `pedal:` line in the `contracts/cli.md` format (nickname first when known, UUID shortened to 8 characters + `…`, MAC in full, the right reason), none with `--json`; the test fails if a command exists in `COMMANDS` that it does not cover (SC-003)
+- [X] T037 [P] [US3] `tests/contract/test_cli_stdout_unchanged.py`: for the same commands, stdout with a default selected equals stdout with no configuration (golden comparison within the test, human mode), and exit codes are equal (SC-006); JSON documents differ only by `device.nickname` and `device.chosen_by`
+- [X] T038 [P] [US3] `tests/contract/test_cli_info_identity.py` and the JSON contract tests that validate a `device` object: assert `nickname` and `chosen_by` are present; the 001 `info.schema.json` `device` definition still validates (added keys)
+- [X] T039 [P] [US2] `tests/contract/test_cli_target_errors.py`: exit 3 text for a default not seen with and without other pedals, and for an identifier unknown to the configuration; exit 4 text with both hints and nicknames of known pedals at the end of their rows; exit 2 for `--device nobody` before any scan (scanner raises if used); invalid file → exit 2 for `info`, but `info --device <identifier>` runs with the warning; a non-Tank advertised name with `--device ID` adds `name: <name> (not a Tank-G name)` to the pedal line
+- [X] T040 [P] [US4] `tests/contract/test_cli_last_seen.py`: after a successful command on a known pedal the file's `last_name`, `last_firmware`, `last_seen_at` are updated; on an unknown pedal the file is untouched (not created); with `--device` / `OPENVAVE_DEVICE` the `default` is unchanged; a read-only configuration directory does not fail the command (FR-023, FR-026)
 
 ### Implementation
 
-- [ ] T041 [US2] `src/openvave/transport/ble.py`: `open_ble(target: Target | str | None, scan_timeout)` per T034: stop at first sight for a target, build `TargetNotFoundError` from the scan's Tank-G rows, annotate the returned `DeviceInfo` (`nickname`, `chosen_by`); `select_device` keeps its 0.4.0 signature and behaviour for a plain identifier
-- [ ] T042 [US2] `src/openvave/cli/__init__.py`: one session helper (async context manager, e.g. `_pedal(args, factory)`) that loads the configuration only when needed (R5), calls `resolve_target(args.device, os.environ.get("OPENVAVE_DEVICE"), known)`, obtains the transport from the factory, prints the pedal line, opens `TankG`, and records last-seen after the handshake (best effort); change `TransportFactory` to take `Target | str | None`
-- [ ] T043 [US2] `src/openvave/cli/__init__.py` and `src/openvave/cli/watch.py`: replace every per-command `source()` closure and direct `factory(args.device, …)` call with the helper of T042, so no command can bypass the choice (T035, T036)
-- [ ] T044 [P] [US3] `src/openvave/cli/render.py`: `pedal_line(device)` and `device_json` with `nickname` and `chosen_by` (T036, T038)
-- [ ] T045 [US2] `src/openvave/cli/__init__.py` `_report`: `TargetNotFoundError` text with `seen:` rows and the two hints; `MultipleDevicesError` text with both hints and nicknames; `--device` help text ("identifier or nickname"); keep the existing exit-3 hint for the no-target case (T039)
-- [ ] T046 [US3] `specs/001-readonly-ble-connection/contracts/info.schema.json` and the other schemas that define `device`: add the optional `nickname` and `chosen_by` properties (no change to `required`); `CHANGELOG.md` [Unreleased]: choice order, `OPENVAVE_DEVICE`, the pedal line, the JSON keys, "no fallback" behaviour
+- [X] T041 [US2] `src/openvave/transport/ble.py`: `open_ble(target: Target | str | None, scan_timeout)` per T034: stop at first sight for a target, build `TargetNotFoundError` from the scan's Tank-G rows, annotate the returned `DeviceInfo` (`nickname`, `chosen_by`); `select_device` keeps its 0.4.0 signature and behaviour for a plain identifier
+- [X] T042 [US2] `src/openvave/cli/__init__.py`: one session helper (async context manager, e.g. `_pedal(args, factory)`) that loads the configuration only when needed (R5), calls `resolve_target(args.device, os.environ.get("OPENVAVE_DEVICE"), known)`, obtains the transport from the factory, prints the pedal line, opens `TankG`, and records last-seen after the handshake (best effort); change `TransportFactory` to take `Target | str | None`
+- [X] T043 [US2] `src/openvave/cli/__init__.py` and `src/openvave/cli/watch.py`: replace every per-command `source()` closure and direct `factory(args.device, …)` call with the helper of T042, so no command can bypass the choice (T035, T036)
+- [X] T044 [P] [US3] `src/openvave/cli/render.py`: `pedal_line(device)` and `device_json` with `nickname` and `chosen_by` (T036, T038)
+- [X] T045 [US2] `src/openvave/cli/__init__.py` `_report`: `TargetNotFoundError` text with `seen:` rows and the two hints; `MultipleDevicesError` text with both hints and nicknames; `--device` help text ("identifier or nickname"); keep the existing exit-3 hint for the no-target case (T039)
+- [X] T046 [US3] `specs/001-readonly-ble-connection/contracts/info.schema.json` and the other schemas that define `device`: add the optional `nickname` and `chosen_by` properties (no change to `required`); `CHANGELOG.md` [Unreleased]: choice order, `OPENVAVE_DEVICE`, the pedal line, the JSON keys, "no fallback" behaviour
 
 ### Live verification (milestone gate)
 
-- [ ] T047 [US2] Run quickstart §3 (Bluetooth on, no pedal needed) and paste the output and exit code under this task; run `uv run pytest tests/contract/test_cli_pedal_line.py tests/integration/test_choice_matrix.py -q` and note the number of cases
+- [X] T047 [US2] Run quickstart §3 (Bluetooth on, no pedal needed) and paste the output and exit code under this task; run `uv run pytest tests/contract/test_cli_pedal_line.py tests/integration/test_choice_matrix.py -q` and note the number of cases
 
-**Checkpoint**: Milestone 2 DONE — every command acts on the chosen pedal, says so, and never falls back
+**Gate evidence (2026-11-19)**:
+- `uv run pytest -q`: 2541 passed, 6 skipped (M1 gate 1984 + 557 new). `uv run ruff check .`: all
+  checks passed. `uv run ruff format --check src tests`: 154 files formatted. `uv run mypy`: no
+  issues in 28 source files.
+- `uv run pytest tests/contract/test_cli_pedal_line.py tests/integration/test_choice_matrix.py -q`:
+  496 passed in 12.8 s (pedal line: 14 commands × 4 `chosen_by`, human and `--json`, plus the
+  coverage guard; matrix: 4 options × 3 environments × 4 configurations × 4 scan results = 192
+  combinations × `info` and `set gain=90`, + size check). Also `test_cli_stdout_unchanged.py`
+  (27: human stdout and exit codes identical for all 14 commands; JSON differs only by
+  `device.nickname` / `device.chosen_by`), `test_cli_target_errors.py`, `test_cli_last_seen.py`.
+- T047, quickstart §3, in the owner's Terminal panel (macOS, Bluetooth on), temporary
+  `OPENVAVE_CONFIG`, `select AA:BB:CC:DD:EE:01 --name stage --offline` first. The owner's pedal
+  (fw 96) happened to be on and advertising, which makes this a live no-fallback check
+  (identifier redacted as `<UUID>`):
+
+  ```text
+  $ time openvave info --device stage; echo "exit $?"
+  error: stage (AA:BB:CC:DD:EE:01) not found
+    seen: <UUID>  TANK-Gv2_BLE  -56 dBm
+  hint: switch it on and close the M-VAVE phone app (a connected pedal stops advertising).
+  hint: use another pedal once with --device ID, or make it the default with: openvave select ID
+  … 5.202 total
+  exit 3
+  ```
+
+  The full 5 s scan ran, the only Tank-G in range was listed and not connected to, exit 3, as in
+  `contracts/cli.md`.
+- Changed pre-existing test files (assertions only, for the new stderr line, the added JSON keys
+  and the factory now receiving a `Target`): `test_cli_info_identity.py` (also T038 additions),
+  `test_cli_info_regions.py`, `test_cli_preset_dump.py`, `test_cli_save.py`,
+  `test_cli_set_fields.py`, `test_cli_scan.py`, `tests/unit/test_scan.py` (T034 additions).
+- Deviations:
+  - The session helper of T042 lives in a new module, `src/openvave/cli/choice.py`
+    (`pedal_session`, `choose`, `annotate`, `record_seen`), because `watch.py` uses it too.
+    `cli/__init__.py` and `watch.py` have no transport source of their own any more.
+  - `transport/ble.py` gains `locate(target, scan_timeout, *, scanner_factory)` (the choice,
+    returning the BLE device and the annotated `DeviceInfo`); `open_ble` is `locate` plus
+    `BleakTransport` and also takes `scanner_factory`. Tests drive `locate` with a fake scanner
+    so the CLI matrix exercises the real scan rules. Not exported.
+  - The `seen:` prefix is repeated on every row (contract note updated).
+  - "`--device NICKNAME` and `OPENVAVE_DEVICE` leave the file byte-identical" holds for the
+    choice (`default` and nicknames never change); a successful command on a known pedal still
+    updates its `last_*` fields, as R9 / T040 require. Tested that way.
+  - `--device` help/metavar: `ID|NICKNAME`.
+
+**Checkpoint**: ✅ Milestone 2 DONE — every command acts on the chosen pedal, says so, and never falls back
 
 ---
 

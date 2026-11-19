@@ -215,7 +215,13 @@ def human_preset(
 def device_json(device: DeviceInfo | None) -> dict[str, Any] | None:
     if device is None:
         return None
-    return {"identifier": device.identifier, "name": device.name, "rssi": device.rssi}
+    return {
+        "identifier": device.identifier,
+        "name": device.name,
+        "rssi": device.rssi,
+        "nickname": device.nickname,
+        "chosen_by": device.chosen_by,
+    }
 
 
 def envelope(
@@ -1179,6 +1185,31 @@ CHOICE_NOTE = (
 def short_identifier(identifier: str) -> str:
     """A UUID shortened to its first 8 characters plus ``…``; a MAC in full (research R8)."""
     return identifier[:8] + "…" if _UUID_SHAPE.match(identifier) else identifier
+
+
+TANK_G_NAME = "TANK-Gv2_BLE"
+
+CHOSEN_BY_TEXT = {
+    "selected": "(selected)",
+    "device_option": "(--device)",
+    "environment": "(OPENVAVE_DEVICE)",
+    "only_one_found": "(only one found)",
+}
+"""Reason shown at the end of the ``pedal:`` line, by ``DeviceInfo.chosen_by`` (research R8)."""
+
+
+def pedal_line(device: DeviceInfo) -> str:
+    """``pedal: stage  8F3A21C4…  -58 dBm  (selected)``: which pedal a command uses (stderr,
+    human mode, before connecting; spec 005 R8). No nickname: the identifier comes first."""
+    parts = [device.nickname] if device.nickname else []
+    parts += [short_identifier(device.identifier), rssi_text(device.rssi)]
+    reason = CHOSEN_BY_TEXT.get(device.chosen_by or "")
+    if reason:
+        parts.append(reason)
+    line = "pedal: " + "  ".join(parts)
+    if device.name != TANK_G_NAME:
+        line += f"   name: {device.name or '?'} (not a Tank-G name)"
+    return line
 
 
 def rssi_text(rssi: int | None) -> str:

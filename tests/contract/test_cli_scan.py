@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from openvave.devices import Target
 from openvave.errors import BluetoothUnavailableError
 from openvave.models import DeviceInfo
 from openvave.transport import Transport
@@ -110,7 +111,9 @@ def test_identify_adds_firmware(capsys: pytest.CaptureFixture[str]) -> None:
     fakes = {u: FakeTransport.from_capture(FW96_CONNECT) for u in (UUID_1, UUID_2)}
     calls: list[str | None] = []
 
-    async def factory(device_id: str | None, scan_timeout: float) -> tuple[Transport, DeviceInfo]:
+    async def factory(target: Target | None, scan_timeout: float) -> tuple[Transport, DeviceInfo]:
+        assert target is not None and target.chosen_by == "device_option"
+        device_id = target.identifier
         calls.append(device_id)
         if device_id == UUID_2:
             raise BluetoothUnavailableError("Bluetooth unavailable: off")

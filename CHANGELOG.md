@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed (command line, spec 005 milestone 2): every command uses the chosen pedal
+
+- Every pedal command (`info`, `preset dump|backup|select|reload|save|restore`, `set`,
+  `bypass`, `loopback`, `watch`) chooses its pedal in one order: `--device VALUE`, then
+  `OPENVAVE_DEVICE`, then the default pedal (`openvave select`), then the only Tank-G in range as
+  in 0.4.0. `--device` and `OPENVAVE_DEVICE` take an identifier or a known nickname; neither
+  changes the configuration. A text that is neither is exit 2 before any scan, listing the known
+  nicknames.
+- **No fallback**: when a pedal is chosen, the scan stops as soon as it is seen and nothing else
+  is ever connected to. If it is not seen within `--scan-timeout`, the command exits 3 naming it,
+  lists the Tank-G pedals it did see (`seen:`) and says how to use another one. Several pedals
+  without a choice still exit 4; the message now lists them strongest first, with the nicknames
+  of known pedals, and suggests `--device ID` or `openvave select ID`.
+- A `pedal:` line on stderr says which pedal a command uses and why, before connecting, e.g.
+  `pedal: stage  8F3A21C4…  -58 dBm  (selected)`; the reason is `(selected)`, `(--device)`,
+  `(OPENVAVE_DEVICE)` or `(only one found)`. Not printed with `--json`. stdout and exit codes of
+  every command are unchanged.
+- JSON: the `device` object gains `nickname` (string or null) and `chosen_by`
+  (`device_option`, `environment`, `selected`, `only_one_found`). `schema_version` stays 2; the
+  001 `info` and `preset-dump` schemas list the two optional keys.
+- An invalid configuration file makes a pedal command exit 2 with the `forget --all` hint, except
+  when `--device` / `OPENVAVE_DEVICE` gives an identifier: then the command runs and warns
+  `(nicknames unavailable)`.
+- After a successful command on a known pedal, its `last_name`, `last_firmware` and
+  `last_seen_at` are updated (best effort; a file that cannot be written does not fail the
+  command). An unknown pedal leaves the file untouched.
+- Library: `openvave.transport.ble.open_ble(target, scan_timeout)` takes a `Target`, an
+  identifier or `None`; with a target it raises `TargetNotFoundError` instead of choosing another
+  pedal. `TankG.connect()` without an argument behaves as in 0.4.0.
+
 ### Added (command line, spec 005 milestone 1)
 
 - `openvave scan [--all] [--identify]`: lists every Tank-G in range, strongest signal first, for
@@ -31,9 +61,6 @@ All notable changes to this project are documented here. The format follows
   `forget` exit 2 with a hint; `scan` still lists pedals with a warning.
 - Library: `openvave.scan(timeout, *, include_all=False, known=None)`,
   `openvave.identify(entries)` and `openvave.ScanEntry`. `discover()` is unchanged.
-
-Other commands do not use the default pedal yet: `info`, `set` and the rest behave exactly as
-in 0.4.0.
 
 ### Added (library, spec 005 milestone 0)
 

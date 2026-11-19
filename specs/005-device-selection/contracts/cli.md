@@ -24,8 +24,9 @@ hint: switch it on and close the M-VAVE phone app (a connected pedal stops adver
 hint: use another pedal once with --device ID, or make it the default with: openvave select ID
 ```
 
-  (no `seen:` lines when no Tank-G was seen; for an identifier unknown to the configuration the
-  first line is `error: device <identifier> not found`.)
+  (one `seen:` line per Tank-G seen, strongest first; none when no Tank-G was seen; for an
+  identifier unknown to the configuration the first line is `error: device <identifier> not
+  found`.)
 - Without a target: 0.4.0 behaviour. Several pedals, exit 4:
 
 ```text

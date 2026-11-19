@@ -22,6 +22,7 @@ from openvave.cli import render
 from openvave.devices import (
     KnownDevice,
     KnownDevices,
+    Target,
     check_nickname,
     default_config_path,
     is_identifier,
@@ -33,7 +34,7 @@ from openvave.transport import Transport
 logger = logging.getLogger("openvave")
 
 Command = Callable[..., Awaitable[tuple[str, int]]]
-TransportFactory = Callable[[str | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
+TransportFactory = Callable[[Target | None, float], Awaitable[tuple[Transport, DeviceInfo | None]]]
 ScannerFactory = Callable[..., Any] | None
 
 _PREFIX = re.compile(r"^[0-9A-Fa-f:-]+$")
@@ -166,7 +167,8 @@ def _identify_factory(
         return None
 
     async def make(device: DeviceInfo) -> Transport:
-        transport, _ = await factory(device.identifier, 0.0)
+        target = Target(device.identifier, device.nickname, "device_option")
+        transport, _ = await factory(target, 0.0)
         return transport
 
     return make

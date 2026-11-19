@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 
-from openvave.devices import KnownDevices
-from openvave.errors import MultipleDevicesError
+from openvave.devices import KnownDevices, Target
+from openvave.errors import MultipleDevicesError, NoDeviceFoundError, TargetNotFoundError
 from openvave.transport import ble
 from openvave.transport.ble import BLE_NAME, select_device
 from tests.support.scanner import SPEAKER as SPEAKER_ID
@@ -126,7 +126,9 @@ async def test_open_ble_uses_the_early_stop(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(ble, "_scan", fake_scan)
     _, chosen = await ble.open_ble(None, 5.0)
     assert chosen.identifier == PEDAL_A[0]
-    assert calls == [{"timeout": 5.0, "wanted_id": None, "stop_early": True}]
+    assert calls == [
+        {"timeout": 5.0, "wanted_id": None, "stop_early": True, "scanner_factory": None}
+    ]
 
 
 def test_default_grace_is_one_second() -> None:
@@ -219,3 +221,113 @@ async def test_discover_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ble, "_scan", fake_scan)
     assert await ble.discover(3.0) == [ble.DeviceInfo(UUID_1, TANK, -58)]
     assert calls == [(3.0, {})]
+
+
+# --- spec 005 M2: open_ble / locate with a Target (T034) ---------------------------------------
+
+STAGE = Target(UUID_1, "stage", "selected")
+
+
+async def locate(
+    target: Target | str | None,
+    adverts: list[tuple[float, tuple[str, str, int | None]]],
+    *,
+    timeout: float = 0.4,
+) -> tuple[ble.DeviceInfo, float]:
+    started = time.monotonic()
+    _, chosen = await ble.locate(target, timeout, scanner_factory=timed_scanner(adverts))
+    return chosen, time.monotonic() - started
+
+
+async def test_target_stops_at_first_sight() -> None:
+    chosen, elapsed = await locate(
+        STAGE, [(0.02, (UUID_2, TANK, -50)), (0.05, (UUID_1, TANK, -58))], timeout=2.0
+    )
+    assert chosen.identifier == UUID_1
+    assert elapsed < 0.5  # no grace period, far below the timeout
+
+
+async def test_target_device_carries_nickname_and_chosen_by() -> None:
+    chosen, _ = await locate(STAGE, [(0.01, (UUID_1, TANK, -58))])
+    assert (chosen.nickname, chosen.chosen_by, chosen.rssi) == ("stage", "selected", -58)
+
+
+async def test_target_matches_case_insensitively() -> None:
+    target = Target(UUID_1.lower(), None, "environment")
+    chosen, _ = await locate(target, [(0.01, (UUID_1, TANK, -58))])
+    assert chosen.identifier == UUID_1
+    assert chosen.chosen_by == "environment"
+
+
+async def test_target_absent_others_seen_lists_tank_g_strongest_first() -> None:
+    with pytest.raises(TargetNotFoundError) as caught:
+        await locate(
+            STAGE,
+            [
+                (0.01, (UUID_3, TANK, -70)),
+                (0.02, (SPEAKER_ID, "Some Speaker", -30)),
+                (0.03, (UUID_2, TANK, -61)),
+            ],
+            timeout=0.2,
+        )
+    err = caught.value
+    assert err.target == STAGE
+    assert [d.identifier for d in err.seen] == [UUID_2, UUID_3]
+    assert err.exit_code == 3
+    assert str(err) == f"stage ({UUID_1}) not found"
+
+
+async def test_target_absent_waits_the_timeout_and_nothing_seen() -> None:
+    started = time.monotonic()
+    with pytest.raises(TargetNotFoundError) as caught:
+        await ble.locate(STAGE, 0.2, scanner_factory=timed_scanner([]))
+    assert caught.value.seen == ()
+    assert time.monotonic() - started >= 0.2
+
+
+async def test_no_target_one_pedal_is_only_one_found() -> None:
+    chosen, _ = await locate(None, [(0.01, (UUID_1, TANK, -58)), (0.02, (SPEAKER_ID, "S", -30))])
+    assert chosen.identifier == UUID_1
+    assert chosen.chosen_by == "only_one_found"
+    assert chosen.nickname is None
+
+
+async def test_no_target_no_pedal() -> None:
+    with pytest.raises(NoDeviceFoundError) as caught:
+        await locate(None, [(0.01, (SPEAKER_ID, "S", -30))], timeout=0.1)
+    assert not isinstance(caught.value, TargetNotFoundError)
+
+
+async def test_no_target_several_pedals_strongest_first() -> None:
+    with pytest.raises(MultipleDevicesError) as caught:
+        await locate(None, [(0.01, (UUID_2, TANK, -61)), (0.02, (UUID_1, TANK, -58))])
+    assert [d.identifier for d in caught.value.candidates] == [UUID_1, UUID_2]
+
+
+async def test_plain_identifier_string_is_device_option() -> None:
+    chosen, _ = await locate(UUID_1, [(0.01, (UUID_1, TANK, -58))])
+    assert chosen.chosen_by == "device_option"
+    assert chosen.nickname is None
+    with pytest.raises(TargetNotFoundError, match=f"device {UUID_2} not found"):
+        await locate(UUID_2, [(0.01, (UUID_1, TANK, -58))], timeout=0.1)
+
+
+async def test_target_is_connected_whatever_its_name() -> None:
+    chosen, _ = await locate(
+        Target(SPEAKER_ID, None, "device_option"), [(0.01, (SPEAKER_ID, "Some Speaker", -30))]
+    )
+    assert chosen.name == "Some Speaker"
+
+
+async def test_open_ble_builds_the_transport_for_the_located_device() -> None:
+    transport, chosen = await ble.open_ble(
+        STAGE, 0.4, scanner_factory=timed_scanner([(0.01, (UUID_1, TANK, -58))])
+    )
+    assert isinstance(transport, ble.BleakTransport)
+    assert chosen.chosen_by == "selected"
+
+
+def test_select_device_keeps_its_signature() -> None:
+    found = [ble.DeviceInfo(UUID_1, TANK, -58)]
+    assert select_device(found, UUID_1.lower()).identifier == UUID_1
+    assert select_device(found, None).chosen_by is None

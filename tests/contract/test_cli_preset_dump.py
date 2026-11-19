@@ -97,7 +97,13 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
     doc = preset_json(capsys)
     assert doc["schema_version"] == 2
     assert doc["command"] == "preset dump"
-    assert doc["device"] == {"identifier": "3F1A-UUID", "name": "TANK-Gv2_BLE", "rssi": -58}
+    assert doc["device"] == {
+        "identifier": "3F1A-UUID",
+        "name": "TANK-Gv2_BLE",
+        "rssi": -58,
+        "nickname": None,
+        "chosen_by": "only_one_found",
+    }
     assert doc["identity"]["name"] == "TANK-Gv2"
     assert doc["identity"]["firmware"] == 96
     assert "regions" not in doc
@@ -142,7 +148,7 @@ def test_sends_only_query_global_and_preset_read(
 def test_human_block(capsys: pytest.CaptureFixture[str]) -> None:
     code, out, err, _ = run(capsys, ["preset", "dump"])
     assert code == 0
-    assert err == ""
+    assert err == "pedal: 3F1A-UUID  -58 dBm  (only one found)\n"  # spec 005 pedal line
     assert out.splitlines() == [
         "Current preset  (TANK-Gv2, firmware 96)   type 4 @ 0x10000000, 21 bytes",
         STATE_LINE,
@@ -253,7 +259,8 @@ def test_read_timeout_exit_6(capsys: pytest.CaptureFixture[str], json_flag: bool
     code = main(argv, transport_factory=factory_for(fake))
     out, err = capsys.readouterr()
     assert code == 6
-    assert err.startswith("error:")
+    error_lines = [line for line in err.splitlines() if not line.startswith("pedal: ")]
+    assert error_lines[0].startswith("error:")
     assert "Traceback" not in err
     assert out == ""
     assert fake.closed

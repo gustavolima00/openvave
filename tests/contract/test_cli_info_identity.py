@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable
 from datetime import datetime
+from pathlib import Path
 
+import jsonschema
 import pytest
 
 import openvave
 from openvave.cli import main
+from openvave.devices import Target
 from openvave.errors import (
     BluetoothUnavailableError,
     HandshakeError,
@@ -68,7 +71,7 @@ def test_human_output(capsys: pytest.CaptureFixture[str]) -> None:
     assert "TANK-Gv2" in out
     assert "firmware 96" in out
     assert "3F1A-UUID" in out
-    assert err == ""
+    assert err == "pedal: 3F1A-UUID  -58 dBm  (only one found)\n"  # spec 005 pedal line
     assert fake.sent[0] == CAP.tx(QUERY)
     assert fake.closed
 
@@ -86,13 +89,19 @@ def test_json_output(capsys: pytest.CaptureFixture[str], argv: list[str]) -> Non
     fake = FakeTransport.from_capture(FW96_CONNECT)
     code, out, err = run(capsys, argv, factory_for(fake))
     assert code == 0
-    assert err == ""
+    assert err == ""  # no pedal line with --json
     doc = json.loads(out)
     assert doc["schema_version"] == 2
     assert doc["command"] == "info"
     read_at = datetime.fromisoformat(doc["read_at"])
     assert read_at.utcoffset() is not None and read_at.utcoffset().total_seconds() == 0
-    assert doc["device"] == {"identifier": "3F1A-UUID", "name": "TANK-Gv2_BLE", "rssi": -58}
+    assert doc["device"] == {
+        "identifier": "3F1A-UUID",
+        "name": "TANK-Gv2_BLE",
+        "rssi": -58,
+        "nickname": None,
+        "chosen_by": "only_one_found",
+    }
     identity = doc["identity"]
     assert identity["name"] == "TANK-Gv2"
     assert identity["firmware"] == 96
@@ -112,11 +121,11 @@ def test_options_reach_factory(capsys: pytest.CaptureFixture[str]) -> None:
     fake = FakeTransport.from_capture(FW96_CONNECT)
     code, _, _ = run(
         capsys,
-        ["--device", "ABC", "info", "--scan-timeout", "3"],
+        ["--device", "AA:BB:CC:DD:EE:01", "info", "--scan-timeout", "3"],
         factory_for(fake, calls=calls),
     )
     assert code == 0
-    assert calls == [("ABC", 3.0)]
+    assert calls == [(Target("AA:BB:CC:DD:EE:01", None, "device_option"), 3.0)]
 
 
 @pytest.mark.parametrize(
@@ -240,3 +249,36 @@ def test_usage_error_exit_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["bogus"]) == 2
     assert main([]) == 2
     capsys.readouterr()
+
+
+# --- spec 005 M2: nickname and chosen_by in the JSON device object (T038) ----------------------
+
+SCHEMAS_001 = Path(__file__).resolve().parents[2] / "specs" / "001-readonly-ble-connection"
+
+
+@pytest.mark.parametrize("name", ["info.schema.json", "preset-dump.schema.json"])
+def test_001_device_definition_has_the_optional_choice_keys(name: str) -> None:
+    schema = json.loads((SCHEMAS_001 / "contracts" / name).read_text(encoding="utf-8"))
+    device = schema["$defs"]["device"]
+    assert device["required"] == ["identifier", "name", "rssi"]  # added keys only
+    assert device["properties"]["nickname"] == {"type": ["string", "null"]}
+    assert device["properties"]["chosen_by"]["enum"] == [
+        "device_option",
+        "environment",
+        "selected",
+        "only_one_found",
+        None,
+    ]
+
+
+def test_json_device_validates_against_info_schema(capsys: pytest.CaptureFixture[str]) -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    code, out, _ = run(capsys, ["info", "--json"], factory_for(fake))
+    assert code == 0
+    doc = json.loads(out)
+    assert {"nickname", "chosen_by"} <= set(doc["device"])
+    schema = json.loads((SCHEMAS_001 / "contracts" / "info.schema.json").read_text("utf-8"))
+    jsonschema.validate(doc, schema, cls=jsonschema.Draft202012Validator)
+    old = json.loads(json.dumps(doc))
+    del old["device"]["nickname"], old["device"]["chosen_by"]
+    jsonschema.validate(old, schema, cls=jsonschema.Draft202012Validator)  # 0.4.0 documents too
