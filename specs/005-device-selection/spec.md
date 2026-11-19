@@ -24,6 +24,21 @@ data) and [`specs/protocol/command-layer.md`](../protocol/command-layer.md) (con
 feature sends **no new pedal message**: it changes how a pedal is found, chosen and reported, and
 reuses the confirmed handshake only where a story says so.
 
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: Should spec 005 add a persistent connection? → A: Not in the CLI: commands stay one-off
+  (connect, act, disconnect) and the CLI's focus is visibility of the pointed-at pedal and
+  switching. The library MUST support a long-lived connection (open, many operations, status,
+  close) for code built on it.
+- Q: What happens when the selected pedal is not found but another Tank-G is? → A: Refuse every
+  command (exit 3), name the selected pedal, list the pedals seen, hint `--device` / `select`; no
+  fallback.
+- Q: Does the configuration remember one selected pedal or a list? → A: A list of known pedals with
+  unique nicknames, one marked as the default; `select` changes the default, `forget` clears the
+  default or removes a named entry.
+
 ## Starting point (0.4.0, 2026-11-19)
 
 What openvave does today:
@@ -156,8 +171,8 @@ choice reasons and check the human line and the JSON fields.
    carries the nickname (or none) and how the pedal was chosen (`selected`, `device_option`,
    `only_one_found`).
 3. **Given** a selection exists, **When** the owner runs `openvave device` (show), **Then** it prints
-   the nickname, identifier, when it was selected and the firmware last seen, without scanning or
-   connecting, and exits 0; with no selection it says so and how to make one, and exits 0.
+   the default's nickname, identifier, when it was selected and the firmware last seen, then the
+   other known pedals, without scanning or connecting, and exits 0; with no selection it says so and how to make one, and exits 0.
 4. **Given** `openvave device --check`, **When** it runs, **Then** it also scans and says whether
    the selected pedal is in range now (exit 3 if not), still without connecting.
 
@@ -166,7 +181,7 @@ choice reasons and check the human line and the JSON fields.
 ### User Story 4 - Switch, rename, override and forget (Priority: P2)
 
 The owner switches the default to another pedal, renames a nickname, uses a different pedal for one
-command without changing the default, and forgets the selection (or a remembered pedal) entirely.
+command without changing the default, and forgets the selection (or a known pedal) entirely.
 
 **Why this priority**: the selection is only safe if it is easy to change and to undo.
 
@@ -184,7 +199,12 @@ checking the stored state and the `device` output after each step; run one comma
 3. **Given** a nickname exists, **When** the owner renames it, **Then** commands accept the new
    nickname and reject the old one as unknown (exit 2, nothing scanned).
 4. **Given** a selection, **When** the owner runs `openvave forget`, **Then** nothing is selected any
-   more, the confirmation says what was forgotten, and the next command behaves as in 0.4.0.
+   more (known pedals and their nicknames stay), the confirmation says what was forgotten, and the
+   next command behaves as in 0.4.0. **When** the owner runs `openvave forget home`, **Then** that
+   known pedal and its nickname are removed (and the default is cleared if it was `home`).
+6. **Given** `stage` (default) and `home` are known pedals, **When** the owner runs
+   `openvave select home`, **Then** `home` becomes the default without copying its identifier
+   again, and `openvave device` lists both with `home` marked as the default.
 5. **Given** the environment variable `OPENVAVE_DEVICE` is set, **When** a command runs without
    `--device`, **Then** the variable's identifier or nickname is used for that run, ahead of the
    saved selection; `--device` still wins over both.
@@ -216,48 +236,45 @@ location, exercise listing, choosing, saving and forgetting, and connecting to t
 
 ---
 
-### User Story 6 - Keep one connection across several commands (Priority: P3, scope to be decided)
+### User Story 6 - Keep one connection open from Python (Priority: P3)
 
-The owner wants to "connect" once, run several commands quickly over the same connection, see
-whether openvave is connected, and "disconnect" (for example to hand the pedal back to the phone
-app). Today every command connects and disconnects (about 1–2 s each), and there is nothing to
-disconnect.
+A library user (for example an app, a live controller or a long script) opens a connection to the
+chosen pedal once, runs many reads and writes over it for as long as they like, can check whether
+it is still connected and to which pedal, and closes it when done, which releases the pedal to the
+phone app. To switch pedals they close the connection and open one to the other pedal. The CLI does
+not get a persistent connection: each command is a one-off that connects, acts and disconnects.
 
-**Why this priority**: it would make interactive use faster and match the owner's mental model, but
-it changes the process model (something must stay running and hold the pedal's only connection),
-which affects safety, scripting and every platform. The batch `set FIELD=VALUE ...` form from 0.4.0
-already covers the most common multi-change case on one connection.
+**Why this priority**: tools built on the library need to hold the pedal without paying a scan and
+handshake per operation; the CLI's needs are covered by Stories 1–4 (visibility and switching) and
+by the batch `set FIELD=VALUE ...` form.
 
-**Scope**: [NEEDS CLARIFICATION: Should a persistent connection be part of spec 005? Options: (A)
-no, defer it to a later spec and only make the one-connection-per-command model clear (`device`
-shows "not connected; each command connects for its own run"); (B) an interactive shell
-(`openvave shell`) that connects once and runs commands typed into it until `quit`/`disconnect`;
-(C) a background service with `openvave connect`, `openvave status`, `openvave disconnect`, that
-other commands route through.]
+**Independent Test**: in the hardware-free suite with a fake transport, open a connection, run many
+reads and a write, check exactly one connection and one handshake happened, check the connection
+status and pedal, drop the link and check the next operation fails as lost, close and check the
+transport was released.
 
-**Independent Test** (if in scope): open the persistent connection, run three reads and one write,
-check only one connection was made, disconnect, and check the pedal advertises again.
+**Acceptance Scenarios**:
 
-**Acceptance Scenarios** (if in scope):
-
-1. **Given** a persistent connection to `stage`, **When** the owner runs two commands in a row,
-   **Then** neither scans nor reconnects, and each still states which pedal it acted on.
-2. **Given** a persistent connection, **When** the owner disconnects, **Then** the pedal is released
-   and becomes visible to the phone app and to a new scan.
-3. **Given** the link drops while connected (pedal switched off), **When** the next command runs,
-   **Then** it reports the lost connection (exit 6) and the status shows not connected; nothing is
-   retried silently.
+1. **Given** a connection opened to `stage`, **When** the library user runs any number of
+   operations, **Then** none of them scans or reconnects.
+2. **Given** an open connection, **When** the user asks whether it is connected and to which pedal,
+   **Then** the answer reflects the live link (identifier, nickname, how it was chosen).
+3. **Given** an open connection, **When** the user closes it, **Then** the pedal is released and
+   advertises again; closing twice is harmless.
+4. **Given** the link drops (pedal switched off), **When** the next operation runs, **Then** it fails
+   as a lost connection, the status reports not connected, and nothing reconnects or retries
+   silently; the user may open a new connection.
+5. **Given** an open connection to one pedal, **When** the user wants another, **Then** they close
+   it and open one to the other; one session never talks to two pedals.
 
 ---
 
 ### Edge Cases
 
-- **Selected pedal not in range, another Tank-G is**: [NEEDS CLARIFICATION: what should a pedal
-  command do? Options: (A) refuse every command (exit 3), name the selected pedal and list what
-  was seen, hint `--device` / `select`; (B) refuse writes but let reads fall back to the only other
-  pedal with a warning; (C) fall back for every command with a warning line naming the pedal used.]
-  Whatever the answer, a write MUST NOT go to a pedal other than the selected one without the user
-  naming it for that run.
+- **Selected pedal not in range, another Tank-G is**: every command (read or write) refuses with
+  exit 3, names the selected pedal (nickname and identifier), lists the Tank-G pedals that were
+  seen (numbered, strongest first), and hints `--device ID` for this run or `openvave select` to
+  switch. Nothing connects to the other pedal.
 - **Selected pedal not in range, no Tank-G in range**: exit 3; the message names the selected pedal
   and keeps the existing hint (switch it on, close the phone app, another program may hold it).
 - **Pedal held by the phone app or by another openvave process**: it does not advertise, so it is
@@ -307,20 +324,22 @@ check only one connection was made, disconnect, and check the pedal advertises a
 - **FR-009**: The CLI MUST offer `openvave select <ID | NICKNAME | ROW>` with an optional
   `--name NICKNAME`, which remembers that pedal as the default for this user on this computer.
 - **FR-010**: Selecting MUST check that the pedal is in range (a scan that stops when it is seen)
-  and refuse with exit 3 otherwise, unless `--offline` is given with a full identifier.
+  and refuse with exit 3 otherwise, unless `--offline` is given with a full identifier. Selecting a
+  known pedal by its nickname does not need it in range (its identifier is already known).
 - **FR-011**: `select` with no argument MUST select the only Tank-G in range, or list them and
   select nothing when there are several (exit 4) or none (exit 3). The CLI MUST never prompt
   interactively.
 - **FR-012**: The selection MUST be stored in a per-user configuration file in the platform's
-  standard per-user configuration location, in a documented human-readable format, holding for the
-  selected pedal at least: identifier, nickname, when it was selected, and the name and firmware
-  last seen. The file MUST contain no other personal data and MUST never be sent anywhere.
+  standard per-user configuration location, in a documented human-readable format, holding for each
+  known pedal at least: identifier, nickname (optional), when it was added and last selected, and the
+  name and firmware last seen, plus which known pedal is the default (or none). The file MUST contain no other personal data and MUST never be sent anywhere.
 - **FR-013**: The configuration location MUST be overridable (environment variable
   `OPENVAVE_CONFIG`) so tests and scripts can use a temporary one.
-- **FR-014**: [NEEDS CLARIFICATION: does the configuration remember only the one selected pedal, or
-  a list of known pedals, each with a nickname, of which one is the default? A list makes
-  `--device home` and switching by nickname work for pedals that are not the default; one entry is
-  simpler.]
+- **FR-014**: The configuration MUST hold a list of **known pedals**, each with an optional unique
+  nickname, and at most one of them marked as the **default** (the selection). A pedal becomes known
+  only when the owner selects it (or names it with `--name`); pedals are never added silently.
+  `--device NICKNAME` and `select NICKNAME` work for any known pedal. `openvave device` lists every
+  known pedal and marks the default; `scan` shows the nickname of every known pedal it sees.
 - **FR-015**: Nicknames MUST be short (1–32 characters: letters, digits, `-`, `_`), unique,
   case-insensitive, and MUST NOT look like an identifier (MAC or UUID form).
 
@@ -332,9 +351,10 @@ check only one connection was made, disconnect, and check the pedal advertises a
 - **FR-017**: With a known target (any of the first three), the scan MUST stop as soon as that
   pedal is seen and MUST NOT connect to any other pedal.
 - **FR-018**: An unknown nickname MUST be refused before scanning (exit 2), listing known nicknames.
-- **FR-019**: Behaviour when the saved selection is not in range follows the Edge Cases decision;
-  in every option a write MUST only go to the selected pedal or one named with `--device` /
-  `OPENVAVE_DEVICE` for that run.
+- **FR-019**: When the target from FR-016 (`--device`, `OPENVAVE_DEVICE` or the saved selection)
+  is not seen, the command MUST refuse with exit 3, reads and writes alike, naming the target and
+  listing the Tank-G pedals seen with the `--device` / `select` hints; it MUST NOT fall back to
+  another pedal.
 - **FR-020**: When several Tank-G are in range and no target is known, commands MUST exit 4 as
   today, list the candidates (numbered, strongest first), and hint both `--device ID` and
   `openvave select ID`.
@@ -346,18 +366,20 @@ check only one connection was made, disconnect, and check the pedal advertises a
   `--json`, the `device` object MUST add `nickname` (or null) and `chosen_by`
   (`device_option`, `environment`, `selected`, `only_one_found`); existing fields are unchanged, so
   `schema_version` stays 2.
-- **FR-022**: `openvave device` MUST show the saved selection (or that there is none) and the
-  configuration path without using Bluetooth; `--check` MUST add a scan reporting whether it is in
+- **FR-022**: `openvave device` MUST show the default (or that there is none), every known pedal,
+  and the configuration path without using Bluetooth; `--check` MUST add a scan reporting whether it is in
   range; `--json` MUST print one document.
-- **FR-023**: After a successful connection, the name and firmware last seen for the selected pedal
+- **FR-023**: After a successful connection to a known pedal, its name and firmware last seen
   SHOULD be updated in the configuration (best effort: a failure to write it MUST NOT fail the
   command).
 
 **Switching and forgetting**
 
-- **FR-024**: Selecting another pedal MUST replace the default and report what it replaced.
-- **FR-025**: The CLI MUST offer renaming a nickname and `openvave forget` (forget the selection;
-  with a nickname or identifier, forget that entry if FR-014 keeps a list). Forgetting MUST work
+- **FR-024**: Selecting another pedal MUST make it the default (adding it to the known pedals if
+  new) and report which default it replaced; the previous default stays known.
+- **FR-025**: The CLI MUST offer renaming a nickname and `openvave forget`: with no argument it
+  clears the default and keeps the known pedals; with a nickname or identifier it removes that known
+  pedal (clearing the default if it was that one). Forgetting MUST work
   without Bluetooth and on an invalid configuration file (it resets it, keeping a copy).
 - **FR-026**: `--device` and `OPENVAVE_DEVICE` MUST NOT change the saved configuration.
 
@@ -376,9 +398,15 @@ check only one connection was made, disconnect, and check the pedal advertises a
 
 **Connection model**
 
-- **FR-031**: Unless User Story 6 is brought into scope, each command keeps its own connection and
-  closes it on exit, and the README MUST state this plainly ("openvave holds the pedal only while a
-  command runs; there is nothing to disconnect"), next to the single-connection note.
+- **FR-031**: CLI commands MUST keep one connection per command, closed on exit; the CLI MUST NOT
+  offer a persistent connection (no shell, no background service, no connect/disconnect commands).
+  The README MUST state this plainly ("openvave holds the pedal only while a command runs; there is
+  nothing to disconnect"), next to the single-connection note, and `openvave device` MUST say the
+  selection is a choice, not an open connection.
+- **FR-031a**: The library MUST support a long-lived connection: open it explicitly (as an
+  alternative to a scoped block), run any number of operations over it, query whether it is
+  connected and to which pedal, and close it explicitly (idempotent). A dropped link MUST be
+  reported as lost on the next operation and in the status, with no automatic reconnect or retry.
 
 **Documentation**
 
@@ -394,15 +422,18 @@ check only one connection was made, disconnect, and check the pedal advertises a
 - A pedal identity that is the same on every computer (for example from device-info bytes whose
   meaning is unknown). Recorded as a research idea; it needs two pedals and is `hypothesis` today.
 - Syncing the configuration between computers.
+- A persistent connection in the CLI (interactive shell, background service, connect/disconnect
+  commands); the long-lived connection is a library feature only (FR-031a).
 
 ### Key Entities
 
 - **Found pedal**: one advertiser seen in a scan: identifier, advertised name, signal strength,
   whether it is a Tank-G; optionally firmware (with `--identify`).
-- **Remembered pedal**: identifier (specific to this computer), nickname, selected-at time, name and
-  firmware last seen. One of them (or the only one, per FR-014) is the **selection**.
-- **Configuration**: the per-user file holding remembered pedals; location overridable; versioned
-  format.
+- **Known pedal**: identifier (specific to this computer), optional unique nickname, added and
+  last-selected times, name and firmware last seen. At most one known pedal is the **default**
+  (the selection).
+- **Configuration**: the per-user file holding the known pedals and which one is the default;
+  location overridable; versioned format.
 - **Pedal choice**: the pedal a command will use and its reason (`device_option`, `environment`,
   `selected`, `only_one_found`).
 

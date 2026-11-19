@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,12 +31,10 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left on purpose for `/speckit-clarify`:
-  1. **Persistent connection** (User Story 6): defer to a later spec, interactive shell, or
-     background service with connect / status / disconnect.
-  2. **Selected pedal absent but another Tank-G in range** (Edge Cases, FR-019): refuse always,
-     fall back for reads only, or fall back with a warning.
-  3. **One selected pedal or a list of known pedals with nicknames** (FR-014).
+- Three `[NEEDS CLARIFICATION]` markers were resolved with `/speckit-clarify` on 2026-11-19 (see
+  the spec's Clarifications section): no persistent connection in the CLI, long-lived connection in
+  the library (US6, FR-031/FR-031a); no fallback when the selected pedal is absent (FR-019); a list
+  of known pedals with one default (FR-014).
 - CLI command and option names, the `OPENVAVE_DEVICE` / `OPENVAVE_CONFIG` variables and JSON
   field names appear on purpose: specs 001–004 name the CLI surface in the spec, and Constitution
   V makes the CLI a user-facing product. No language, library or code structure is named. Names are
