@@ -58,8 +58,8 @@ All notable changes to this project are documented here. The format follows
   (`on`). Each sends the same frames as the matching command and returns its `--json` document
   plus `summary` and `reminder` (`not saved; discard with preset_reload` after an edit).
 - The command line's opt-ins are arguments, passed to the library unchanged: `dry_run` (plan and
-  frames, nothing sent), `experimental` (messages not yet confirmed: block switches, LED colour,
-  loopback; untested firmware), `discard_edits` (select, reload, bypass on). Unknown fields and
+  frames, nothing sent), `experimental` (messages not yet confirmed — none on fw 96 since spec 007
+  — and untested firmware), `discard_edits` (select, reload, bypass on). Unknown fields and
   bad values are refused before connecting; a batch that stops midway is an error carrying the
   `set --json` document so far as `partial:`.
 - `bypass_off` without `position` returns to the preset `bypass_on` reported in the same server
@@ -121,7 +121,8 @@ All notable changes to this project are documented here. The format follows
   `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
   on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current
   directory, which was often a git working tree. The `Backup saved:` line gives the path as before;
-  `--backup-dir DIR` is unchanged.
+  `--backup-dir DIR` is unchanged. `openvave mcp` uses the same folder (and honours
+  `OPENVAVE_BACKUP_DIR` too).
 
 ### Documentation
 

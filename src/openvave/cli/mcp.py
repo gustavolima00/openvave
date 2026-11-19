@@ -7,7 +7,6 @@ This module needs no MCP package: it parses the options and imports
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,15 +15,13 @@ INSTALL_HINT = "error: the MCP server needs the 'mcp' extra: pip install 'openva
 
 
 def default_backup_dir() -> Path:
-    """The per-user backup folder (spec 006 research R10): ``$XDG_DATA_HOME/openvave/backups``,
-    else ``%LOCALAPPDATA%\\openvave\\backups`` on Windows, else
-    ``~/.local/share/openvave/backups``."""
-    xdg = os.environ.get("XDG_DATA_HOME")
-    if xdg:
-        return Path(xdg) / "openvave" / "backups"
-    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
-        return Path(os.environ["LOCALAPPDATA"]) / "openvave" / "backups"
-    return Path.home() / ".local" / "share" / "openvave" / "backups"
+    """The per-user backup folder (spec 006 research R10), shared with the command line's
+    automatic backups (:func:`openvave.cli.files.default_backup_dir`): ``$OPENVAVE_BACKUP_DIR``,
+    else ``$XDG_DATA_HOME/openvave/backups``, else ``%LOCALAPPDATA%\\openvave\\backups`` on
+    Windows, else ``~/.local/share/openvave/backups``."""
+    from openvave.cli.files import default_backup_dir as shared
+
+    return shared()
 
 
 def _non_negative(text: str) -> float:

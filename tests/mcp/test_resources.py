@@ -44,9 +44,9 @@ async def test_fields(tmp_path: Path) -> None:
     assert fields["amp_type"]["range"] == {"min": 0, "max": 8}
     assert fields["amp_on"]["kind"] == "block switch"
     assert fields["amp_on"]["syntax"] == "on | off"
-    assert fields["amp_on"]["experimental"] is True  # block switches are only observed
+    assert fields["amp_on"]["experimental"] is False  # confirmed in spec 007 gate session C
     assert fields["led_colour"]["kind"] == "LED"
-    assert fields["led_colour"]["experimental"] is True
+    assert fields["led_colour"]["experimental"] is False
     reverb = fields["reverb_decay"]
     assert reverb["kind"] == "typed knob"
     assert reverb["types"] == list(REVERB_TYPES)

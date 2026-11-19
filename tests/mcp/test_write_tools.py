@@ -15,7 +15,7 @@ from openvave.cli import main
 from openvave.transport.fake import FakeTransport
 from tests.mcp.conftest import PEDAL, CountingFactory, open_harness, options
 from tests.support import storage_fixture as sf
-from tests.support.write_fixture import EDIT, NORMAL, TUNER, make_fake, writes
+from tests.support.write_fixture import EDIT, NORMAL, TUNER, demote, make_fake, writes
 
 BYPASSED = bytes([0, 0, 0xFF, NORMAL])
 P = sf.PUBLIC_PRESET
@@ -140,7 +140,15 @@ async def test_dry_run_sends_nothing(
     assert "dry run" in result["summary"]
 
 
-async def test_set_observed_field_needs_experimental(tmp_path) -> None:
+async def test_set_block_switch_runs_without_experimental(tmp_path) -> None:
+    # confirmed since spec 007 gate session C
+    async with open_harness(options(tmp_path), factory_of(lambda: make_fake(NORMAL))) as h:
+        result = await h.ok("pedal_set", {"changes": {"delay_on": "on"}})
+    assert result["result"]["applied"] is True
+
+
+async def test_set_observed_field_needs_experimental(tmp_path, monkeypatch) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     async with open_harness(options(tmp_path), factory_of(lambda: make_fake(NORMAL))) as h:
         text = await h.error("pedal_set", {"changes": {"delay_on": "on"}})
         assert text.startswith("experimental_required: ")
@@ -307,7 +315,16 @@ async def test_bypass_off_refused_when_not_bypassed(tmp_path) -> None:
         assert writes(h.factory.fake) == []
 
 
-async def test_loopback_needs_experimental(tmp_path) -> None:
+async def test_loopback_runs_without_experimental(tmp_path) -> None:
+    # confirmed since spec 007 gate session C
+    make = lambda: make_fake(NORMAL, status=b"\x00")  # noqa: E731
+    async with open_harness(options(tmp_path), factory_of(make)) as h:
+        result = await h.ok("loopback", {"on": True})
+    assert result["result"]["applied"] is True
+
+
+async def test_loopback_needs_experimental_when_not_confirmed(tmp_path, monkeypatch) -> None:
+    demote(monkeypatch, "loopback")
     make = lambda: make_fake(NORMAL, status=b"\x00")  # noqa: E731
     async with open_harness(options(tmp_path), factory_of(make)) as h:
         text = await h.error("loopback", {"on": True})

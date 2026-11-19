@@ -68,10 +68,10 @@ def fields_document() -> dict[str, Any]:
         "fields": [_field(spec) for spec in WRITABLE_FIELDS.values()],
         "notes": (
             "pedal_set takes {field: value} with these value texts (JSON numbers and booleans "
-            "are accepted too). Fields with experimental: true use a write message only "
-            "observed on hardware and need experimental: true in the call; untested firmware "
-            "needs it for every write. Edits change the current sound only (not saved; "
-            "preset_reload discards them)."
+            "are accepted too). Fields with experimental: true use a write message not yet "
+            "confirmed on hardware and need experimental: true in the call (none on firmware 96 "
+            "since spec 007); untested firmware needs it for every write. Edits change the "
+            "current sound only (not saved; preset_reload discards them)."
         ),
     }
 
@@ -144,8 +144,9 @@ openvave is unofficial: not affiliated with or endorsed by M-VAVE / Cuvave.
 ## Opt-ins (arguments of each call, never remembered)
 
 - `dry_run: true`: plan only; the result shows the exact frames, nothing is sent.
-- `experimental: true`: allows write messages only *observed* on hardware (block switches, LED
-  colour, loopback) and any write on a firmware other than 96.
+- `experimental: true`: allows write messages not yet *confirmed* on hardware (none on firmware
+  96 since spec 007: block switches, LED colour and loopback are confirmed) and any write on a
+  firmware other than 96.
 - `discard_edits: true`: allows losing unsaved edits of the current sound.
 - `unsafe: true`: allows overwriting stored presets (save / restore).
 
