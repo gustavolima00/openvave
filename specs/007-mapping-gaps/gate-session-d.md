@@ -28,3 +28,25 @@ P=/Users/gustavomarques/personal/riffmind/openvave/captures/private
 | 8 | restore all | `uv run openvave preset restore $P/20261119-gate007-D0.json --all --unsafe --backup-dir $P` (dry run first: `differ: 9C 9D (2 of 36)`) | 3 × ACK | `restored` |
 | 9 | select 1B | `uv run openvave preset select 1B` | `00 59 22 09 00 00 04 01 00 00 e0 01 00 00 01 18` | back on 1B |
 | 10 | backup D1 | `uv run openvave preset backup --output $P/20261119-gate007-D1.json` | reads only | equal to D0 apart from `created_at` |
+
+## Result (2026-11-19, owner at the pedal)
+
+Every persistent step ran its dry run first; each frame was compared with the independent encoding
+(copy, import, selects) or with the image computed from D0 (swap: 773 bytes equal, checksum `88`;
+restore: D0's image, checksum `7a`) and approved in chat before the real run.
+
+| Step | Result |
+|---|---|
+| export 1A | read-only; `raw` = the public 1A bytes |
+| copy 1A → 9D | slot write, commit, select 9D: 3 × ACK; `verify stored 9D = 1A … copied` |
+| swap 9C ↔ 9D | image write (773 bytes, 5 Bluetooth writes), commit, select 9D: 3 × ACK; `verify 36 of 36 … swapped` |
+| import 1A file → 9D | slot write (same frame as the copy), commit, select 9D: 3 × ACK; `imported` |
+| restore all from D0 | `differ: 9C 9D (2 of 36)`; 3 × ACK; `restored` |
+| select 1B | ACK, applied |
+| D1 vs D0 | equal apart from `created_at` |
+
+Each command took its automatic backup first (`captures/private/tankg-backup-20261119-1703*-before-copy|swap.json`,
+`…-170509-before-import.json`, `…-170602-before-restore.json`). Traces stay in `captures/private/`
+(`20261119-gate007-{copy,swap,import}_d.trace`): they carry the stored presets read by the
+automatic backups, and no new message was sent (the stored-slot, stored-image, commit and select
+rows were already `confirmed`), so no excerpt is committed.

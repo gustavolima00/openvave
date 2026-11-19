@@ -112,6 +112,8 @@ All notable changes to this project are documented here. The format follows
   `swap_presets`, `plan_import` / `import_preset`, `export_preset`, `PresetFile`. JSON: the
   sequence-result schema adds the commands `preset copy|swap|import` and the actions `copy`,
   `import`, `swap`.
+  Tested on fw 96 (2026-11-19): export, copy 1A → 9D, swap 9C ↔ 9D, import, then restore all;
+  final backup equal to the first.
 - Documented: the MASTER knob is not reported over Bluetooth (no byte moved while it was turned,
   observed).
 
