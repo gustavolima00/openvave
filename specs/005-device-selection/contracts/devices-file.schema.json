@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/riffmind/openvave/specs/005-device-selection/contracts/devices-file.schema.json",
+  "title": "openvave known pedals (devices.json)",
+  "type": "object",
+  "required": ["format_version", "default", "devices"],
+  "additionalProperties": true,
+  "properties": {
+    "format_version": { "const": 1 },
+    "default": { "type": ["string", "null"], "description": "identifier of the default pedal; must be one of devices[].identifier" },
+    "devices": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/device" }
+    }
+  },
+  "$defs": {
+    "time": { "type": "string", "format": "date-time", "description": "UTC, ISO 8601" },
+    "device": {
+      "type": "object",
+      "required": ["identifier", "nickname", "added_at", "selected_at", "last_name", "last_firmware", "last_seen_at"],
+      "additionalProperties": true,
+      "properties": {
+        "identifier": { "type": "string", "description": "MAC (Linux/Windows) or CoreBluetooth UUID (macOS); specific to this computer" },
+        "nickname": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_-]{1,32}$" },
+        "added_at": { "$ref": "#/$defs/time" },
+        "selected_at": { "oneOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] },
+        "last_name": { "type": ["string", "null"] },
+        "last_firmware": { "type": ["integer", "null"], "minimum": 0 },
+        "last_seen_at": { "oneOf": [{ "$ref": "#/$defs/time" }, { "type": "null" }] }
+      }
+    }
+  }
+}

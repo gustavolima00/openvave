@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/riffmind/openvave/specs/005-device-selection/contracts/device.schema.json",
+  "title": "openvave device / select / forget / device rename --json",
+  "type": "object",
+  "required": ["schema_version", "command", "config_path", "default", "devices"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "const": 2 },
+    "command": { "enum": ["device", "select", "forget", "device rename"] },
+    "config_path": { "type": "string" },
+    "default": { "oneOf": [{ "$ref": "#/$defs/known" }, { "type": "null" }] },
+    "devices": { "type": "array", "items": { "$ref": "#/$defs/known" } },
+    "environment_override": { "type": ["string", "null"], "description": "value of OPENVAVE_DEVICE when set (device only)" },
+    "in_range": { "type": ["boolean", "null"], "description": "device --check only" },
+    "rssi": { "type": ["integer", "null"], "description": "device --check and select, when scanned" },
+    "previous_default": { "oneOf": [{ "$ref": "#/$defs/known" }, { "type": "null" }], "description": "select only" },
+    "removed": { "type": "array", "items": { "$ref": "#/$defs/known" }, "description": "forget only" }
+  },
+  "$defs": {
+    "known": {
+      "type": "object",
+      "required": ["identifier", "nickname", "added_at", "selected_at", "last_name", "last_firmware", "last_seen_at"],
+      "additionalProperties": true,
+      "properties": {
+        "identifier": { "type": "string" },
+        "nickname": { "type": ["string", "null"] },
+        "added_at": { "type": "string", "format": "date-time" },
+        "selected_at": { "type": ["string", "null"] },
+        "last_name": { "type": ["string", "null"] },
+        "last_firmware": { "type": ["integer", "null"] },
+        "last_seen_at": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

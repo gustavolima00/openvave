@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/riffmind/openvave/specs/005-device-selection/contracts/scan.schema.json",
+  "title": "openvave scan --json",
+  "type": "object",
+  "required": ["schema_version", "command", "scanned_at", "scan_seconds", "default_seen", "devices"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "const": 2 },
+    "command": { "const": "scan" },
+    "scanned_at": { "type": "string", "format": "date-time" },
+    "scan_seconds": { "type": "number" },
+    "default_seen": { "type": ["boolean", "null"], "description": "null when there is no default pedal" },
+    "devices": {
+      "type": "array",
+      "description": "Tank-G pedals first, strongest signal first; other advertisers only with --all",
+      "items": {
+        "type": "object",
+        "required": ["identifier", "name", "rssi", "tank_g", "nickname", "known", "selected"],
+        "additionalProperties": true,
+        "properties": {
+          "identifier": { "type": "string" },
+          "name": { "type": "string" },
+          "rssi": { "type": ["integer", "null"] },
+          "tank_g": { "type": "boolean" },
+          "nickname": { "type": ["string", "null"] },
+          "known": { "type": "boolean" },
+          "selected": { "type": "boolean" },
+          "firmware": { "type": ["integer", "null"], "description": "present only with --identify" },
+          "identify_error": { "type": ["string", "null"], "description": "present only with --identify" }
+        }
+      }
+    }
+  }
+}

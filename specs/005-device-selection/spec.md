@@ -38,6 +38,9 @@ reuses the confirmed handshake only where a story says so.
 - Q: Does the configuration remember one selected pedal or a list? → A: A list of known pedals with
   unique nicknames, one marked as the default; `select` changes the default, `forget` clears the
   default or removes a named entry.
+- Planning amendment: `select` takes a unique identifier prefix instead of a row number (rows are
+  ordered by signal strength, which can differ between the scan the owner read and the scan
+  `select` runs). See research R4.
 
 ## Starting point (0.4.0, 2026-11-19)
 
@@ -117,7 +120,7 @@ message when nothing is found.
 
 ### User Story 2 - Select a pedal once and have every command use it (Priority: P1)
 
-The owner picks a pedal from the search (by identifier, or by its position in the list) and
+The owner picks a pedal from the search (by identifier, or by the first characters of it when they match one pedal only) and
 optionally gives it a short nickname. From then on, every pedal command on that computer, for that
 user, connects to that pedal without asking for `--device`, even when another Tank-G is in range.
 
@@ -273,7 +276,7 @@ transport was released.
 
 - **Selected pedal not in range, another Tank-G is**: every command (read or write) refuses with
   exit 3, names the selected pedal (nickname and identifier), lists the Tank-G pedals that were
-  seen (numbered, strongest first), and hints `--device ID` for this run or `openvave select` to
+  seen (strongest first), and hints `--device ID` for this run or `openvave select` to
   switch. Nothing connects to the other pedal.
 - **Selected pedal not in range, no Tank-G in range**: exit 3; the message names the selected pedal
   and keeps the existing hint (switch it on, close the phone app, another program may hold it).
@@ -306,7 +309,7 @@ transport was released.
   any of them.
 - **FR-002**: Each row MUST show the identifier (in full, copyable), advertised name, signal
   strength (or unknown), nickname if any, and whether it is the selected pedal; rows are ordered by
-  signal strength, strongest first, and numbered so a row can be referred to.
+  signal strength, strongest first.
 - **FR-003**: The search MUST use the full scan time (it does not stop at the first pedal), so every
   pedal in range has the chance to be listed.
 - **FR-004**: `--all` MUST include other advertising devices, flagged as not a Tank-G.
@@ -321,7 +324,7 @@ transport was released.
 
 **Selection**
 
-- **FR-009**: The CLI MUST offer `openvave select <ID | NICKNAME | ROW>` with an optional
+- **FR-009**: The CLI MUST offer `openvave select <ID | ID-PREFIX | NICKNAME>` (a prefix of at least 4 characters that matches exactly one Tank-G in range; row numbers are not accepted because the order can change between two scans) with an optional
   `--name NICKNAME`, which remembers that pedal as the default for this user on this computer.
 - **FR-010**: Selecting MUST check that the pedal is in range (a scan that stops when it is seen)
   and refuse with exit 3 otherwise, unless `--offline` is given with a full identifier. Selecting a
@@ -356,7 +359,7 @@ transport was released.
   listing the Tank-G pedals seen with the `--device` / `select` hints; it MUST NOT fall back to
   another pedal.
 - **FR-020**: When several Tank-G are in range and no target is known, commands MUST exit 4 as
-  today, list the candidates (numbered, strongest first), and hint both `--device ID` and
+  today, list the candidates (strongest first), and hint both `--device ID` and
   `openvave select ID`.
 
 **Reporting the pedal**
