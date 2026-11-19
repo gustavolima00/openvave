@@ -1,195 +1,223 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 920" width="860" height="920" role="img" aria-labelledby="t d">
-<title id="t">Tank-G controls mapped to openvave fields</title>
-<desc id="d">Schematic of the Tank-G controls grouped by effect block in chain order, each labelled with its openvave field name and its byte in the 21-byte preset. Not the physical layout.</desc>
-<rect width="860" height="920" rx="14" fill="#f6f5f1"/>
-<text x="20" y="36" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="20" font-weight="700" fill="#1f2328">Tank-G controls → openvave fields</text>
-<text x="20" y="58" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#57606a">Schematic, grouped by effect block in chain order. Not the physical panel layout. "byte N" = offset in the 21-byte preset (preset dump).</text>
-<rect x="20" y="78" width="112" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="76.0" y="102" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">GATE</text>
-<text x="76.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">NOISE GATE</text>
-<path d="M56.9,189.1 A27,27 0 1,1 95.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="76.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="76.0" y1="170" x2="76.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="76.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">noise_gate</text>
-<text x="76.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 4</text>
-<text x="76.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<text x="76.0" y="304" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#8c959f">no on/off switch</text>
-<rect x="144" y="78" width="572" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="430.0" y="102" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">AMP</text>
-<text x="200.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">AMP TYPE</text>
-<line x1="183.0" y1="187.0" x2="179.5" y2="190.5" stroke="#57606a" stroke-width="2"/>
-<line x1="176.5" y1="174.7" x2="171.6" y2="175.7" stroke="#57606a" stroke-width="2"/>
-<line x1="177.8" y1="160.8" x2="173.2" y2="158.9" stroke="#57606a" stroke-width="2"/>
-<line x1="186.7" y1="150.0" x2="183.9" y2="145.9" stroke="#57606a" stroke-width="2"/>
-<line x1="200.0" y1="146.0" x2="200.0" y2="141.0" stroke="#57606a" stroke-width="2"/>
-<line x1="213.3" y1="150.0" x2="216.1" y2="145.9" stroke="#57606a" stroke-width="2"/>
-<line x1="222.2" y1="160.8" x2="226.8" y2="158.9" stroke="#57606a" stroke-width="2"/>
-<line x1="223.5" y1="174.7" x2="228.4" y2="175.7" stroke="#57606a" stroke-width="2"/>
-<line x1="217.0" y1="187.0" x2="220.5" y2="190.5" stroke="#57606a" stroke-width="2"/>
-<circle cx="200.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="200.0" y1="170" x2="200.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="200.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">amp_type</text>
-<text x="200.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 5</text>
-<text x="200.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">9 positions, 0–8</text>
-<text x="292.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">GAIN</text>
-<path d="M272.9,189.1 A27,27 0 1,1 311.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="292.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="292.0" y1="170" x2="292.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="292.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">gain</text>
-<text x="292.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 6</text>
-<text x="292.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<text x="384.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">TREBLE</text>
-<path d="M364.9,189.1 A27,27 0 1,1 403.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="384.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="384.0" y1="170" x2="384.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="384.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">treble</text>
-<text x="384.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 7</text>
-<text x="384.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<text x="476.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">MIDDLE</text>
-<path d="M456.9,189.1 A27,27 0 1,1 495.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="476.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="476.0" y1="170" x2="476.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="476.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">middle</text>
-<text x="476.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 8</text>
-<text x="476.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<text x="568.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">BASS</text>
-<path d="M548.9,189.1 A27,27 0 1,1 587.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="568.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="568.0" y1="170" x2="568.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="568.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">bass</text>
-<text x="568.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 9</text>
-<text x="568.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<text x="660.0" y="134" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">VOLUME</text>
-<path d="M640.9,189.1 A27,27 0 1,1 679.1,189.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="660.0" cy="170" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="660.0" y1="170" x2="660.0" y2="154" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="660.0" y="218" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">volume</text>
-<text x="660.0" y="234" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 10</text>
-<text x="660.0" y="249" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<rect x="372.0" y="286" width="116" height="28" rx="14" fill="#eef6ee" stroke="#3e9e5f"/>
-<circle cx="388.0" cy="300" r="5" fill="#3e9e5f"/>
-<text x="436.0" y="304" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">amp_on</text>
-<text x="430.0" y="332" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">block switch · byte 0</text>
-<rect x="20" y="378" width="204" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="122.0" y="402" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">MOD</text>
-<text x="76.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">MOD FX</text>
-<path d="M56.9,489.1 A27,27 0 0,1 54.7,453.4" fill="none" stroke="#3b7dd8" stroke-width="5" stroke-linecap="butt"/>
-<path d="M58.1,449.8 A27,27 0 0,1 93.9,449.8" fill="none" stroke="#e0892b" stroke-width="5" stroke-linecap="butt"/>
-<path d="M97.3,453.4 A27,27 0 0,1 95.1,489.1" fill="none" stroke="#3e9e5f" stroke-width="5" stroke-linecap="butt"/>
-<circle cx="76.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="76.0" y1="470" x2="76.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="76.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">mod_fx</text>
-<text x="76.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 11</text>
-<text x="76.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127, 3 types</text>
-<text x="76.0" y="564" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#57606a">chorus·phaser·tremolo</text>
-<text x="168.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">SPEED</text>
-<path d="M148.9,489.1 A27,27 0 1,1 187.1,489.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="168.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="168.0" y1="470" x2="168.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="168.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">mod_speed</text>
-<text x="168.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 12</text>
-<text x="168.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<rect x="64.0" y="586" width="116" height="28" rx="14" fill="#eef6ee" stroke="#3e9e5f"/>
-<circle cx="80.0" cy="600" r="5" fill="#3e9e5f"/>
-<text x="128.0" y="604" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">mod_on</text>
-<text x="122.0" y="632" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">block switch · byte 1</text>
-<rect x="236" y="378" width="204" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="338.0" y="402" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">DLY</text>
-<text x="292.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">DLY MIX</text>
-<path d="M272.9,489.1 A27,27 0 0,1 270.7,453.4" fill="none" stroke="#3b7dd8" stroke-width="5" stroke-linecap="butt"/>
-<path d="M274.1,449.8 A27,27 0 0,1 309.9,449.8" fill="none" stroke="#e0892b" stroke-width="5" stroke-linecap="butt"/>
-<path d="M313.3,453.4 A27,27 0 0,1 311.1,489.1" fill="none" stroke="#3e9e5f" stroke-width="5" stroke-linecap="butt"/>
-<circle cx="292.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="292.0" y1="470" x2="292.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="292.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">delay_mix</text>
-<text x="292.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 13</text>
-<text x="292.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127, 3 types</text>
-<text x="292.0" y="564" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#57606a">analog·tape·dual</text>
-<text x="384.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">TIME</text>
-<path d="M364.9,489.1 A27,27 0 1,1 403.1,489.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="384.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="384.0" y1="470" x2="384.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="384.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">delay_time</text>
-<text x="384.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 14</text>
-<text x="384.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<rect x="280.0" y="586" width="116" height="28" rx="14" fill="#eef6ee" stroke="#3e9e5f"/>
-<circle cx="296.0" cy="600" r="5" fill="#3e9e5f"/>
-<text x="344.0" y="604" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">delay_on</text>
-<text x="338.0" y="632" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">block switch · byte 2</text>
-<rect x="452" y="378" width="204" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="554.0" y="402" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">RVB</text>
-<text x="508.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">RVB DECAY</text>
-<path d="M488.9,489.1 A27,27 0 0,1 486.7,453.4" fill="none" stroke="#3b7dd8" stroke-width="5" stroke-linecap="butt"/>
-<path d="M490.1,449.8 A27,27 0 0,1 525.9,449.8" fill="none" stroke="#e0892b" stroke-width="5" stroke-linecap="butt"/>
-<path d="M529.3,453.4 A27,27 0 0,1 527.1,489.1" fill="none" stroke="#3e9e5f" stroke-width="5" stroke-linecap="butt"/>
-<circle cx="508.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="508.0" y1="470" x2="508.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="508.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">reverb_decay</text>
-<text x="508.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 15</text>
-<text x="508.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127, 3 types</text>
-<text x="508.0" y="564" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#57606a">room·spring·cloud</text>
-<text x="600.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">RVB MIX</text>
-<path d="M580.9,489.1 A27,27 0 1,1 619.1,489.1" fill="none" stroke="#c4cbd3" stroke-width="3"/>
-<circle cx="600.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="600.0" y1="470" x2="600.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="600.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">reverb_mix</text>
-<text x="600.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 16</text>
-<text x="600.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">0–127</text>
-<rect x="496.0" y="586" width="116" height="28" rx="14" fill="#eef6ee" stroke="#3e9e5f"/>
-<circle cx="512.0" cy="600" r="5" fill="#3e9e5f"/>
-<text x="560.0" y="604" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">reverb_on</text>
-<text x="554.0" y="632" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">block switch · byte 3</text>
-<rect x="668" y="378" width="112" height="282" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="724.0" y="402" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="15" font-weight="700" fill="#1f2328" letter-spacing="2">CAB</text>
-<text x="724.0" y="434" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="700" fill="#424a53">IR CAB</text>
-<line x1="707.0" y1="487.0" x2="703.5" y2="490.5" stroke="#57606a" stroke-width="2"/>
-<line x1="700.5" y1="474.7" x2="695.6" y2="475.7" stroke="#57606a" stroke-width="2"/>
-<line x1="701.8" y1="460.8" x2="697.2" y2="458.9" stroke="#57606a" stroke-width="2"/>
-<line x1="710.7" y1="450.0" x2="707.9" y2="445.9" stroke="#57606a" stroke-width="2"/>
-<line x1="724.0" y1="446.0" x2="724.0" y2="441.0" stroke="#57606a" stroke-width="2"/>
-<line x1="737.3" y1="450.0" x2="740.1" y2="445.9" stroke="#57606a" stroke-width="2"/>
-<line x1="746.2" y1="460.8" x2="750.8" y2="458.9" stroke="#57606a" stroke-width="2"/>
-<line x1="747.5" y1="474.7" x2="752.4" y2="475.7" stroke="#57606a" stroke-width="2"/>
-<line x1="741.0" y1="487.0" x2="744.5" y2="490.5" stroke="#57606a" stroke-width="2"/>
-<circle cx="724.0" cy="470" r="19" fill="#2d333b" stroke="#1f2328"/>
-<line x1="724.0" y1="470" x2="724.0" y2="454" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
-<text x="724.0" y="518" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">ir_cab</text>
-<text x="724.0" y="534" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">byte 17</text>
-<text x="724.0" y="549" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#57606a">9 positions, 0–8</text>
-<text x="724.0" y="604" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#8c959f">no on/off switch</text>
-<text x="20" y="692" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="700" fill="#424a53">Preset and pedal state (not knobs)</text>
-<rect x="20" y="702" width="820" height="140" rx="10" fill="#ffffff" stroke="#d0d7de"/>
-<text x="34" y="726" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#424a53">PRESET LED</text>
-<text x="150" y="726" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">led_colour</text>
-<text x="282" y="726" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">bytes 18–20 (R, G, B)</text>
-<text x="450" y="726" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">LED colour observed once; byte map: unknown</text>
-<text x="34" y="752" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#424a53">PRESET 1A–9D</text>
-<text x="150" y="752" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">bank · slot</text>
-<text x="282" y="752" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">global bytes 1 · 2</text>
-<text x="450" y="752" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">9 banks × 4 slots (index = 4·bank + slot, 0–35)</text>
-<text x="34" y="778" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#424a53">MODE</text>
-<text x="150" y="778" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">mode</text>
-<text x="282" y="778" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">global byte 3</text>
-<text x="450" y="778" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">0 edit · 1 normal · 2 tuner (openvave only reads it)</text>
-<text x="34" y="804" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#424a53">BYPASS</text>
-<text x="150" y="804" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">bypass on|off</text>
-<text x="282" y="804" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">no byte of its own</text>
-<text x="450" y="804" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">while bypassed: slot reads ff, buffer all 00</text>
-<text x="34" y="830" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" font-weight="700" fill="#424a53">LOOPBACK</text>
-<text x="150" y="830" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#0b5cad">loopback on|off</text>
-<text x="282" y="830" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">status byte 0</text>
-<text x="450" y="830" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">Bluetooth audio into the USB recording; experimental</text>
-<text x="20" y="870" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">Knob legend:</text>
-<path d="M110,866 h28" stroke="#c4cbd3" stroke-width="3"/><text x="144" y="870" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">continuous 0–127</text>
-<path d="M270,866 h10" stroke="#3b7dd8" stroke-width="5"/>
-<path d="M282,866 h10" stroke="#e0892b" stroke-width="5"/>
-<path d="M294,866 h10" stroke="#3e9e5f" stroke-width="5"/>
-<text x="310" y="870" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">typed knob: 3 types, off between them</text>
-<line x1="645" y1="861" x2="620" y2="871" stroke="#57606a" stroke-width="2"/>
-<line x1="652" y1="861" x2="627" y2="871" stroke="#57606a" stroke-width="2"/>
-<line x1="659" y1="861" x2="634" y2="871" stroke="#57606a" stroke-width="2"/>
-<line x1="666" y1="861" x2="641" y2="871" stroke="#57606a" stroke-width="2"/>
-<line x1="673" y1="861" x2="648" y2="871" stroke="#57606a" stroke-width="2"/>
-<text x="685" y="870" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#57606a">stepped selector, 9 positions</text>
-<text x="20" y="900" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#8c959f">CAPS labels are descriptive; the names printed on your pedal may differ. Original drawing for openvave (MIT); not a vendor image.</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 680" width="1000" height="680" role="img" aria-labelledby="t d">
+<title id="t">Tank-G front panel mapped to openvave fields</title>
+<desc id="d">The fifteen knobs of the Tank-G in panel order, left to right: master, IR cab, reverb mix, reverb decay, delay time, delay mix, mod speed, mod fx, volume, bass, middle, treble, gain, amp type, noise gate, each with its openvave field and preset byte, coloured like the knob LEDs. Below, the four footswitches A/REVERB, B/DELAY, C/MOD, D/AMP.</desc>
+<defs>
+<radialGradient id="g-white"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#c9d6ea"/><stop offset="1" stop-color="#c9d6ea" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="g-orange"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#f08a24"/><stop offset="1" stop-color="#f08a24" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="g-purple"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#a855f7"/><stop offset="1" stop-color="#a855f7" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="g-blue"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#3b82f6"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="g-green"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#22c55e"/><stop offset="1" stop-color="#22c55e" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="g-red"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#ef4444"/><stop offset="1" stop-color="#ef4444" stop-opacity="0.15"/></radialGradient>
+<radialGradient id="metal"><stop offset="0" stop-color="#fbfbfb"/><stop offset="0.7" stop-color="#cfd3d6"/><stop offset="1" stop-color="#9aa1a7"/></radialGradient>
+</defs>
+<rect width="1000" height="680" rx="14" fill="#f6f5f1"/>
+<text x="20" y="34" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="20" font-weight="700" fill="#1f2328">Tank-G front panel → openvave fields</text>
+<text x="20" y="56" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#57606a">Knobs in panel order, left to right, coloured like their LEDs. Read right to left, they follow preset bytes 4 → 17.</text>
+<rect x="20" y="72" width="960" height="258" rx="10" fill="#3dbab6" stroke="#2a9895" stroke-width="2"/>
+<text x="36" y="252" transform="rotate(-90 36 252)" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9" font-weight="700" fill="#10303a">◀ XLR OUT</text>
+<text x="60.0" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">MASTER</text>
+<circle cx="60.0" cy="134" r="17" fill="url(#g-white)"/>
+<circle cx="60.0" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="60.0" cy="134" r="7.5" fill="url(#g-white)"/>
+<line x1="60.0" y1="134" x2="60.0" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="122.9" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">IR CAB</text>
+<circle cx="108.0" cy="148.8" r="1.3" fill="#10303a"/>
+<circle cx="102.3" cy="138.1" r="1.3" fill="#10303a"/>
+<circle cx="103.5" cy="126.0" r="1.3" fill="#10303a"/>
+<circle cx="111.2" cy="116.5" r="1.3" fill="#10303a"/>
+<circle cx="122.9" cy="113.0" r="1.3" fill="#10303a"/>
+<circle cx="134.5" cy="116.5" r="1.3" fill="#10303a"/>
+<circle cx="142.3" cy="126.0" r="1.3" fill="#10303a"/>
+<circle cx="143.5" cy="138.1" r="1.3" fill="#10303a"/>
+<circle cx="137.7" cy="148.8" r="1.3" fill="#10303a"/>
+<circle cx="122.9" cy="134" r="17" fill="url(#g-orange)"/>
+<circle cx="122.9" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="122.9" cy="134" r="7.5" fill="url(#g-orange)"/>
+<line x1="122.9" y1="134" x2="122.9" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="185.7" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">RVB MIX</text>
+<circle cx="185.7" cy="134" r="17" fill="url(#g-purple)"/>
+<circle cx="185.7" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="185.7" cy="134" r="7.5" fill="url(#g-purple)"/>
+<line x1="185.7" y1="134" x2="185.7" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="248.6" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">RVB DECAY</text>
+<path d="M233.7,148.8 A21,21 0 0,1 232.0,121.1" fill="none" stroke="#3b7dd8" stroke-width="3"/>
+<path d="M234.7,118.3 A21,21 0 0,1 262.5,118.3" fill="none" stroke="#e0892b" stroke-width="3"/>
+<path d="M265.1,121.1 A21,21 0 0,1 263.4,148.8" fill="none" stroke="#3e9e5f" stroke-width="3"/>
+<circle cx="248.6" cy="134" r="17" fill="url(#g-purple)"/>
+<circle cx="248.6" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="248.6" cy="134" r="7.5" fill="url(#g-purple)"/>
+<line x1="248.6" y1="134" x2="248.6" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="311.4" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">DLY TIME</text>
+<circle cx="311.4" cy="134" r="17" fill="url(#g-blue)"/>
+<circle cx="311.4" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="311.4" cy="134" r="7.5" fill="url(#g-blue)"/>
+<line x1="311.4" y1="134" x2="311.4" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="374.3" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">DLY MIX</text>
+<path d="M359.4,148.8 A21,21 0 0,1 357.7,121.1" fill="none" stroke="#3b7dd8" stroke-width="3"/>
+<path d="M360.4,118.3 A21,21 0 0,1 388.2,118.3" fill="none" stroke="#e0892b" stroke-width="3"/>
+<path d="M390.9,121.1 A21,21 0 0,1 389.1,148.8" fill="none" stroke="#3e9e5f" stroke-width="3"/>
+<circle cx="374.3" cy="134" r="17" fill="url(#g-blue)"/>
+<circle cx="374.3" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="374.3" cy="134" r="7.5" fill="url(#g-blue)"/>
+<line x1="374.3" y1="134" x2="374.3" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="437.1" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">MOD SPEED</text>
+<circle cx="437.1" cy="134" r="17" fill="url(#g-green)"/>
+<circle cx="437.1" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="437.1" cy="134" r="7.5" fill="url(#g-green)"/>
+<line x1="437.1" y1="134" x2="437.1" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="500.0" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">MOD FX</text>
+<path d="M485.2,148.8 A21,21 0 0,1 483.4,121.1" fill="none" stroke="#3b7dd8" stroke-width="3"/>
+<path d="M486.1,118.3 A21,21 0 0,1 513.9,118.3" fill="none" stroke="#e0892b" stroke-width="3"/>
+<path d="M516.6,121.1 A21,21 0 0,1 514.8,148.8" fill="none" stroke="#3e9e5f" stroke-width="3"/>
+<circle cx="500.0" cy="134" r="17" fill="url(#g-green)"/>
+<circle cx="500.0" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="500.0" cy="134" r="7.5" fill="url(#g-green)"/>
+<line x1="500.0" y1="134" x2="500.0" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="562.9" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">VOLUME</text>
+<circle cx="562.9" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="562.9" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="562.9" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="562.9" y1="134" x2="562.9" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="625.7" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">BASS</text>
+<circle cx="625.7" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="625.7" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="625.7" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="625.7" y1="134" x2="625.7" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="688.6" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">MIDDLE</text>
+<circle cx="688.6" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="688.6" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="688.6" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="688.6" y1="134" x2="688.6" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="751.4" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">TREBLE</text>
+<circle cx="751.4" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="751.4" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="751.4" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="751.4" y1="134" x2="751.4" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="814.3" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">GAIN</text>
+<circle cx="814.3" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="814.3" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="814.3" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="814.3" y1="134" x2="814.3" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="877.1" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">TYPE</text>
+<circle cx="862.3" cy="148.8" r="1.3" fill="#10303a"/>
+<circle cx="856.5" cy="138.1" r="1.3" fill="#10303a"/>
+<circle cx="857.7" cy="126.0" r="1.3" fill="#10303a"/>
+<circle cx="865.5" cy="116.5" r="1.3" fill="#10303a"/>
+<circle cx="877.1" cy="113.0" r="1.3" fill="#10303a"/>
+<circle cx="888.8" cy="116.5" r="1.3" fill="#10303a"/>
+<circle cx="896.5" cy="126.0" r="1.3" fill="#10303a"/>
+<circle cx="897.7" cy="138.1" r="1.3" fill="#10303a"/>
+<circle cx="892.0" cy="148.8" r="1.3" fill="#10303a"/>
+<circle cx="877.1" cy="134" r="17" fill="url(#g-red)"/>
+<circle cx="877.1" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="877.1" cy="134" r="7.5" fill="url(#g-red)"/>
+<line x1="877.1" y1="134" x2="877.1" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="940.0" y="98" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" font-weight="600" fill="#10303a">NOISE GATE</text>
+<circle cx="940.0" cy="134" r="17" fill="url(#g-white)"/>
+<circle cx="940.0" cy="134" r="12" fill="#1c2026" stroke="#0d0f12"/>
+<circle cx="940.0" cy="134" r="7.5" fill="url(#g-white)"/>
+<line x1="940.0" y1="134" x2="940.0" y2="123" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+<text x="128" y="230" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="800" fill="#10303a">A/REVERB</text>
+<circle cx="128" cy="268" r="25" fill="#bfe6e4" stroke="#8fcfcc" stroke-width="2"/>
+<circle cx="128" cy="268" r="17" fill="url(#metal)" stroke="#7d858c"/>
+<text x="380" y="230" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="800" fill="#10303a">B/DELAY</text>
+<circle cx="380" cy="268" r="25" fill="#bfe6e4" stroke="#8fcfcc" stroke-width="2"/>
+<circle cx="380" cy="268" r="17" fill="url(#metal)" stroke="#7d858c"/>
+<text x="627" y="230" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="800" fill="#10303a">C/MOD</text>
+<circle cx="627" cy="268" r="25" fill="#bfe6e4" stroke="#8fcfcc" stroke-width="2"/>
+<circle cx="627" cy="268" r="17" fill="url(#metal)" stroke="#7d858c"/>
+<text x="875" y="230" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" font-weight="800" fill="#10303a">D/AMP</text>
+<circle cx="875" cy="268" r="25" fill="#bfe6e4" stroke="#8fcfcc" stroke-width="2"/>
+<circle cx="875" cy="268" r="17" fill="url(#metal)" stroke="#7d858c"/>
+<line x1="156" y1="268" x2="220.0" y2="268" stroke="#10303a" stroke-width="1.2"/>
+<line x1="288.0" y1="268" x2="352" y2="268" stroke="#10303a" stroke-width="1.2"/>
+<text x="254.0" y="273" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="800" fill="#10303a">BANK −</text>
+<line x1="655" y1="268" x2="717.0" y2="268" stroke="#10303a" stroke-width="1.2"/>
+<line x1="785.0" y1="268" x2="847" y2="268" stroke="#10303a" stroke-width="1.2"/>
+<text x="751.0" y="273" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" font-weight="800" fill="#10303a">BANK +</text>
+<text x="503" y="214" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#10303a">LIVE / PRESET</text>
+<text x="503" y="230" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#10303a">HOLD TUNER / BT</text>
+<path d="M380,214 v-14 h63 l12,-10" fill="none" stroke="#10303a" stroke-width="1.2"/>
+<path d="M627,214 v-14 h-64 l-12,-10" fill="none" stroke="#10303a" stroke-width="1.2"/>
+<circle cx="503" cy="244" r="3.5" fill="#5df07a"/>
+<rect x="483" y="254" width="40" height="48" rx="4" fill="#0d1117"/>
+<text x="503" y="293" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="34" fill="#e6f0ff">1</text>
+<rect x="31.6" y="344" width="56.9" height="108" rx="8" fill="#f1f4f8" stroke="#c9d6ea" stroke-width="1.5"/>
+<text x="60.0" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#5b6b80" letter-spacing="1.5">MASTER</text>
+<rect x="94.4" y="344" width="56.9" height="108" rx="8" fill="#fdebd6" stroke="#f08a24" stroke-width="1.5"/>
+<text x="122.9" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#b45f0c" letter-spacing="1.5">CAB</text>
+<rect x="157.3" y="344" width="119.7" height="108" rx="8" fill="#f0e4fe" stroke="#a855f7" stroke-width="1.5"/>
+<text x="217.1" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#7e2fd0" letter-spacing="1.5">RVB</text>
+<rect x="283.0" y="344" width="119.7" height="108" rx="8" fill="#dfeafe" stroke="#3b82f6" stroke-width="1.5"/>
+<text x="342.9" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#1d5fd0" letter-spacing="1.5">DLY</text>
+<rect x="408.7" y="344" width="119.7" height="108" rx="8" fill="#dcf6e6" stroke="#22c55e" stroke-width="1.5"/>
+<text x="468.6" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#15803d" letter-spacing="1.5">MOD</text>
+<rect x="534.4" y="344" width="371.1" height="108" rx="8" fill="#fde2e2" stroke="#ef4444" stroke-width="1.5"/>
+<text x="720.0" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#b91c1c" letter-spacing="1.5">AMP</text>
+<rect x="911.6" y="344" width="56.9" height="108" rx="8" fill="#f1f4f8" stroke="#c9d6ea" stroke-width="1.5"/>
+<text x="940.0" y="361" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" font-weight="800" fill="#5b6b80" letter-spacing="1.5">GATE</text>
+<text x="60.0" y="392" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" fill="#5b6b80">not</text>
+<text x="60.0" y="405" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" fill="#5b6b80">mapped</text>
+<text x="122.9" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">ir_cab</text>
+<text x="122.9" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b45f0c">byte 17 · 0–8</text>
+<text x="187.5" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">reverb_mix</text>
+<text x="187.5" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#7e2fd0">byte 16</text>
+<text x="241.3" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">reverb_decay</text>
+<text x="241.3" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#7e2fd0">byte 15 ★</text>
+<text x="313.2" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">delay_time</text>
+<text x="313.2" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#1d5fd0">byte 14</text>
+<text x="374.3" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">delay_mix</text>
+<text x="374.3" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#1d5fd0">byte 13 ★</text>
+<text x="437.1" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">mod_speed</text>
+<text x="437.1" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#15803d">byte 12</text>
+<text x="500.0" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">mod_fx</text>
+<text x="500.0" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#15803d">byte 11 ★</text>
+<text x="562.9" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">volume</text>
+<text x="562.9" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 10</text>
+<text x="625.7" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">bass</text>
+<text x="625.7" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 9</text>
+<text x="688.6" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">middle</text>
+<text x="688.6" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 8</text>
+<text x="751.4" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">treble</text>
+<text x="751.4" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 7</text>
+<text x="814.3" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">gain</text>
+<text x="814.3" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 6</text>
+<text x="877.1" y="418" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">amp_type</text>
+<text x="877.1" y="431" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#b91c1c">byte 5 · 0–8</text>
+<text x="938.2" y="384" text-anchor="middle" font-family="SFMono-Regular,Menlo,Consolas,monospace" font-size="9" font-weight="600" fill="#0b3d75">noise_gate</text>
+<text x="938.2" y="397" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="9.5" fill="#5b6b80">byte 4</text>
+<rect x="32" y="470" width="192" height="70" rx="8" fill="#f0e4fe" stroke="#a855f7" stroke-width="1.5"/>
+<text x="128" y="489" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="800" fill="#7e2fd0">A/REVERB</text>
+<text x="128" y="508" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">preset slot A of the bank</text>
+<text x="128" y="526" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">block switch <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#0b3d75">reverb_on</tspan> · byte 3</text>
+<rect x="284" y="470" width="192" height="70" rx="8" fill="#dfeafe" stroke="#3b82f6" stroke-width="1.5"/>
+<text x="380" y="489" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="800" fill="#1d5fd0">B/DELAY</text>
+<text x="380" y="508" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">preset slot B of the bank</text>
+<text x="380" y="526" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">block switch <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#0b3d75">delay_on</tspan> · byte 2</text>
+<rect x="531" y="470" width="192" height="70" rx="8" fill="#dcf6e6" stroke="#22c55e" stroke-width="1.5"/>
+<text x="627" y="489" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="800" fill="#15803d">C/MOD</text>
+<text x="627" y="508" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">preset slot C of the bank</text>
+<text x="627" y="526" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">block switch <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#0b3d75">mod_on</tspan> · byte 1</text>
+<rect x="779" y="470" width="192" height="70" rx="8" fill="#fde2e2" stroke="#ef4444" stroke-width="1.5"/>
+<text x="875" y="489" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" font-weight="800" fill="#b91c1c">D/AMP</text>
+<text x="875" y="508" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">preset slot D of the bank</text>
+<text x="875" y="526" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10.5" fill="#424a53">block switch <tspan font-family="SFMono-Regular,Menlo,Consolas,monospace" fill="#0b3d75">amp_on</tspan> · byte 0</text>
+<text x="503" y="492" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" fill="#57606a">display:</text>
+<text x="503" y="506" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" fill="#57606a">shows bank?</text>
+<text x="503" y="520" text-anchor="middle" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="10" fill="#57606a">(not checked)</text>
+<text x="20" y="568" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">Footswitch roles are read from the panel labels: a slot letter and an effect block. openvave has not mapped presses one by one.</text>
+<text x="20" y="586" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">Panel combos: A+B = BANK −, C+D = BANK +, B+C = LIVE / PRESET, hold B+C = TUNER / BT (as printed; not tested with openvave).</text>
+<text x="20" y="604" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">MASTER: no preset byte found (it was not in the mapping sessions); probably an output level outside the preset, untested.</text>
+<text x="20" y="632" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">Legend:</text>
+<path d="M70,628 h8" stroke="#3b7dd8" stroke-width="3"/>
+<path d="M80,628 h8" stroke="#e0892b" stroke-width="3"/>
+<path d="M90,628 h8" stroke="#3e9e5f" stroke-width="3"/>
+<text x="104" y="632" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">/ ★ typed knob, 3 effect types (effect-types.md)</text>
+<circle cx="390" cy="628" r="1.4" fill="#57606a"/>
+<circle cx="396" cy="628" r="1.4" fill="#57606a"/>
+<circle cx="402" cy="628" r="1.4" fill="#57606a"/>
+<circle cx="408" cy="628" r="1.4" fill="#57606a"/>
+<circle cx="414" cy="628" r="1.4" fill="#57606a"/>
+<text x="422" y="632" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#57606a">9-position selector</text>
+<text x="550" y="632" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#8c959f">Original drawing for openvave (MIT), traced from the owner's pedal; not a vendor image.</text>
 </svg>

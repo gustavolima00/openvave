@@ -10,35 +10,61 @@ watch`), on firmware 96. The full byte map, with the evidence for every row, is 
 
 ## The controls
 
-![Schematic of the Tank-G controls grouped by effect block, each labelled with its openvave field name and preset byte](images/tankg-controls.svg)
+![The Tank-G front panel in panel order, each knob labelled with its openvave field name and preset byte and coloured like its LED](images/tankg-controls.svg)
 
-The drawing groups controls by effect block in chain order; it is not a picture of the panel, and
-the knobs on your pedal may be arranged and labelled differently.
+The drawing follows the panel left to right, with the panel's own labels, and colours each group
+like its knob LEDs: white for MASTER and NOISE GATE, orange for the cab, purple for reverb, blue
+for delay, green for modulation, red for the amp. Read **right to left**, the knobs follow the
+preset bytes in order: NOISE GATE is byte 4, TYPE byte 5, and so on up to IR CAB, byte 17.
+
+Knobs, in panel order:
+
+| # | Panel label | Field | Preset byte | Values | Confidence |
+|---|---|---|---|---|---|
+| 1 | MASTER | — | — | not mapped (see notes) | — |
+| 2 | IR CAB | `ir_cab` | 17 | 9 positions, 0–8 | confirmed |
+| 3 | RVB MIX | `reverb_mix` | 16 | 0–127 | confirmed |
+| 4 | RVB DECAY | `reverb_decay` | 15 | 0–127: room, spring, cloud ([types](effect-types.md)) | confirmed (types: observed) |
+| 5 | DLY TIME | `delay_time` | 14 | 0–127 | confirmed |
+| 6 | DLY MIX | `delay_mix` | 13 | 0–127: analog, tape, dual ([types](effect-types.md)) | confirmed (types: observed) |
+| 7 | MOD SPEED | `mod_speed` | 12 | 0–127 | confirmed |
+| 8 | MOD FX | `mod_fx` | 11 | 0–127: chorus, phaser, tremolo ([types](effect-types.md)) | confirmed (types: observed) |
+| 9 | VOLUME | `volume` | 10 | 0–127 | confirmed |
+| 10 | BASS | `bass` | 9 | 0–127 | confirmed |
+| 11 | MIDDLE | `middle` | 8 | 0–127 | confirmed |
+| 12 | TREBLE | `treble` | 7 | 0–127 | confirmed |
+| 13 | GAIN | `gain` | 6 | 0–127 | confirmed |
+| 14 | TYPE (amp type) | `amp_type` | 5 | 9 positions, 0–8 | confirmed |
+| 15 | NOISE GATE | `noise_gate` | 4 | 0–127 (the app shows 0 as `OFF`) | confirmed |
+
+Not knobs:
 
 | Control | Field | Preset byte | Values | Confidence |
 |---|---|---|---|---|
-| amp block on/off | `amp_on` | 0 | `on` / `off` | confirmed |
-| mod block on/off | `mod_on` | 1 | `on` / `off` | confirmed |
-| delay block on/off | `delay_on` | 2 | `on` / `off` | confirmed |
 | reverb block on/off | `reverb_on` | 3 | `on` / `off` | confirmed |
-| noise gate | `noise_gate` | 4 | 0–127 (the app shows 0 as `OFF`) | confirmed |
-| amp type | `amp_type` | 5 | 9 positions, 0–8 | confirmed |
-| gain | `gain` | 6 | 0–127 | confirmed |
-| treble | `treble` | 7 | 0–127 | confirmed |
-| middle | `middle` | 8 | 0–127 | confirmed |
-| bass | `bass` | 9 | 0–127 | confirmed |
-| volume | `volume` | 10 | 0–127 | confirmed |
-| MOD FX | `mod_fx` | 11 | 0–127: chorus, phaser, tremolo ([types](effect-types.md)) | confirmed (types: observed) |
-| mod speed | `mod_speed` | 12 | 0–127 | confirmed |
-| DLY MIX | `delay_mix` | 13 | 0–127: analog, tape, dual ([types](effect-types.md)) | confirmed (types: observed) |
-| delay time | `delay_time` | 14 | 0–127 | confirmed |
-| RVB DECAY | `reverb_decay` | 15 | 0–127: room, spring, cloud ([types](effect-types.md)) | confirmed (types: observed) |
-| reverb mix | `reverb_mix` | 16 | 0–127 | confirmed |
-| IR cab | `ir_cab` | 17 | 9 positions, 0–8 | confirmed |
+| delay block on/off | `delay_on` | 2 | `on` / `off` | confirmed |
+| mod block on/off | `mod_on` | 1 | `on` / `off` | confirmed |
+| amp block on/off | `amp_on` | 0 | `on` / `off` | confirmed |
 | preset LED colour | `led_colour` (write only) | 18–20 | R, G, B 0–255 each | observed |
+
+### Footswitches
+
+The four footswitches are printed **A/REVERB**, **B/DELAY**, **C/MOD** and **D/AMP**: each names a
+preset slot of the current bank and an effect block. The blocks match the block switches above
+(reverb byte 3, delay 2, mod 1, amp 0), and the knob LEDs follow those switches (the app's
+bypass turns every LED off; switching AMP on lights the amp LEDs). The panel also prints pairs:
+A + B = BANK −, C + D = BANK +, B + C = LIVE / PRESET, hold B + C = TUNER / BT. The display
+between B and C shows a digit, most likely the bank.
+
+All of this comes from the panel labels: openvave has not mapped the footswitches press by press,
+and how LIVE / PRESET relates to the `mode` byte (normal, edit, tuner; see [Modes](#modes)) has not
+been checked. The jack on the left edge is marked XLR OUT.
 
 Notes:
 
+- **MASTER has no byte.** It was not part of the mapping sessions, and no byte of the preset,
+  global block or status is known to follow it. It is probably an overall output level kept
+  outside the presets, but that is untested; `openvave watch` while turning it would tell.
 - **Values are raw.** 0–127 is the knob's full sweep (every knob reached both ends on the pedal).
   There are no units: openvave does not know what gain 60 means in dB or delay time 40 in ms.
 - **Amp types and IR cabs have no names.** Each is a 9-position selector, 0–8 on the wire. The
@@ -49,7 +75,7 @@ Notes:
   `ff 00 00` turned the LED red in one session (observed), so `set led_colour` exists behind
   `--experimental`; `preset dump` still lists the three bytes as `unknown` until the byte map has a
   second session.
-- Changing a knob on the pedal only takes effect in the pedal's edit mode (owner report). A remote
+- Turning a knob on the pedal does nothing outside the pedal's edit mode (owner report). A remote
   change from openvave or the app works in normal mode.
 
 ## The effect chain
@@ -143,6 +169,7 @@ recorded. The flag survives a power cycle. It was seen in one session (`observed
 ## What is not known yet
 
 - The audio processing order (above).
+- The MASTER knob, and the footswitches press by press.
 - Names for the 9 amp types and 9 IR cabs.
 - Device-info bytes (the `Device info` block of `info`), apart from the firmware version.
 - Whether the "off" zones between effect types really silence the effect (the manual says so; not
