@@ -84,6 +84,8 @@ hint: switch the pedal on and close the M-VAVE phone app; a pedal that is connec
       or to another program stops advertising.
 ```
 
+- Invalid configuration file: the pedals are still listed (no nicknames, no default marker) after
+  `warning: <path>: <problem> (nicknames unavailable)` on stderr.
 - `--json`: one document, [`scan.schema.json`](scan.schema.json), also when the list is empty
   (then exit 3).
 - Exit: 0 at least one Tank-G listed · 3 none · 5 Bluetooth unavailable.
