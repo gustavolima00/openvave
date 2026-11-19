@@ -116,8 +116,12 @@ Nothing reads the configuration unless one of these is called: `TankG.connect()`
 
 ### Tested
 
-- On the owner's pedal (fw 96, macOS), reads only: see "Hardware check" under Milestone 4 in
-  `specs/005-device-selection/tasks.md`.
+- On the owner's pedal (fw 96, macOS 26), reads only: `scan`, `scan --identify`, `select`,
+  `info` with the default and with `--device`, `device --check`, `forget`, a second process
+  while one is connected (exit 3 with the hint), and a long-lived `open()` / `close()` session.
+  Details under "Hardware check" in Milestone 4 of `specs/005-device-selection/tasks.md`. Not yet
+  run on hardware: the phone-app-connected step, switching the pedal off during a long-lived
+  session, and two pedals at once.
 
 ## [0.4.0]
 

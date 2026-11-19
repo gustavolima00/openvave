@@ -17,6 +17,13 @@ Firmware version: unknown (not exposed over GATT; TODO read from pedal menu / ap
 
 The vendor service `ae40` is not advertised; it only appears after connecting.
 
+The identifier openvave shows on macOS is a CoreBluetooth UUID assigned per computer, not the
+pedal's MAC address; the same pedal has another identifier on another Mac (by design of
+CoreBluetooth; the same UUID was reported by `scan`, `info` and `select` throughout a session,
+observed 2026-11-19, fw 96). The pedal stops advertising while any central is connected,
+including another openvave process on the same computer (observed, 2026-11-16 and 2026-11-19).
+Whether the identifier survives turning Bluetooth off and on was not checked.
+
 ## GATT
 
 ATT MTU negotiated by macOS: 185 (confirmed).

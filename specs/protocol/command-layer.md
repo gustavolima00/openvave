@@ -700,3 +700,13 @@ tested.
   2026-11-16, fw 96). Exit 6 (connection refused) did not occur.
 - With the Mac's Bluetooth turned off, bleak reports it as unavailable and `openvave` exits 5
   (observed, 2026-11-16).
+- While one `openvave` process is connected (`watch --duration 15`), a second `openvave info`
+  does not see the pedal and exits 3 with the "stops advertising" hint: the pedal does not
+  advertise to other processes on the same computer either (observed, 2026-11-19, fw 96, macOS
+  26, spec 005 M4).
+- A long-lived session (`TankG.open()` … `close()`) answers a `state()` read in 0.11–0.12 s over
+  one connection, versus a fresh scan + connect + handshake per command (observed, 2026-11-19,
+  fw 96).
+- With a pedal chosen, the scan ends when it is seen (no 1 s grace): `info` with a default took
+  1.60–3.55 s against 2.81–4.01 s without one, three runs each (observed, 2026-11-19, fw 96,
+  macOS 26).

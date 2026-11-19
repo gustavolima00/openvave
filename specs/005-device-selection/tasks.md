@@ -469,15 +469,43 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
 
 ### Hardware (owner)
 
-- [ ] T058 [US1] Owner runs quickstart §4 `scan`, `scan --identify`, `select --name stage`, `info`, `device --check`, the `--json` check; researcher pastes outputs and times under this task (SC-002: time of `info` with a default vs the 0.4.0 figure of 2.5 s; SC-005: the pedal is listed within 5 s)
-- [ ] T059 [US1] Owner runs the phone-app-connected steps and the two-commands-at-once step of quickstart §4; researcher records exit codes and texts (expected: exit 3 with the "stops advertising" hint)
-- [ ] T060 [US4] Owner runs `forget` then `info` (expects `(only one found)`); optional: the Bluetooth off/on observation; if a second Tank-G is available, the two-pedal steps
-- [ ] T061 [US6] Owner runs the quickstart §5 script on the pedal, once to completion and once switching the pedal off mid-loop; researcher records the output
-- [ ] T062 Any behaviour that differs from the contracts becomes a failing test first, then a fix, in this PR
+- [X] T058 [US1] Owner runs quickstart §4 `scan`, `scan --identify`, `select --name stage`, `info`, `device --check`, the `--json` check; researcher pastes outputs and times under this task (SC-002: time of `info` with a default vs the 0.4.0 figure of 2.5 s; SC-005: the pedal is listed within 5 s)
+- [ ] T059 [US1] (two-commands step done above; phone-app step needs the owner) Owner runs the phone-app-connected steps and the two-commands-at-once step of quickstart §4; researcher records exit codes and texts (expected: exit 3 with the "stops advertising" hint)
+- [X] T060 [US4] Owner runs `forget` then `info` (expects `(only one found)`); optional: the Bluetooth off/on observation; if a second Tank-G is available, the two-pedal steps
+- [ ] T061 [US6] (to-completion run done above; pedal-off run needs the owner) Owner runs the quickstart §5 script on the pedal, once to completion and once switching the pedal off mid-loop; researcher records the output
+- [X] T062 Any behaviour that differs from the contracts becomes a failing test first, then a fix, in this PR
+- Hardware check (2026-11-19, owner's pedal on, fw 96, phone app closed, macOS 26, temporary
+  `OPENVAVE_CONFIG`, reads only; identifier redacted as `<UUID>`). Run from the Terminal panel by
+  the researcher with the owner's go-ahead; steps that need hands on the pedal or the phone were
+  not run (see T059, T061).
+  - T058 (all exit 0):
+    - `scan`: `<UUID>  TANK-Gv2_BLE  -54 dBm`, `1 pedal found. Select one: …`.
+    - `scan --identify`: the same row with `fw 96`.
+    - `select --name stage`: `Default pedal: stage  <UUID>  (TANK-Gv2_BLE, -53 dBm)`, saved.
+    - `info`: stderr `pedal: stage  <UUID>…  -54 dBm  (selected)`; stdout as in 0.4.0
+      (firmware 96, normal, preset 1B). `info --device stage`: the same with `(--device)`.
+    - `device --check`: `last seen … (TANK-Gv2_BLE, firmware 96)` (written by the `info` before)
+      and `In range: yes (-53 dBm)`.
+    - `info --json` `device`: `nickname: 'stage'`, `chosen_by: 'selected'`, `rssi: -54`.
+    - `scan` again: `* stage  <UUID>  TANK-Gv2_BLE  -54 dBm`, `* = default.`
+    - Times (wall clock, `.venv/bin/openvave`, three runs each): `scan` 5.17 / 5.17 / 5.15 s
+      (SC-005: the pedal is listed, the scan ends at the 5 s timeout as specified); `select --name
+      stage` 1.22 s; `info` with the default 3.55 / 2.20 / 1.60 s; `info` with no default (`only
+      one found`, the 0.4.0 path with its 1 s grace) 4.01 / 3.12 / 2.81 s.
+  - T060: `forget` → `Forgot the default (stage <UUID>…). It is still a known pedal; …`;
+    `info` → `pedal: stage  <UUID>…  -53 dBm  (only one found)` (the nickname shows because the
+    pedal is still known), exit 0. Bluetooth off/on: not run. Second Tank-G: none available.
+  - T059 (part): two commands at once. `watch --duration 15` in the background, `info` 6 s later:
+    `error: stage (<UUID>) not found`, the "connected pedal stops advertising" hint and the
+    `--device` / `select` hint, exit 3; no `seen:` line. `watch` finished normally (exit 0, 30
+    cycles). A second openvave process does not see a pedal the first one is connected to.
+  - T061 (part): quickstart §5 to completion: `device: stage selected`, five `normal True` lines
+    (0.11–0.12 s per `state()` over the one connection), `closed; is_connected False`, exit 0.
+  - T062: nothing differed from the contracts; no fix needed.
 
 ### Documentation and release
 
-- [ ] T063 [P] `specs/protocol/command-layer.md` (connection notes) and `specs/protocol/ble-gatt.md`: record what T058–T061 observed with date, firmware and confidence (a second openvave process does not see a connected pedal; the identifier is per computer on macOS; the Bluetooth off/on result if run)
+- [X] T063 [P] `specs/protocol/command-layer.md` (connection notes) and `specs/protocol/ble-gatt.md`: record what T058–T061 observed with date, firmware and confidence (a second openvave process does not see a connected pedal; the identifier is per computer on macOS; the Bluetooth off/on result if run)
 - [X] T064 `README.md` (after rebasing on `main`): new "Finding and choosing a pedal" section (scan, select, device, rename, forget, choice order, `OPENVAVE_DEVICE`, `OPENVAVE_CONFIG`, identifiers are per computer on macOS, "openvave holds the pedal only while a command runs; there is nothing to disconnect"); Options and Exit codes updated; Library section shows `connect_selected()` and the `open()` / `close()` lifecycle; links to the 0.5.0 contracts and schemas; "Before you connect" mentions that a connected pedal is invisible to `scan`
 - [X] T065 [P] `CHANGELOG.md`: move [Unreleased] to `[0.5.0]` with a summary paragraph; `tests/contract/test_changelog_050.py` in the style of `test_changelog_040.py` (commands, variables, library names, "no fallback", schema_version unchanged)
 - [X] T066 `pyproject.toml` version `0.5.0` (and the package description if it still says read-only); `src/openvave/__init__.py` docstring; `uv run openvave --version`
@@ -493,6 +521,25 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
   - T066: `uv run openvave --version` → `openvave 0.5.0`; the package description drops
     "Read-only" (writes exist since 0.3.0).
 - [ ] T067 Review SC-001…SC-006 and record each result under this task; run the full quickstart once more end to end
+  - Reviewed 2026-11-19 (partial: T059 and T061 still need the owner):
+    - SC-001 (two pedals, at most three commands): hardware-free only. Exit 4 lists both pedals
+      with the `openvave select ID` hint, then `select <prefix>` and the command
+      (`tests/unit/test_scan.py`, choice matrix). Not checked on hardware: one pedal available.
+    - SC-002: met in part. `info` with the default 1.60–3.55 s against 2.81–4.01 s for the 0.4.0
+      path (no default, 1 s grace); medians 2.20 vs 3.12 s (0.92 s less), warm runs only 1.90 vs
+      2.97 s (1.07 s less). The first run of each set was the slowest by about 1 s. Three runs
+      are too few to call the 1 s margin firmly; the grace wait is gone, as the scan code shows.
+      The first half ("no slower than `--device ID` in 0.4.0") holds: both stop when the pedal is
+      seen.
+    - SC-003: met, `tests/contract/test_cli_pedal_line.py` (every command, human and JSON);
+      the `pedal:` line and JSON `device` fields seen on hardware.
+    - SC-004: met, `tests/integration/test_choice_matrix.py` with the session-wide audit (no
+      write reaches a pedal other than the chosen one; no fallback).
+    - SC-005: met on macOS with one pedal (listed in each of three 5.2 s scans). Linux and a
+      second pedal: not checked.
+    - SC-006: met, `tests/contract/test_cli_stdout_unchanged.py` (stdout and exit codes as in
+      0.4.0); `info` stdout on hardware matched 0.4.0's layout.
+    - The three files above: 523 passed. Full suite at the docs commit: 2602 passed, 6 skipped.
 
 **Checkpoint**: Milestone 4 DONE — 0.5.0 released
 
