@@ -22,6 +22,7 @@ from pathlib import Path
 from openvave import __version__
 from openvave.backup import restore_problems
 from openvave.cli import choice, files, pedals, render, watch
+from openvave.cli import mcp as mcp_command
 from openvave.devices import Target
 from openvave.errors import (
     BluetoothUnavailableError,
@@ -325,6 +326,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     record.add_argument("--no-record", action="store_true", help="do not write a session record")
     pedals.add_parsers(sub, common)
+    mcp_command.add_parser(sub, common)
     return parser
 
 
@@ -896,59 +898,67 @@ def _device_row(device: DeviceInfo) -> str:
     return f"{row}  {device.nickname}" if device.nickname else row
 
 
-def _report(err: OpenvaveError) -> None:
+def error_text(err: OpenvaveError) -> str:
+    """The ``error:`` line's text for a library error (without the ``error:`` prefix)."""
     if isinstance(err, MultipleDevicesError):
-        print(f"error: {len(err.candidates)} pedals found", file=sys.stderr)
-    else:
-        print(f"error: {err}", file=sys.stderr)
+        return f"{len(err.candidates)} pedals found"
+    return str(err)
+
+
+def report_lines(err: OpenvaveError) -> list[str]:
+    """The lines the CLI prints after ``error: …``: what was seen, candidates and hints.
+
+    Shared with the MCP server (spec 006), so both give the same advice."""
+    lines: list[str] = []
     if isinstance(err, ConfigError):
         if err.reason == "invalid_file":
-            print("hint: fix the file or reset it with: openvave forget --all", file=sys.stderr)
+            lines.append("hint: fix the file or reset it with: openvave forget --all")
     elif isinstance(err, TargetNotFoundError):
         for seen in err.seen:
-            print(f"  seen: {_device_row(seen)}", file=sys.stderr)
-        print(
+            lines.append(f"  seen: {_device_row(seen)}")
+        lines.append(
             "hint: switch it on and close the M-VAVE phone app (a connected pedal stops "
             "advertising).",
-            file=sys.stderr,
         )
-        print(
+        lines.append(
             "hint: use another pedal once with --device ID, or make it the default with: "
             "openvave select ID",
-            file=sys.stderr,
         )
     elif isinstance(err, MultipleDevicesError):
         for c in err.candidates:
-            print(f"  {_device_row(c)}", file=sys.stderr)
-        print(
+            lines.append(f"  {_device_row(c)}")
+        lines.append(
             "hint: use one once with --device ID, or remember one with: openvave select ID",
-            file=sys.stderr,
         )
     elif isinstance(err, BluetoothUnavailableError):
         if sys.platform == "darwin":
-            print(
+            lines.append(
                 "hint: turn Bluetooth on, and allow your terminal app under System Settings > "
                 "Privacy & Security > Bluetooth",
-                file=sys.stderr,
             )
         else:
-            print("hint: turn Bluetooth on and check this user may access it", file=sys.stderr)
+            lines.append("hint: turn Bluetooth on and check this user may access it")
     elif isinstance(err, WriteNotAppliedError) and err.result is not None:
         kind = err.result.plan.target.kind
         check = {
             "bypass": "'openvave info' shows the pedal state.",
             "loopback": "'openvave info' shows the status byte.",
         }.get(kind, "'openvave preset reload' loads the stored preset again.")
-        print(
+        lines.append(
             "hint: the pedal acknowledged the write but the re-read does not show it; nothing "
             f"was retried. {check}",
-            file=sys.stderr,
         )
     elif err.exit_code == 3:
-        print(
+        lines.append(
             "hint: switch the pedal on and close the M-VAVE phone app (it holds the connection)",
-            file=sys.stderr,
         )
+    return lines
+
+
+def _report(err: OpenvaveError) -> None:
+    print(f"error: {error_text(err)}", file=sys.stderr)
+    for line in report_lines(err):
+        print(line, file=sys.stderr)
 
 
 PEDAL_COMMANDS = ("scan", "select", "device", "forget")
@@ -1052,6 +1062,9 @@ def main(
             return EXIT_USAGE
     if args.command in PEDAL_COMMANDS:
         return _run_pedal_command(args, scanner_factory, transport_factory)
+    if args.command == "mcp":
+        with _logging(args.trace):
+            return mcp_command.run(args, transport_factory or _ble_factory(scanner_factory))
     factory = transport_factory or _ble_factory(scanner_factory)
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):

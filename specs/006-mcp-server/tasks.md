@@ -83,13 +83,13 @@ Projected PR count: **5** (≤ 8). Milestone N+1 starts only after Milestone N's
 
 ### Setup
 
-- [ ] T001 Add `[project.optional-dependencies] mcp = ["mcp>=2.3,<3"]` and `mcp>=2.3,<3` to the dev
+- [X] T001 Add `[project.optional-dependencies] mcp = ["mcp>=2.3,<3"]` and `mcp>=2.3,<3` to the dev
   group in `pyproject.toml`; `uv sync`; add a mypy override only if the SDK lacks types (it ships
   `py.typed`); confirm `uv run pytest -q` still green
-- [ ] T002 Create package `src/openvave/mcp_server/` with `__init__.py` (docstring: the server is
+- [X] T002 Create package `src/openvave/mcp_server/` with `__init__.py` (docstring: the server is
   imported only by `openvave mcp`; exposes `run(options, *, transport_factory=None,
   scanner_factory=None) -> int`), empty `server.py`, `holder.py`, `errors.py`, `results.py`
-- [ ] T003 [P] Test harness in `tests/mcp/conftest.py`: `counting_factory` (wraps a
+- [X] T003 [P] Test harness in `tests/mcp/conftest.py`: `counting_factory` (wraps a
   `FakeTransport.from_capture(...)` source from the captures existing tests use; counts opens and
   handshakes; can be told to `lose_link()`), `ManualTimer` (injectable idle timer the test fires),
   `make_server(options, factory)` returning the `MCPServer`, and an async `client` fixture using
@@ -97,64 +97,70 @@ Projected PR count: **5** (≤ 8). Milestone N+1 starts only after Milestone N's
 
 ### Tests first (must fail)
 
-- [ ] T004 [P] [US3] `tests/mcp/test_holder.py`: lazy start; N `pedal_info` = 1 open + 1 handshake;
+- [X] T004 [P] [US3] `tests/mcp/test_holder.py`: lazy start; N `pedal_info` = 1 open + 1 handshake;
   `pedal_disconnect` idempotent and reopen on next call; idle release via `ManualTimer` (timer
   armed after a call, cancelled at the start of the next, `--idle-release 0` never arms); lost link
   between calls → one reopen; lost during a call → error, next call reopens, the fake records no
   repeated write; reopen attempt fails (pedal absent) → `no_device_found` error and server alive;
   concurrent calls serialised (fake records request/reply strictly alternating); shutdown closes
-- [ ] T005 [P] [US3] `tests/mcp/test_status.py`: `pedal_status` before connecting (`connected:
+- [X] T005 [P] [US3] `tests/mcp/test_status.py`: `pedal_status` before connecting (`connected:
   false`, options echoed), after (pedal, `chosen_by`, firmware, `firmware_untested`, `since`),
   after an error (`last_error`); never takes the lock (answers while a slow fake call is pending)
-- [ ] T006 [P] [US1] `tests/mcp/test_read_tools.py::test_info_*`: `pedal_info` result equals the
+- [X] T006 [P] [US1] `tests/mcp/test_read_tools.py::test_info_*`: `pedal_info` result equals the
   `info --json` document built by `openvave.cli.render.info_json` for the same capture (+
   `summary`); bypass/tuner captures report the state; untested-firmware capture carries the warning
-- [ ] T007 [P] [US3] `tests/mcp/test_errors.py`: each `OpenvaveError` subclass and `ValueError` maps
+- [X] T007 [P] [US3] `tests/mcp/test_errors.py`: each `OpenvaveError` subclass and `ValueError` maps
   to `isError` text `<kind>: <message>` + `hint:` (the CLI's hint) per contracts/tools.md
   §Errors; an unexpected exception → `internal` and a traceback on stderr (caplog), server alive
-- [ ] T008 [P] [US3] `tests/mcp/test_command.py`: `openvave mcp --help` lists the options;
+- [X] T008 [P] [US3] `tests/mcp/test_command.py`: `openvave mcp --help` lists the options;
   invalid `--idle-release -1` → exit 2; with `openvave.mcp_server` import made to fail
   (`monkeypatch` of `sys.modules["mcp"] = None`) → exit 2 and the install hint on stderr; options
   reach `ServerOptions`; during in-process tool calls `capsys` stdout stays empty
 
 ### Implementation
 
-- [ ] T009 [US3] `src/openvave/mcp_server/holder.py`: `ServerOptions` (frozen dataclass,
-  data-model table) and `default_backup_dir()` stub used later; `PedalHolder` with fields of the
+- [X] T009 [US3] `src/openvave/mcp_server/holder.py`: `ServerOptions` (frozen dataclass,
+  data-model table; `default_backup_dir()` landed in `cli/mcp.py`, T014); `PedalHolder` with fields of the
   data model, `use()` async context manager (lock → cancel idle → open or reopen once → yield →
   re-arm idle), `disconnect()`, `shutdown()`, `status()`; target choice through
   `openvave.cli.choice.choose` / `annotate` / `record_seen` with a namespace carrying
   `device=session_target or options.device`; transport factory and timer injectable
-- [ ] T010 [US3] `src/openvave/mcp_server/errors.py`: `tool_errors()` async context manager /
+- [X] T010 [US3] `src/openvave/mcp_server/errors.py`: `tool_errors()` async context manager /
   decorator mapping exceptions to `ToolError` text (kind from `WriteRefusedError.reason` or a
-  class table; hint text shared with `openvave.cli._report` — extract the hint strings into a small
-  pure function `openvave.cli.hint_lines(err) -> list[str]` used by both, CLI output unchanged);
+  class table; hint text shared with `openvave.cli._report` — extracted as `openvave.cli.error_text(err)`
+  and `openvave.cli.report_lines(err) -> list[str]` used by both, CLI output unchanged);
   records `holder.last_error`
-- [ ] T011 [US1] `src/openvave/mcp_server/results.py`: `with_summary(document, text)`; summary =
+- [X] T011 [US1] `src/openvave/mcp_server/results.py`: `with_summary(document, text)`; summary =
   first line of the CLI's human output for the same result (`render.human_info` …)
-- [ ] T012 [US3] `src/openvave/mcp_server/server.py`: `build_server(holder, options) ->
+- [X] T012 [US3] `src/openvave/mcp_server/server.py`: `build_server(holder, options) ->
   MCPServer` (name `openvave`, version, `instructions` = one paragraph: one connection, phone app,
   opt-ins), tools `pedal_status`, `pedal_disconnect`, `pedal_info` with annotations from
   contracts/tools.md; a module-level registry `TOOLS: dict[str, ToolSpec(writes, annotations)]`
   used by later milestones
-- [ ] T013 [US3] `run()` in `src/openvave/mcp_server/__init__.py`: configure stderr logging
+- [X] T013 [US3] `run()` in `src/openvave/mcp_server/__init__.py`: configure stderr logging
   (`--trace` → the CLI's trace handler), build holder + server, `await server.run_stdio_async()`,
   `holder.shutdown()` in `finally`; return 0
-- [ ] T014 [US3] `openvave mcp` in `src/openvave/cli/__init__.py`: subparser with the contract's
+- [X] T014 [US3] `openvave mcp` in `src/openvave/cli/__init__.py` (parser and start in the new
+  `src/openvave/cli/mcp.py`, which also holds `default_backup_dir()`, so the CLI needs no MCP
+  package to parse the options): subparser with the contract's
   options (`--device`, `--read-only`, `--backup-dir`, `--idle-release`, plus the global
   `--scan-timeout`, `--timeout`, `--trace`); lazy `import openvave.mcp_server` inside a
   `try/except ImportError` → exit 2 with the hint; `main(..., transport_factory=…)` passes the
   factory through
-- [ ] T015 [US3] `CHANGELOG.md` [Unreleased]: "Added (spec 006 milestone 0): `openvave mcp`…"
+- [X] T015 [US3] `CHANGELOG.md` [Unreleased]: "Added (spec 006 milestone 0): `openvave mcp`…"
 
 ### Live verification (milestone gate)
 
-- [ ] T016 Suite, ruff, mypy green; `uv run --extra mcp openvave mcp` started by hand answers an
+- [X] T016 Suite, ruff, mypy green; `uv run --extra mcp openvave mcp` started by hand answers an
   MCP Inspector `tools/list` with the three tools (quickstart §2, optional if Node is absent:
   then a stdio smoke test in `tests/mcp/test_command.py` that spawns `python -m openvave mcp` with
   `mcp.Client(StdioServerParameters(...))` and lists tools); report to the owner
+  - Evidence (2026-11-19): `uv run pytest -q` → 2640 passed, 6 skipped (hardware); `tests/mcp/`
+    38 passed, including `test_stdio_smoke` (spawns `python -m openvave mcp`, lists the three
+    tools, `pedal_status` → `connected: false`); ruff check / format, mypy (34 files) clean.
+    Inspector not run (the stdio smoke test covers the same check). No pedal involved.
 
-**Checkpoint**: Milestone 0 DONE
+**Checkpoint**: Milestone 0 DONE ✅
 
 ---
 

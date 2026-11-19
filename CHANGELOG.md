@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (spec 006 milestone 0): `openvave mcp`, an MCP server for AI assistants
+
+- `openvave mcp [--device ID|NICKNAME] [--read-only] [--backup-dir DIR] [--idle-release SECONDS]`
+  runs a Model Context Protocol server over stdin/stdout, for assistants such as Claude Desktop
+  and Claude Code. It needs the new optional extra: `pip install 'openvave[mcp]'` (the official
+  `mcp` SDK, 2.x); without it the command exits 2 with that hint, and `pip install openvave`
+  still installs only `bleak`. stdout carries only MCP messages; warnings and `--trace` go to
+  stderr.
+- One connection, held between tool calls: nothing is scanned until a pedal tool runs, calls
+  run one at a time, and the pedal is released after `--idle-release` seconds without a pedal
+  call (default 300, `0` never), on `pedal_disconnect`, and when the server exits, so the phone
+  app can connect. A lost link fails the call that saw it (nothing is resent); the next call
+  connects once more. The pedal is chosen as by every command (`--device`, `OPENVAVE_DEVICE`,
+  the default, the only one in range), never another one.
+- Tools so far: `pedal_status` (connection, pedal, firmware, last error, options; sends
+  nothing), `pedal_disconnect`, `pedal_info` (the `info --json` document plus a `summary`).
+  Library errors become tool errors `<kind>: <message>` with the command line's hints.
+- Command line: `openvave.cli.error_text()` / `report_lines()` hold the `error:` text and the
+  hint lines the CLI prints, shared with the server; CLI output is unchanged.
+
 ## [0.5.0]
 
 Finding and choosing a pedal. `openvave scan` lists every Tank-G in range without connecting,
