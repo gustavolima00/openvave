@@ -61,7 +61,7 @@ the `device` object carries `nickname` and `chosen_by`.
 | `--experimental` | every write command | allow messages not yet `confirmed`, and untested firmware |
 | `--discard-edits` | `preset select`, `preset reload`, `bypass on`, `preset restore` | go ahead although unsaved edits are lost |
 | `--unsafe` | `preset save`, `preset restore` | required: accept that stored presets are overwritten |
-| `--backup-dir DIR` | `preset save`, `preset restore` | where the automatic backup goes (default `.`; never overwrites) |
+| `--backup-dir DIR` | `preset save`, `preset restore` | where the automatic backup goes (default `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups` on Windows, or `~/.local/share/openvave/backups`; created if missing; never overwrites) |
 
 Positions are `1A`–`9D` (case-insensitive) or an index `0`–`35`.
 

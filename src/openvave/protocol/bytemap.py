@@ -62,7 +62,7 @@ def _knob(offset: int, name: str, label: str, field: str, notes: str, *extra: st
     )
 
 
-def _selector(offset: int, name: str, label: str) -> ByteMapEntry:
+def _selector(offset: int, name: str, label: str, note: str = "") -> ByteMapEntry:
     """A 9-position stepped knob of the current preset (0–8), counted click by click."""
     return ByteMapEntry(
         region=Region.CURRENT_PRESET,
@@ -76,7 +76,7 @@ def _selector(offset: int, name: str, label: str) -> ByteMapEntry:
         confidence="confirmed",
         firmware=MAP_FIRMWARE,
         evidence=_twice(name),
-        notes="9 positions, 0-8, one click at a time (2026-11-16 19:17)",
+        notes="9 positions, 0-8, one click at a time (2026-11-16 19:17)" + note,
     )
 
 
@@ -162,7 +162,7 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
         _FW96_REVERB_APP,
     ),
     _knob(16, "reverb_mix", "reverb mix", "reverb_mix", "0-127 swept"),
-    _selector(17, "ir_cab", "IR cab"),
+    _selector(17, "ir_cab", "IR cab", "; hypothesis: 0 = cab off (app shows OFF, manual)"),
     _unknown(Region.CURRENT_PRESET, 18, _PER_PRESET),
     _unknown(Region.CURRENT_PRESET, 19, _PER_PRESET),
     _unknown(Region.CURRENT_PRESET, 20, _PER_PRESET),

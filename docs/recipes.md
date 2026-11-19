@@ -214,7 +214,7 @@ What happens, in order:
 1. openvave reads the pedal and lists the bytes that will change in the target slot (here, only
    the gain). Without `--to` it saves into the loaded slot.
 2. It takes a **full backup** (the same reads and cross-check as `preset backup`) and writes it to
-   `--backup-dir` (default: the current directory) as `tankg-backup-<date>-<time>-before-save.json`.
+   `--backup-dir` (default: `~/.local/share/openvave/backups`, or `$OPENVAVE_BACKUP_DIR`) as `tankg-backup-<date>-<time>-before-save.json`.
    If the backup fails or cannot be written, nothing is sent. There is no way to skip it.
 3. It sends the phone app's save sequence: write the slot, read it back (a mismatch stops before
    anything is committed), wait 300 ms, commit, wait 100 ms, select the slot.

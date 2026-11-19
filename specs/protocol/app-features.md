@@ -72,7 +72,7 @@ MIDI page and no firmware update on this screen.
 |---|---|---|---|
 | 36 presets `1A`–`9D` | names are generated from the index; nothing is read or written for names | hypothesis | — |
 | tap a preset | select `i`, wait 100 ms, read `0x10000000` × 21 | confirmed | volatile (unsaved edits are lost) |
-| preset LED colour swatch + colour picker | shown from preset bytes 18–20 (R, G, B); picker writes 3 bytes at `0x10000012` | write observed; LED meaning hypothesis | volatile until saved |
+| preset LED colour swatch + colour picker | shown from preset bytes 18–20 (R, G, B); picker writes 3 bytes at `0x10000012` | write and LED meaning observed (spec 004 gate session A: `ff 00 00` turned the preset LED red in normal mode) | volatile until saved |
 
 ### Effect chain
 
@@ -86,7 +86,7 @@ knob change writes the whole 14-byte block at `0x10000004`, rebuilt from the app
 | MOD | byte 1, `0x10000001` | FX (11), Speed (12) | FX is a **section** knob |
 | DLY | byte 2, `0x10000002` | Mix (13), Time (14) | Mix is a **section** knob |
 | REV | byte 3, `0x10000003` | Decay (15), Mix (16) | Decay is a **section** knob |
-| CAB | none | IR (17) | a number 1–9; no cab names in the app |
+| CAB | none | IR (17) | 0 shown as `OFF`, 1–8 as the raw value (corrected 2026-11-19; the manual also says the first IR slot turns the cab off); no cab names in the app |
 
 Switch writes: 1 byte, `01` on / `00` off (observed on hardware for all four, confirmed for none
 yet). Knob block: confirmed.
@@ -105,10 +105,10 @@ the `X` positions between two types turn the module off (manual). openvave uses 
 | Control | Messages | Confidence | Risk |
 |---|---|---|---|
 | Save | 21 B at `2 + 21·i` (loaded `i`) → 300 ms → empty write `0xF0000000` → 100 ms → select `i` | observed (checks 3 and 4): a changed save persists across a power cycle | persistent |
-| Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis | persistent |
+| Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis (openvave's `preset save --to` sends the same writes: confirmed) | persistent |
 | BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | observed (check 2) | volatile: all blocks off, clean sound; edit buffer reads all zero and global slot reads `ff` |
 | BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | observed (check 2) | volatile; reloads the stored preset, so unsaved edits are lost |
-| Loopback | read `0xD0000000` × 1 on connect; toggle writes `01` / `00` there (no commit) | read confirmed; write and meaning hypothesis | unknown persistence |
+| Loopback | read `0xD0000000` × 1 on connect; toggle writes `01` / `00` there (no commit) | read confirmed; write and meaning observed (spec 004 gate session A: `01` mixes the pedal's Bluetooth audio into the USB recording) | kept across a power cycle without a commit |
 
 ### More menu
 
@@ -333,8 +333,8 @@ Still open after spec 004:
   "Save to" with the app's dialog (openvave's `--to` does the same writes), factory restore.
 - Bypass corner cases (another index than the loaded preset, data `00`, footswitch exit), other
   firmware than 96, other ATT MTUs for the image write.
-- The automatic backup lands in the current directory by default (a git-ignored default or a
-  warning is a follow-up).
+- ~~The automatic backup lands in the current directory by default~~ (since the change after 0.5.0
+  it defaults to `~/.local/share/openvave/backups` or `$OPENVAVE_BACKUP_DIR`).
 
 Out of scope (unchanged): erase `0x21`, factory restore from vendor images, firmware update,
 writes to the global block, MIDI.

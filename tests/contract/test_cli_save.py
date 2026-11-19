@@ -320,3 +320,34 @@ def test_automatic_backup_never_overwrites(tmp_path: Path) -> None:
         "tankg-backup-20261118-101500-before-restore.json"
     )
     assert files.automatic_backup_path(tmp_path, "save", when).name.endswith("-save-2.json")
+
+
+def test_default_backup_dir_follows_the_platform(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENVAVE_BACKUP_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    assert files.default_backup_dir() == tmp_path / "data" / "openvave" / "backups"
+    monkeypatch.setenv("XDG_DATA_HOME", "")
+    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert files.default_backup_dir() == tmp_path / ".local" / "share" / "openvave" / "backups"
+    monkeypatch.setenv("OPENVAVE_BACKUP_DIR", str(tmp_path / "mine"))
+    assert files.default_backup_dir() == tmp_path / "mine"
+
+
+def test_backup_without_backup_dir_goes_to_the_data_dir(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Not the current directory, which may be a git working tree (spec 004 follow-up)."""
+    monkeypatch.delenv("OPENVAVE_BACKUP_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.chdir(tmp_path)
+    fake = edited_fake()
+    code = main(["preset", "save", "--to", "1C", *UNSAFE_OPTS], transport_factory=factory_for(fake))
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    target = tmp_path / "data" / "openvave" / "backups"
+    [saved] = backups(target)
+    assert f"Backup saved: {saved}" in out
+    assert list(tmp_path.glob("tankg-backup-*")) == []

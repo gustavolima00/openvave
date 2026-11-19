@@ -135,9 +135,10 @@ def _unsafe_options(parser: argparse.ArgumentParser, action: str) -> None:
     parser.add_argument(
         "--backup-dir",
         metavar="DIR",
-        default=".",
+        default=None,
         help=f"where the automatic backup tankg-backup-<time>-before-{action}.json goes "
-        "(default: current directory; never overwrites)",
+        "(default: $OPENVAVE_BACKUP_DIR, else ~/.local/share/openvave/backups, created if "
+        "needed; never overwrites)",
     )
 
 
@@ -704,6 +705,8 @@ async def _sequence(
             print(render.human_sequence_header(plan, source), flush=True)
 
     def on_backup(backup: Backup) -> None:
+        if args.create_backup_dir:
+            args.backup_dir.mkdir(parents=True, exist_ok=True)
         path = files.automatic_backup_path(args.backup_dir, action, datetime.now())
         files.write_json_atomic(path, backup.to_document(), force=False)
         saved.append(str(path))
@@ -847,9 +850,14 @@ def _prepare_write(args: argparse.Namespace) -> None:
 def _prepare_sequence(args: argparse.Namespace) -> None:
     """``preset save`` / ``preset restore``: position, backup directory and the restore file are
     checked before any pedal I/O (usage errors exit 2)."""
-    args.backup_dir = Path(args.backup_dir)
-    if not args.backup_dir.is_dir():
-        raise UsageError(f"--backup-dir {args.backup_dir} is not a directory")
+    if args.backup_dir is None:
+        args.backup_dir = files.default_backup_dir()
+        args.create_backup_dir = True
+    else:
+        args.backup_dir = Path(args.backup_dir)
+        args.create_backup_dir = False
+        if not args.backup_dir.is_dir():
+            raise UsageError(f"--backup-dir {args.backup_dir} is not a directory")
     text = args.to if args.action == "save" else args.slot
     try:
         args.index = None if text is None else parse_position(text)

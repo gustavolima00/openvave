@@ -59,7 +59,8 @@ Each row, with its evidence, is under "Write messages" in
 On top of that, `preset save` and `preset restore`:
 
 - take a **full, cross-checked backup** of all 36 presets before the first write and write it to
-  `--backup-dir` (never overwriting a file); if that fails, nothing is written, and the backup
+  `--backup-dir` (by default `~/.local/share/openvave/backups`, outside any project folder; never
+  overwriting a file); if that fails, nothing is written, and the backup
   cannot be skipped;
 - read a written slot back before committing it, and stop if it differs;
 - verify the result at the end (slot contents, loaded preset, buffer; a full read after

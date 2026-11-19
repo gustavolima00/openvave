@@ -86,6 +86,21 @@ All notable changes to this project are documented here. The format follows
   without elicitation are not asked, as the command line is not.
 - `--read-only` also hides `preset_save` and `preset_restore`; their annotations mark them
   destructive and not idempotent.
+### Changed
+
+- `preset save` and `preset restore` without `--backup-dir` now write their automatic backup to
+  `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
+  on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current
+  directory, which was often a git working tree. The `Backup saved:` line gives the path as before;
+  `--backup-dir DIR` is unchanged.
+
+### Documentation
+
+- `ir_cab` position 0 is most likely "cab off" (the manual says the first IR slot turns the IR off,
+  and the phone app shows `OFF` for 0, then 1–8): documented as a hypothesis; openvave still prints
+  `#0`. The manual's PRESET and LIVE modes are openvave's `normal` and `edit`.
+- The app-feature inventory no longer calls the loopback and LED-colour meanings hypotheses (both
+  observed in spec 004 gate session A), and gives the app's IR cab display correctly.
 
 ## [0.5.0]
 

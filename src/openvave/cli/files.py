@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +43,24 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp)
         raise
+
+
+def default_backup_dir() -> Path:
+    """Where the automatic backup of ``preset save`` / ``preset restore`` goes without
+    ``--backup-dir``, in this order: ``$OPENVAVE_BACKUP_DIR``; ``$XDG_DATA_HOME/openvave/backups``;
+    on Windows ``%LOCALAPPDATA%\\openvave\\backups``; otherwise
+    ``~/.local/share/openvave/backups``. Empty variables count as unset. Until 0.5.0 the default
+    was the current directory, which is often a git working tree."""
+    explicit = os.environ.get("OPENVAVE_BACKUP_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+    xdg = os.environ.get("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / "openvave" / "backups"
+    local = os.environ.get("LOCALAPPDATA")
+    if sys.platform == "win32" and local:
+        return Path(local) / "openvave" / "backups"
+    return Path.home() / ".local" / "share" / "openvave" / "backups"
 
 
 def automatic_backup_path(directory: Path, action: str, when: datetime) -> Path:

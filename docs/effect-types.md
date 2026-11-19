@@ -122,8 +122,15 @@ In the library the value is a tuple: `("spring", 10)`, or `(None, 10)` to keep t
 ## Amp types and IR cabs
 
 `amp_type` (byte 5) and `ir_cab` (byte 17) are stepped selectors with **9 positions each**, 0–8.
-They are not typed knobs: every position is a model, and there is no off zone. Neither the pedal's
-protocol nor the phone app names them (the app shows numbers 1–9), so openvave shows `#0`–`#8`.
+They are not typed knobs (no sections, no off zones between types). Neither the pedal's protocol
+nor the phone app names them, so openvave shows `#0`–`#8`.
+
+- `amp_type`: 9 amp models. The phone app shows the raw value plus one (1–9).
+- `ir_cab`: **position 0 turns the cabinet simulation off**, positions 1–8 are 8 cabinet IRs. The
+  manual says so ("the first slot means the IR has been turned off") and the phone app shows `OFF`
+  for 0 and the raw value (1–8) otherwise. Not yet heard on hardware, so it is a `hypothesis` and
+  openvave still prints `#0`. The 8 cabinets can be replaced by importing IR files with the vendor
+  software, so any names would only describe the factory IRs.
 
 ```bash
 openvave set amp_type 3

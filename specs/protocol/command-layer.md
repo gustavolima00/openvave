@@ -155,7 +155,7 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
 | preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | confirmed | 96 | `captures/fw96/20261116-step-delay_time.jsonl`, `captures/fw96/20261116-step-delay_time-1917.jsonl` | Alone, 0 → 127, swept three times. Session 19:17 (labelled `delay time`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
 | preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261117-reverb-sections-app.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. The phone app splits this one byte into three colour sections of 44 values (blue, orange, green), each numbered 1–40 with `X` past 40; see "Reverb decay sections" (2026-11-17, observed). The raw byte stays one continuous knob. fw96: `0x05` |
 | preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | confirmed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl`, `captures/fw96/20261116-step-reverb_mix-1917.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). Session 19:17 (labelled `reverb mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x04` |
-| preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. fw96: `0x07` |
+| preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. Hypothesis (app code and manual, 2026-11-19): `0` turns the cab simulation off and 1–8 are the 8 (user-replaceable) IRs; the app shows `OFF` for 0 and the raw value otherwise, and shows amp type as raw + 1. Not heard yet. fw96: `0x07` |
 | preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
 | preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): green component of the preset's LED colour. fw96: `0x16` |
 | preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): blue component of the preset's LED colour. fw96: `0x43` |
@@ -686,8 +686,11 @@ tested.
 - Other firmware than 96 (every row is listed for fw 96 only), other ATT MTUs for the chunked
   image write, and non-zero write status codes (no NAK seen yet).
 - Still unknown from earlier: the meaning of the header `a5 5a`; the names of the 9 amp types and
-  9 IR cabs. Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair.
-- The automatic backup defaults to the current directory, which may be a git working tree
+  the 8 IR cabs (the app has no names: amp type as 1–9, IR cab `OFF` then 1–8; the manual's lists
+  are images, not transcribed). That IR cab `0` is "cab off" (app code and manual) is a hypothesis
+  until heard. Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair.
+- ~~The automatic backup defaults to the current directory, which may be a git working tree~~
+  (after 0.5.0: `~/.local/share/openvave/backups` or `$OPENVAVE_BACKUP_DIR`)
   (observed in every gate step; follow-up: a git-ignored default or a warning).
 
 ### Host observations (from the 001 milestone gates)

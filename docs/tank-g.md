@@ -22,7 +22,7 @@ Knobs, in panel order:
 | # | Panel label | Field | Preset byte | Values | Confidence |
 |---|---|---|---|---|---|
 | 1 | MASTER | — | — | not mapped (see notes) | — |
-| 2 | IR CAB | `ir_cab` | 17 | 9 positions, 0–8 | confirmed |
+| 2 | IR CAB | `ir_cab` | 17 | 9 positions, 0–8 (0 = cab off, hypothesis) | confirmed |
 | 3 | RVB MIX | `reverb_mix` | 16 | 0–127 | confirmed |
 | 4 | RVB DECAY | `reverb_decay` | 15 | 0–127: room, spring, cloud ([types](effect-types.md)) | confirmed (types: observed) |
 | 5 | DLY TIME | `delay_time` | 14 | 0–127 | confirmed |
@@ -67,10 +67,11 @@ Notes:
   outside the presets, but that is untested; `openvave watch` while turning it would tell.
 - **Values are raw.** 0–127 is the knob's full sweep (every knob reached both ends on the pedal).
   There are no units: openvave does not know what gain 60 means in dB or delay time 40 in ms.
-- **Amp types and IR cabs have no names.** Each is a 9-position selector, 0–8 on the wire. The
-  phone app shows them as numbers 1–9 and names neither. openvave prints `#0`–`#8` (the raw
-  value). Neither the protocol docs nor the app give a list of amp models or cabinets, so these
-  pages do not either.
+- **Amp types and IR cabs have no names.** Each is a 9-position selector, 0–8 on the wire.
+  openvave prints `#0`–`#8` (the raw value). The phone app shows amp types as 1–9 and the IR cab
+  as `OFF` for 0 and 1–8 otherwise; the manual agrees that the first IR position turns the cab off
+  (hypothesis until heard). The manual's lists of models are images we have not transcribed, and
+  the app names neither, so these pages do not either.
 - **Preset bytes 18–20** hold the colour of the preset LED, as red, green, blue. Writing
   `ff 00 00` turned the LED red in one session (observed), so `set led_colour` exists behind
   `--experimental`; `preset dump` still lists the three bytes as `unknown` until the byte map has a
@@ -131,11 +132,12 @@ leave edit mode or the tuner; use the pedal for that).
 
 | Value | Mode | openvave writes |
 |---|---|---|
-| 1 | **normal**: playing a preset | allowed (as the phone app does) |
-| 0 | **edit**: the pedal's own edit mode | `set` allowed; `preset select` and `reload` need `--discard-edits`; `bypass on`, `save`, `restore` refused |
+| 1 | **normal** (the manual's PRESET mode): playing a preset | allowed (as the phone app does) |
+| 0 | **edit** (the manual's LIVE mode): the pedal's own edit mode | `set` allowed; `preset select` and `reload` need `--discard-edits`; `bypass on`, `save`, `restore` refused |
 | 2 | **tuner** | every write refused |
 
-The pedal's own edit mode is not needed for remote editing: `openvave set` and the phone app write
+The manual calls these PRESET and LIVE mode (B+C footswitches toggle them); openvave keeps the
+names `normal` and `edit`, which are also the JSON values. The pedal's own edit mode is not needed for remote editing: `openvave set` and the phone app write
 the edit buffer in normal mode, and the pedal stays in normal mode. Leaving the pedal's edit mode
 without saving restores the stored preset (observed).
 
