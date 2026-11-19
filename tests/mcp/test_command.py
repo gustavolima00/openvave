@@ -152,4 +152,6 @@ async def test_stdio_read_only_lists_no_write_tool(tmp_path: Path) -> None:
         "bypass_on",
         "bypass_off",
         "loopback",
+        "preset_save",
+        "preset_restore",
     }

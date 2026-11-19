@@ -60,8 +60,8 @@ def test_the_contract_table_is_parsed() -> None:
     }
 
 
-MILESTONE_TOOLS = set(ROWS) - {"preset_save", "preset_restore"}
-"""Tools that exist so far (save / restore land in milestone 3)."""
+MILESTONE_TOOLS = set(ROWS)
+"""Tools that exist so far: every tool of the contract (milestone 3)."""
 
 
 async def test_annotations_equal_the_contract(tmp_path) -> None:

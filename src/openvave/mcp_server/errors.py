@@ -93,11 +93,19 @@ Partial = Callable[[OpenvaveError], dict[str, Any] | None]
 """Builds the ``partial`` document of an error raised mid-batch / mid-sequence (or ``None``)."""
 
 
-def error_message(err: BaseException, partial: Partial | None = None) -> str:
+Notes = Callable[[OpenvaveError], list[str]]
+"""Extra lines for an error, after the CLI's hints (the automatic backup of a sequence)."""
+
+
+def error_message(
+    err: BaseException, partial: Partial | None = None, notes: Notes | None = None
+) -> str:
     """The full text of the tool error for ``err``."""
     kind = kind_of(err)
     if isinstance(err, OpenvaveError):
         lines = [f"{kind}: {error_text(err)}", *(line.strip() for line in report_lines(err))]
+        if notes is not None:
+            lines.extend(notes(err))
         document = partial(err) if partial is not None else None
         if document is not None:
             lines.append("partial: " + json.dumps(document, separators=(",", ":")))
@@ -109,7 +117,9 @@ def error_message(err: BaseException, partial: Partial | None = None) -> str:
 
 
 @contextlib.contextmanager
-def tool_errors(on_error: Callable[[str], None], partial: Partial | None = None) -> Iterator[None]:
+def tool_errors(
+    on_error: Callable[[str], None], partial: Partial | None = None, notes: Notes | None = None
+) -> Iterator[None]:
     """Turn any exception raised inside into a :class:`ToolError`; ``on_error`` gets the first
     line (the holder's ``last_error``). ``ToolError`` raised inside passes through."""
     try:
@@ -117,7 +127,7 @@ def tool_errors(on_error: Callable[[str], None], partial: Partial | None = None)
     except ToolError:
         raise
     except Exception as err:
-        message = error_message(err, partial)
+        message = error_message(err, partial, notes)
         if kind_of(err) == "internal":
             logger.exception("unexpected error in a tool call")
         on_error(message.splitlines()[0])

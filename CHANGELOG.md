@@ -67,6 +67,26 @@ All notable changes to this project are documented here. The format follows
 - `--read-only` leaves the six write tools out of the tool list (calling one fails); every tool's
   annotations (read-only, destructive, idempotent) follow the contract's table.
 
+### Added (spec 006 milestone 3): save and restore in `openvave mcp`
+
+- `preset_save` (`to`: `1A`–`9D` or `0`–`35`, default the loaded preset) and `preset_restore`
+  (`file`: a name in the backup folder, with `slot` or `all: true`) send the same sequences as
+  `preset save` / `preset restore` and return their `--json` document plus `summary` and
+  `reminder` (the automatic backup's path). Both need `unsafe: true`, as the command line needs
+  `--unsafe`; `dry_run`, `experimental` and (restore) `discard_edits` are passed unchanged.
+- The automatic backup of all 36 presets is written to the backup folder before the first write
+  (`tankg-backup-<time>-before-save|restore.json`, never overwriting); if it cannot be written,
+  nothing is sent to the pedal. A sequence that stops midway is an error naming the backup and
+  carrying the document so far as `partial:`.
+- Restore reads only from the backup folder: a path, `..`, or a link leading out is refused
+  (`invalid_file`) before connecting, as is a file that fails the restore checks.
+- With `unsafe: true` (and no `dry_run`), a client that supports elicitation asks the owner
+  first ("Overwrite stored preset 2A with the current sound? A full backup is written to … first.");
+  declining or cancelling is the error `declined_by_owner`, with nothing read or sent. Clients
+  without elicitation are not asked, as the command line is not.
+- `--read-only` also hides `preset_save` and `preset_restore`; their annotations mark them
+  destructive and not idempotent.
+
 ## [0.5.0]
 
 Finding and choosing a pedal. `openvave scan` lists every Tank-G in range without connecting,

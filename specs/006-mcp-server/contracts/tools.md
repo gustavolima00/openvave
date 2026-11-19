@@ -111,7 +111,14 @@ server asks before connecting for the write: *"Overwrite stored preset 2A with t
 A full backup is written to <folder> first."* (restore: the file and `slot` / all 36 presets),
 schema `{confirm: boolean}`. Accept with `confirm: true` → run; decline, cancel or
 `confirm: false` → error `declined_by_owner`, nothing sent. Clients without the capability are
-not asked (CLI parity).
+not asked (CLI parity). Nobody is asked for a call the tool refuses from its arguments alone (bad
+position, `slot` and `all` both or neither, a restore `file` that is not a valid backup in the
+folder): that call fails with `invalid_value` / `invalid_file` instead.
+
+Save / restore errors add, after the hints: `stored presets may have changed; nothing was
+retried` once a persistent frame was sent, and `backup: <path> (…)` once the automatic backup is
+written. An automatic backup that cannot be written (folder not writable) is `invalid_file`, and
+nothing is sent to the pedal.
 
 ## Resources
 

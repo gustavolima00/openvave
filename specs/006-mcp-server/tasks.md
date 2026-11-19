@@ -329,34 +329,52 @@ folder, and the owner's confirmation through elicitation where supported.
 
 ### Tests first (must fail)
 
-- [ ] T046 [P] [US5] `tests/mcp/test_save_restore.py` (`@pytest.mark.persistent_writes`): the
+- [X] T046 [P] [US5] `tests/mcp/test_save_restore.py` (`@pytest.mark.persistent_writes`): the
   criteria above, reusing the save/restore fakes of `tests/contract/test_cli_save.py` /
   `test_cli_restore.py`; frames equal the CLI's for the same arguments
-- [ ] T047 [P] [US5] `tests/mcp/test_elicitation.py`: callback variants × both client modes;
+- [X] T047 [P] [US5] `tests/mcp/test_elicitation.py`: callback variants × both client modes;
   message names position(s) and folder; capability absent → not asked
 
 ### Implementation
 
-- [ ] T048 [US5] Elicitation resolver in `server.py` (research R9): `Confirm` model, `ask()`
+- [X] T048 [US5] Elicitation resolver (landed in the new `src/openvave/mcp_server/sequences.py`
+  with both tools, registered from `server.py`; research R9): `Confirm` model, `ask()`
   resolver returning `Elicit(...)` or the "not asked" marker; outcome → proceed or
   `declined_by_owner`
-- [ ] T049 [US5] `preset_save` tool: `plan_save` for `dry_run`; else `save_preset(to, unsafe=…,
+- [X] T049 [US5] `preset_save` tool: `plan_save` for `dry_run`; else `save_preset(to, unsafe=…,
   experimental=…, on_backup=…)` with `on_backup` writing to
   `openvave.cli.files.automatic_backup_path(holder.options.backup_dir, "save", now)`
-- [ ] T050 [US5] `preset_restore` tool: `resolve_backup_file` + `openvave.cli.load_restore_file`
+- [X] T050 [US5] `preset_restore` tool: `resolve_backup_file` + `openvave.cli.load_restore_file`
   (or `openvave.backup` loader) before taking the pedal; `plan_restore` / `restore(...)` with the
   same `on_backup`; `slot` (position or index) xor `all`
-- [ ] T051 [US5] Annotations (`destructiveHint=true`) and descriptions (what `unsafe` means, that a
+- [X] T051 [US5] Annotations (`destructiveHint=true`) and descriptions (what `unsafe` means, that a
   backup is taken first, that the owner may be asked)
-- [ ] T052 `CHANGELOG.md` [Unreleased]: milestone 3 entries
+- [X] T052 `CHANGELOG.md` [Unreleased]: milestone 3 entries
 
 ### Live verification (milestone gate)
 
-- [ ] T053 Suite, ruff, mypy green; persistent-frame audit passes (only marked tests send them)
-- [ ] T054 SC-003 test extended to save/restore
-- [ ] T055 Report to the owner
+- [X] T053 Suite, ruff, mypy green; persistent-frame audit passes (only marked tests send them)
+- [X] T054 SC-003 test extended to save/restore
+- [X] T055 Report to the owner
+  - Evidence (2026-11-19): `uv run pytest -q` → 2896 passed, 24 skipped (6 hardware, 18
+    gate-matrix cells for tools without `discard_edits`); the session persistent-write audit
+    passes (only `tests/mcp/test_save_restore.py` and `test_elicitation.py`, both marked
+    `persistent_writes`, send slot / commit / image frames). `test_save_restore.py`: save (run
+    and dry run) and restore (`all`, `slot` 1C, `slot` 2) send the CLI's frames and return its
+    `--json` document; without `unsafe` → `unsafe_required`, no frame, no backup file; edit
+    mode, `firmware_mismatch`, `edits_would_be_discarded` refused with nothing sent; slot/all,
+    bad position, absolute / separator / `..` / missing / symlink-out / corrupt files refused
+    before connecting; the automatic backup (folder 0700) equals the pedal before the save; a
+    read-only folder → `invalid_file`, nothing written to the pedal; a commit NAK carries
+    `backup:` and `partial:`. `test_elicitation.py` (legacy and `auto` modes): accept +
+    `confirm: true` runs; decline / cancel / `confirm: false` → `declined_by_owner` with no
+    connection and no backup; not asked without `unsafe`, with `dry_run`, for invalid
+    arguments, or without the capability; the confirmation is not a tool argument.
+    `test_gates.py` (SC-003) covers save/restore × 3 opt-ins × 3 states with no persistent
+    frame. ruff check / format, mypy (38 files) clean. Nothing in `src/openvave/protocol/` or
+    `specs/protocol/` changed. No pedal involved.
 
-**Checkpoint**: Milestone 3 DONE
+**Checkpoint**: Milestone 3 DONE ✅
 
 ---
 

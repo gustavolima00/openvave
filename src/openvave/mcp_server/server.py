@@ -27,6 +27,7 @@ from openvave.mcp_server import backups, resources
 from openvave.mcp_server.errors import InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
 from openvave.mcp_server.results import add_knob_types, change_json, change_label, with_summary
+from openvave.mcp_server.sequences import register_sequences
 from openvave.mcp_server.writes import register_writes
 from openvave.models import ByteChange, DeviceInfo, PedalState, Region, RegionRead
 from openvave.protocol import classify, diff
@@ -81,6 +82,8 @@ TOOLS: dict[str, ToolSpec] = {
     "bypass_on": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
     "bypass_off": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
     "loopback": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "preset_save": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
+    "preset_restore": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
 }
 """Every tool, its annotations and whether ``--read-only`` hides it (contracts/tools.md)."""
 
@@ -310,6 +313,7 @@ def build_server(holder: PedalHolder) -> MCPServer:
         return {"summary": summary, "folder": str(folder), "backups": rows}
 
     register_writes(server, holder, lambda name: TOOLS[name].annotations(), record)
+    register_sequences(server, holder, lambda name: TOOLS[name].annotations(), record)
     if holder.options.read_only:
         # --read-only: the write tools are neither listed nor callable (FR-010)
         for name, spec in TOOLS.items():

@@ -1,8 +1,10 @@
-"""SC-003: whatever opt-ins the assistant passes to a volatile write tool, the pedal never
-receives a persistent write, and never a message not yet confirmed unless ``experimental``."""
+"""SC-003: whatever opt-ins the assistant passes to a write tool, the pedal never receives a
+persistent write without ``unsafe``, and never a message not yet confirmed unless
+``experimental``."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -10,6 +12,7 @@ import pytest
 from openvave import session
 from openvave.protocol.writes import _SHAPES, message_for
 from tests.mcp.conftest import CountingFactory, open_harness, options
+from tests.support import restore_fixture as rf
 from tests.support.audit import persistent_violation
 from tests.support.write_fixture import EDIT, NORMAL, make_fake, writes
 
@@ -23,6 +26,10 @@ CALLS: list[tuple[str, dict[str, Any]]] = [
     ("bypass_on", {}),
     ("bypass_off", {"position": "1B"}),
     ("loopback", {"on": True}),
+    ("preset_save", {}),
+    ("preset_save", {"to": "2A"}),
+    ("preset_restore", {"file": "source.json", "all": True}),
+    ("preset_restore", {"file": "source.json", "slot": "3B"}),
 ]
 OPT_INS: list[dict[str, Any]] = [{}, {"experimental": True}, {"discard_edits": True}]
 STATES = {
@@ -30,7 +37,7 @@ STATES = {
     "edit": lambda: make_fake(EDIT, status=b"\x00"),
     "bypass": lambda: make_fake(NORMAL, buffer=bytes(21), glob=BYPASSED, status=b"\x00"),
 }
-ACCEPTS_DISCARD = {"preset_select", "preset_reload", "bypass_on"}
+ACCEPTS_DISCARD = {"preset_select", "preset_reload", "bypass_on", "preset_restore"}
 
 
 @pytest.fixture(autouse=True)
@@ -56,9 +63,13 @@ async def test_no_persistent_or_unconfirmed_write(tmp_path, state, opt_in, tool,
     if "discard_edits" in opt_in and tool not in ACCEPTS_DISCARD:
         pytest.skip(f"{tool} takes no discard_edits")
     factory = CountingFactory(make=STATES[state])
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    image = rf.image_with(s2=bytes(range(21)), s9=bytes(range(21)))
+    (folder / "source.json").write_text(json.dumps(rf.document(image)), encoding="utf-8")
     async with open_harness(options(tmp_path), factory) as h:
         await h.call(tool, {**args, **opt_in})
     sent = [frame for fake in factory.fakes for frame in writes(fake)]
-    assert not [f for f in sent if persistent_violation(f, False)]
+    assert not [f for f in sent if persistent_violation(f, False)]  # no unsafe: none persistent
     if not opt_in.get("experimental"):
         assert all(confirmed(f) for f in sent), [f.hex(" ") for f in sent]
