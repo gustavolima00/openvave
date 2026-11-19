@@ -375,3 +375,50 @@ def test_unknown_fault_kind_or_action_is_rejected() -> None:
         make_fake(NORMAL, faults={"stored_slot": "explode"})
     with pytest.raises(ValueError):
         make_fake(NORMAL, faults={"erase": "nak"})
+
+
+# -- lose_link (spec 005 T048) ----------------------------------------------------------------
+
+
+async def test_lose_link_runs_the_disconnect_callback_and_later_writes_fail() -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    lost: list[str] = []
+    fake.on_disconnect(lambda: lost.append("lost"))
+    await _open(fake)
+    await fake.write(CAP.tx(QUERY))
+    fake.lose_link()
+    assert lost == ["lost"]
+    assert fake.closed
+    with pytest.raises(ConnectionLostError):
+        await fake.write(CAP.tx(QUERY))
+    assert fake.sent == [CAP.tx(QUERY)]
+
+
+async def test_lose_link_without_callback() -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    await _open(fake)
+    fake.lose_link()
+    with pytest.raises(ConnectionLostError):
+        await fake.write(CAP.tx(QUERY))
+
+
+async def test_lose_link_is_a_noop_when_closed() -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    lost: list[str] = []
+    fake.on_disconnect(lambda: lost.append("lost"))
+    fake.lose_link()  # never opened
+    await _open(fake)
+    await fake.close()
+    fake.lose_link()
+    assert lost == []
+
+
+async def test_reopen_after_lose_link() -> None:
+    fake = FakeTransport.from_capture(FW96_CONNECT)
+    got = await _open(fake)
+    fake.lose_link()
+    await fake.close()
+    await fake.open()
+    await fake.write(CAP.tx(QUERY))
+    await _settle()
+    assert got.chunks == [CAP.rx(QUERY)]

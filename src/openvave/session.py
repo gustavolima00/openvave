@@ -32,9 +32,13 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from types import TracebackType
+from typing import Literal
 
+from openvave.devices import KnownDevice, KnownDevices, Target
 from openvave.errors import (
+    ConfigError,
     ConnectionLostError,
     HandshakeError,
     OpenvaveError,
@@ -169,13 +173,25 @@ for position 10 of the type the preset already uses."""
 TransportSource = Callable[[], Awaitable[tuple[Transport, DeviceInfo | None]]]
 """Coroutine factory producing the transport to use and, if known, the device it reaches."""
 
+SessionState = Literal["closed", "opening", "open", "lost"]
+"""Where a :class:`TankG` is in its lifecycle (spec 005 data model "Session lifecycle")."""
+
 
 class TankG:
-    """A read-only session with one Tank-G.
+    """A session with one Tank-G: one connection, any number of operations.
 
     Use as an async context manager: ``async with TankG.connect() as pedal`` (BLE) or
     ``async with TankG.over(transport) as pedal`` (any :class:`~openvave.transport.Transport`).
     The handshake runs on enter; :attr:`identity` is available inside the block.
+
+    Or keep the connection as long as needed (spec 005 research R10): ``await pedal.open()``,
+    any number of operations, ``await pedal.close()``. :attr:`is_connected` is true between a
+    successful :meth:`open` and :meth:`close` or a lost link. When the link is lost the pending
+    operation and every later one raise :class:`~openvave.errors.ConnectionLostError` without
+    sending anything; nothing reconnects on its own. :meth:`close` (idempotent), then
+    :meth:`open` again, scans and handshakes anew. One session talks to one pedal, and the pedal
+    accepts one connection: while a session is open, the phone app and any scan (including
+    ``openvave scan`` in another process) do not see it.
     """
 
     def __init__(self, source: TransportSource, *, timeout: float = DEFAULT_TIMEOUT) -> None:
@@ -187,6 +203,7 @@ class TankG:
         self._lock = asyncio.Lock()
         self._assembler = FrameAssembler(on_stray=trace_rx_stray)
         self._waiter: asyncio.Future[bytes] | None = None
+        self._state: SessionState = "closed"
 
     # -- construction -------------------------------------------------------------------------
 
@@ -208,18 +225,61 @@ class TankG:
     @classmethod
     def connect(
         cls,
-        device: str | None = None,
+        device: str | KnownDevice | Target | None = None,
         *,
         scan_timeout: float = DEFAULT_SCAN_TIMEOUT,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> TankG:
-        """A session over BLE: scan, pick the single pedal (or ``device``), connect."""
-        from openvave.transport.ble import open_ble
+        """A session over BLE: scan, pick the pedal, connect (on :meth:`open` or ``async with``).
+
+        ``device``: ``None`` uses the only Tank-G in range (0.4.0 rules; no configuration is
+        read); an identifier string or a :class:`~openvave.devices.KnownDevice` is that pedal
+        (``chosen_by="device_option"``); a :class:`~openvave.devices.Target` is used as is. A
+        chosen pedal that is not seen raises :class:`~openvave.errors.TargetNotFoundError`;
+        nothing else is connected to instead. :attr:`device` then carries ``nickname`` and
+        ``chosen_by``.
+        """
+        target: str | Target | None
+        if isinstance(device, KnownDevice):
+            target = Target(device.identifier, device.nickname, "device_option")
+        else:
+            target = device
 
         async def source() -> tuple[Transport, DeviceInfo | None]:
-            return await open_ble(device, scan_timeout)
+            from openvave.transport import ble  # looked up at open time (patched by tests)
+
+            return await ble.open_ble(target, scan_timeout)
 
         return cls(source, timeout=timeout)
+
+    @classmethod
+    def connect_selected(
+        cls,
+        *,
+        config_path: Path | str | None = None,
+        scan_timeout: float = DEFAULT_SCAN_TIMEOUT,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> TankG:
+        """A session over BLE to the default pedal of the known-pedals file (``openvave
+        select``); ``chosen_by="selected"``.
+
+        The file (``config_path``, else :func:`~openvave.devices.default_config_path`) is read
+        now. Raises :class:`~openvave.errors.ConfigError`: ``invalid_file``, or
+        ``unknown_device`` when no default pedal is set.
+        """
+        known = KnownDevices.load(config_path)
+        default = known.default
+        if default is None:
+            raise ConfigError(
+                "no default pedal; choose one with: openvave select ID",
+                reason="unknown_device",
+                path=known.path,
+            )
+        return cls.connect(
+            Target(default.identifier, default.nickname, "selected"),
+            scan_timeout=scan_timeout,
+            timeout=timeout,
+        )
 
     # -- public state -------------------------------------------------------------------------
 
@@ -232,8 +292,16 @@ class TankG:
 
     @property
     def device(self) -> DeviceInfo | None:
-        """The discovered device, or ``None`` when the transport was supplied directly."""
+        """The discovered device, or ``None`` when the transport was supplied directly.
+
+        From :meth:`connect` or :meth:`connect_selected` it carries ``nickname`` (when known)
+        and ``chosen_by``."""
         return self._device
+
+    @property
+    def is_connected(self) -> bool:
+        """True between a successful :meth:`open` and :meth:`close` or a lost link."""
+        return self._state == "open"
 
     # -- reads ------------------------------------------------------------------------------
 
@@ -1514,10 +1582,20 @@ class TankG:
 
     # -- context manager ----------------------------------------------------------------------
 
-    async def __aenter__(self) -> TankG:
-        transport, self._device = await self._source()
-        self._transport = transport
+    # -- lifecycle ----------------------------------------------------------------------------
+
+    async def open(self) -> None:
+        """Connect: obtain the transport (BLE: scan and choose), open it, handshake.
+
+        What ``async with`` does on enter. Raises :class:`RuntimeError` when the session is not
+        closed (open, opening or lost: :meth:`close` it first). On failure the session is closed
+        again and the error propagates."""
+        if self._state != "closed":
+            raise RuntimeError(f"TankG.open() on a session that is {self._state}; close it first")
+        self._state = "opening"
         try:
+            transport, self._device = await self._source()
+            self._transport = transport
             transport.on_notify(self._on_notify)
             set_lost = getattr(transport, "on_disconnect", None)
             if callable(set_lost):
@@ -1526,8 +1604,24 @@ class TankG:
             await asyncio.sleep(SETTLE_DELAY)
             self._identity = await self._handshake()
         except BaseException:
-            await self._close()
+            await self.close()
             raise
+        if self._state == "opening":
+            self._state = "open"
+
+    async def close(self) -> None:
+        """Release the pedal. Idempotent in every state; a pending request is cancelled."""
+        self._state = "closed"
+        waiter, self._waiter = self._waiter, None
+        if waiter is not None and not waiter.done():
+            waiter.cancel()
+        self._assembler.reset()
+        transport, self._transport = self._transport, None
+        if transport is not None:
+            await transport.close()
+
+    async def __aenter__(self) -> TankG:
+        await self.open()
         return self
 
     async def __aexit__(
@@ -1536,16 +1630,7 @@ class TankG:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        await self._close()
-
-    async def _close(self) -> None:
-        waiter, self._waiter = self._waiter, None
-        if waiter is not None and not waiter.done():
-            waiter.cancel()
-        self._assembler.reset()
-        transport, self._transport = self._transport, None
-        if transport is not None:
-            await transport.close()
+        await self.close()
 
     # -- protocol -----------------------------------------------------------------------------
 
@@ -1577,6 +1662,8 @@ class TankG:
     async def _request(self, frame: bytes) -> bytes:
         """Send one request and wait for the next complete frame (one in flight at a time)."""
         async with self._lock:
+            if self._state == "lost":
+                raise ConnectionLostError("the pedal disconnected; close and open the session")
             transport = self._transport
             if transport is None:
                 raise ConnectionLostError("session is closed")
@@ -1585,7 +1672,11 @@ class TankG:
             self._waiter = waiter
             try:
                 trace_tx(frame)
-                await transport.write(frame)
+                try:
+                    await transport.write(frame)
+                except ConnectionLostError:
+                    self._mark_lost(transport)
+                    raise
                 try:
                     async with asyncio.timeout(self._timeout):
                         return await waiter
@@ -1609,9 +1700,17 @@ class TankG:
                 trace_rx_stray(frame)
 
     def _connection_lost(self) -> None:
+        if self._transport is None:  # closed meanwhile: a late callback
+            return
+        self._mark_lost(self._transport)
         waiter = self._waiter
         if waiter is not None and not waiter.done():
             waiter.set_exception(ConnectionLostError("the pedal disconnected"))
+
+    def _mark_lost(self, transport: Transport) -> None:
+        """Record a lost link of the current transport: later operations fail fast (R10)."""
+        if transport is self._transport and self._state in ("opening", "open"):
+            self._state = "lost"
 
 
 def _parse_colour(value: FieldValue) -> tuple[int, ...]:

@@ -24,6 +24,15 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
     known = openvave.KnownDevices.load()                 # known pedals (devices.json); pure ops
     known = known.select("8F3A21C4-…", nickname="stage") # returns a new value; known.save()
     target = openvave.resolve_target(option, environment, known)   # --device > env > default
+    async with openvave.TankG.connect(target) as pedal:  # also an identifier or a KnownDevice
+        ...
+
+    pedal = openvave.TankG.connect_selected()            # the default pedal (openvave select)
+    await pedal.open()                                   # long-lived: one connection, many ops
+    try:
+        ...                                              # pedal.is_connected: False once lost
+    finally:
+        await pedal.close()                              # idempotent; then open() reconnects
 
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
@@ -37,7 +46,9 @@ Only ``0x11`` (query), ``0x23`` (read) and ``0x22`` (write) to a closed allowlis
 sent: the volatile edit buffer, preset select, bypass and loopback writes, and three persistent
 writes (stored slot, commit, stored image) that only ``save_preset`` / ``restore`` send, only with
 ``unsafe=True`` and after a verified backup. Erase, the global block and any other address cannot
-be encoded. The pure codec and
+be encoded. A lost link makes every later operation raise ``ConnectionLostError`` at once;
+nothing is resent or reconnected. While a session is open the pedal accepts no other connection
+(the phone app and scans do not see it). The pure codec and
 the byte map decoder (``decode_region``, ``diff``, ``BYTE_MAP``, ``WRITE_MESSAGES``) live in
 :mod:`openvave.protocol`. Everything not exported here is internal.
 """

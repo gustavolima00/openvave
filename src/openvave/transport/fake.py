@@ -92,7 +92,7 @@ class FakeTransport:
     - ``drop``: ``{label: k}`` — send no reply to the first ``k`` matching requests (a dropped
       request does not consume a reply).
     - ``disconnect_after``: after this many writes the link is lost; later writes raise
-      :class:`ConnectionLostError`.
+      :class:`ConnectionLostError`. :meth:`lose_link` drops the link at any moment instead.
     - ``replies``: ``{label: reply}`` — reply with this frame (or sequence of frames) instead of
       the scripted one.
     - ``memory``: ``{address: bytes}`` — type-4 memory blocks. A read (``0x23``) of type 4 that
@@ -245,8 +245,22 @@ class FakeTransport:
         self._callback = callback
 
     def on_disconnect(self, callback: Callable[[], None]) -> None:
-        """Register the callback run when a ``disconnect`` fault drops the link."""
+        """Register the callback run when the link drops (a ``disconnect`` fault or
+        :meth:`lose_link`)."""
         self._lost = callback
+
+    def lose_link(self) -> None:
+        """Simulate a lost link now (the pedal switched off or out of range, spec 005).
+
+        Runs the :meth:`on_disconnect` callback at once and makes later writes raise
+        :class:`ConnectionLostError` until the fake is opened again. A no-op when the fake is not
+        open (never opened, or already closed or lost)."""
+        if not self.opened or self.closed:
+            return
+        self.closed = True
+        lost = self._lost
+        if lost is not None:
+            lost()
 
     def _reassemble(self, chunk: bytes) -> bytes | None:
         """A whole request, or ``None`` while a split request is still incomplete."""

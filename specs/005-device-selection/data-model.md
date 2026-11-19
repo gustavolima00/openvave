@@ -127,7 +127,7 @@ closed --open()/async with--> open --close()/exit--> closed --open()--> open …
 
 | State | `is_connected` | Operations |
 |---|---|---|
-| closed | False | `RuntimeError` (as today outside `async with`) |
+| closed | False | `ConnectionLostError("session is closed")` (as today outside `async with`) |
 | open | True | run |
 | lost | False | `ConnectionLostError` at once; nothing is sent, nothing reconnects |
 

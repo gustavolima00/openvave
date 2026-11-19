@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (library, spec 005 milestone 3): long-lived connection
+
+- `TankG.open()` and `TankG.close()`: what `async with` does on enter and exit, for code that
+  keeps one connection for many operations. `close()` is idempotent; after it, `open()` scans and
+  handshakes again on the same object. `open()` on a session that is open or lost raises
+  `RuntimeError`.
+- `TankG.is_connected`: true between a successful `open()` and `close()` or a lost link.
+- Lost link: the pending operation and every later one raise `ConnectionLostError` at once,
+  without sending anything; nothing is retried or reconnected.
+- `TankG.connect()` also accepts a `KnownDevice` or a `Target`; `TankG.connect_selected(*,
+  config_path=None, scan_timeout=…, timeout=…)` connects to the default pedal of the known-pedals
+  file (`chosen_by="selected"`) and raises `ConfigError` when there is no default. `pedal.device`
+  carries `nickname` and `chosen_by`. `TankG.connect()` without an argument still reads no
+  configuration.
+- An operation on a session that was never opened, or is closed, still raises
+  `ConnectionLostError("session is closed")` as in 0.4.0.
+- `FakeTransport.lose_link()` simulates a lost link between operations.
+
 ### Changed (command line, spec 005 milestone 2): every command uses the chosen pedal
 
 - Every pedal command (`info`, `preset dump|backup|select|reload|save|restore`, `set`,

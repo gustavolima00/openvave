@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+from pathlib import Path
 
 import pytest
 
@@ -262,15 +263,43 @@ def test_tankg_write_actions_are_named() -> None:
     assert WRITE_ACTIONS <= public
     assert public - WRITE_ACTIONS == {
         "backup",
+        "close",  # spec 005
         "connect",
+        "connect_selected",  # spec 005
         "device",
         "identity",
+        "is_connected",  # spec 005
+        "open",  # spec 005
         "over",
         "read",
         "snapshot",
         "state",  # spec 004
         "watch",
     }
+
+
+SESSION_LIFECYCLE = ("open", "close", "is_connected", "connect_selected")
+"""Spec 005 additions to ``TankG`` (``contracts/library-api.md`` "Long-lived connection")."""
+
+
+def test_spec005_session_lifecycle_is_public_and_documented() -> None:
+    contract = (
+        Path(__file__).resolve().parents[2]
+        / "specs"
+        / "005-device-selection"
+        / "contracts"
+        / "library-api.md"
+    ).read_text(encoding="utf-8")
+    for name in SESSION_LIFECYCLE:
+        member = inspect.getattr_static(openvave.TankG, name)
+        assert inspect.getdoc(getattr(openvave.TankG, name)) or inspect.getdoc(member), name
+        assert f"pedal.{name}" in contract or f"TankG.{name}" in contract, name
+    assert isinstance(inspect.getattr_static(openvave.TankG, "is_connected"), property)
+    assert inspect.iscoroutinefunction(openvave.TankG.open)
+    assert inspect.iscoroutinefunction(openvave.TankG.close)
+    parameters = inspect.signature(openvave.TankG.connect_selected).parameters
+    assert set(parameters) == {"config_path", "scan_timeout", "timeout"}
+    assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in parameters.values())
 
 
 def test_protocol_module_exposes_write_allowlist() -> None:

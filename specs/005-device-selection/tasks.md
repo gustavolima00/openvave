@@ -377,24 +377,83 @@ it is alive and to which pedal, and close it. May start after Milestone 0.
 
 ### Tests (write first, must fail)
 
-- [ ] T048 [P] [US6] `tests/unit/test_fake_transport.py`: `FakeTransport.lose_link()` calls the registered `on_disconnect` callback, makes later `write` raise `ConnectionLostError`, and is a no-op when closed
-- [ ] T049 [P] [US6] `tests/integration/test_session_lifecycle.py`: `open()` / `close()` without `async with` (one transport open, one handshake, N reads and one write on a fake); `is_connected` across closed → open → closed; `close()` twice; `open()` twice → `RuntimeError`; `lose_link()` between operations → next operation raises `ConnectionLostError` and the fake records no new frame; `lose_link()` during a pending request → that request raises as today and later ones fail fast; lost → `open()` raises `RuntimeError`; lost → `close()` → `open()` succeeds with a new source call; `identity` available after `open()`; `async with` still closes on exit and on exception
-- [ ] T050 [P] [US5] `tests/integration/test_connect_forms.py`: with an injected scan (`monkeypatch` of `open_ble`), `TankG.connect()` passes `None` and reads no configuration (a `KnownDevices.load` patched to raise proves it); `TankG.connect("ID")`, `TankG.connect(known_device)`, `TankG.connect(target)` pass the expected target; `TankG.connect_selected(config_path=p)` uses the default of that file with `chosen_by="selected"` and raises `ConfigError` when there is none
-- [ ] T051 [P] [US5] `tests/integration/test_library_usage.py`: add the three examples of `contracts/library-api.md` ("Known pedals", "Choosing and connecting", "Long-lived connection") as runnable tests against the fake
+- [X] T048 [P] [US6] `tests/unit/test_fake_transport.py`: `FakeTransport.lose_link()` calls the registered `on_disconnect` callback, makes later `write` raise `ConnectionLostError`, and is a no-op when closed
+- [X] T049 [P] [US6] `tests/integration/test_session_lifecycle.py`: `open()` / `close()` without `async with` (one transport open, one handshake, N reads and one write on a fake); `is_connected` across closed → open → closed; `close()` twice; `open()` twice → `RuntimeError`; `lose_link()` between operations → next operation raises `ConnectionLostError` and the fake records no new frame; `lose_link()` during a pending request → that request raises as today and later ones fail fast; lost → `open()` raises `RuntimeError`; lost → `close()` → `open()` succeeds with a new source call; `identity` available after `open()`; `async with` still closes on exit and on exception
+- [X] T050 [P] [US5] `tests/integration/test_connect_forms.py`: with an injected scan (`monkeypatch` of `open_ble`), `TankG.connect()` passes `None` and reads no configuration (a `KnownDevices.load` patched to raise proves it); `TankG.connect("ID")`, `TankG.connect(known_device)`, `TankG.connect(target)` pass the expected target; `TankG.connect_selected(config_path=p)` uses the default of that file with `chosen_by="selected"` and raises `ConfigError` when there is none
+- [X] T051 [P] [US5] `tests/integration/test_library_usage.py`: add the three examples of `contracts/library-api.md` ("Known pedals", "Choosing and connecting", "Long-lived connection") as runnable tests against the fake
 
 ### Implementation
 
-- [ ] T052 [US6] `src/openvave/transport/fake.py`: `lose_link()` (T048)
-- [ ] T053 [US6] `src/openvave/session.py`: public `open()` and `close()` (moved from `__aenter__` / `_close`, which now call them), state tracking (closed / open / lost), `is_connected`, fail-fast check at the start of `_request`, `RuntimeError` on `open()` when not closed (T049)
-- [ ] T054 [US5] `src/openvave/session.py`: `connect(device: str | KnownDevice | Target | None = None, …)` and `connect_selected(*, config_path=None, scan_timeout=…, timeout=…)`; the session's `device` carries `nickname` and `chosen_by` (T050)
-- [ ] T055 [P] [US6] `src/openvave/session.py` and `src/openvave/__init__.py` docstrings: lifecycle, the single-connection note ("while open, the phone app and scans do not see the pedal"), no reconnect; `CHANGELOG.md` [Unreleased]: library lifecycle additions (T051)
-- [ ] T056 [US6] `tests/contract/test_public_api.py`: `TankG.open`, `close`, `is_connected`, `connect_selected` are public and documented in `contracts/library-api.md`
+- [X] T052 [US6] `src/openvave/transport/fake.py`: `lose_link()` (T048)
+- [X] T053 [US6] `src/openvave/session.py`: public `open()` and `close()` (moved from `__aenter__` / `_close`, which now call them), state tracking (closed / open / lost), `is_connected`, fail-fast check at the start of `_request`, `RuntimeError` on `open()` when not closed (T049)
+- [X] T054 [US5] `src/openvave/session.py`: `connect(device: str | KnownDevice | Target | None = None, …)` and `connect_selected(*, config_path=None, scan_timeout=…, timeout=…)`; the session's `device` carries `nickname` and `chosen_by` (T050)
+- [X] T055 [P] [US6] `src/openvave/session.py` and `src/openvave/__init__.py` docstrings: lifecycle, the single-connection note ("while open, the phone app and scans do not see the pedal"), no reconnect; `CHANGELOG.md` [Unreleased]: library lifecycle additions (T051)
+- [X] T056 [US6] `tests/contract/test_public_api.py`: `TankG.open`, `close`, `is_connected`, `connect_selected` are public and documented in `contracts/library-api.md`
 
 ### Live verification (milestone gate)
 
-- [ ] T057 [US6] Run the quickstart §5 script against `FakeTransport` (replace `connect_selected()` by `TankG.over(fake)`), once to completion and once calling `fake.lose_link()` mid-loop; paste both outputs under this task
+- [X] T057 [US6] Run the quickstart §5 script against `FakeTransport` (replace `connect_selected()` by `TankG.over(fake)`), once to completion and once calling `fake.lose_link()` mid-loop; paste both outputs under this task
 
-**Checkpoint**: Milestone 3 DONE — the library supports a long-lived connection with an explicit lifecycle
+**Gate evidence (2026-11-19)**:
+- `uv run pytest -q`: 2575 passed, 6 skipped (M2 gate 2541 + 34 new). `uv run ruff check .`: all checks passed.
+  `uv run ruff format --check src tests`: 156 files formatted. `uv run mypy`: no issues in 28
+  source files.
+- New tests: `tests/integration/test_session_lifecycle.py` (17: one source call, one transport
+  open and one handshake for 4 reads and a write; `is_connected` closed → open → closed; `close()`
+  before open and twice; `open()` twice and `async with` on an open session → `RuntimeError`;
+  `lose_link()` between operations → `ConnectionLostError` for read, `set_field` and `state` with
+  no new frame; `lose_link()` during a pending request → that request raises, later ones fail
+  fast; a write raising `ConnectionLostError` marks the session lost; lost → `open()` raises;
+  lost → `close()` → `open()` makes a new source call and handshake; nothing reconnects on its
+  own; a failed `open()` leaves the session closed; `async with` closes on exit and on exception
+  and can be reused), `tests/integration/test_connect_forms.py` (10),
+  `tests/unit/test_fake_transport.py` (+4 `lose_link`), `tests/integration/test_library_usage.py`
+  (+3: the three 005 contract examples; "Long-lived connection" is executed from the contract
+  text with `connect_selected()` → `TankG.over(fake)`).
+- Existing tests: no `async with` test changed. The only changed pre-existing test file is
+  `tests/contract/test_public_api.py` (T056: the four new `TankG` names in the allowed set, and a
+  test that they are public, documented and in the contract).
+- T057, quickstart §5 with `TankG.over(make_fake(NORMAL))` in place of `connect_selected()`
+  (script in the session scratchpad, run with `PYTHONPATH=.`):
+
+  ```text
+  --- run 1: to completion
+  normal True
+  normal True
+  normal True
+  normal True
+  normal True
+  after close: is_connected=False handshakes=1 frames=11
+  exit 0
+  --- run 2: fake.lose_link() before the 3rd iteration
+  normal True
+  normal True
+  after close: is_connected=False handshakes=1 frames=5
+  openvave.errors.ConnectionLostError: the pedal disconnected; close and open the session
+  exit 1
+  ```
+
+  Run 1: five lines over one connection (1 handshake + 5 × 2 state reads = 11 frames). Run 2:
+  the third `state()` raises `ConnectionLostError` before sending anything (frames stop at 5),
+  `close()` in `finally` runs, `is_connected` is false. The same script on the pedal (switching
+  it off mid-loop) is T061, with the owner, in M4.
+- Deviations:
+  - An operation on a closed (never opened, or closed) session keeps raising
+    `ConnectionLostError("session is closed")`, as 0.4.0 does and as the unchanged
+    `test_session_snapshot.py::test_read_outside_session_fails` requires; the data-model table
+    said `RuntimeError` and is corrected. `RuntimeError` is only for `open()` when not closed.
+  - The state has a fourth value, `opening` (between `open()` starting and the handshake
+    succeeding); `is_connected` is false in it and `open()` refuses it.
+  - A write that raises `ConnectionLostError` (not only the transport's disconnect callback)
+    also marks the session lost.
+  - `connect_selected()` reads the file when called, not at `open()`: a missing default raises
+    at the call site, and a reopened session goes to the same pedal. No default is
+    `ConfigError(reason="unknown_device")` with the file's path.
+  - `connect(KnownDevice)` becomes `Target(identifier, nickname, "device_option")`.
+  - Milestone 2 is merged, so `connect(Target)` uses its `open_ble(target)` (no change to
+    `transport/ble.py` here). `session.py` now imports `openvave.devices` (no Bluetooth code).
+
+**Checkpoint**: ✅ Milestone 3 DONE — the library supports a long-lived connection with an explicit lifecycle
 
 ---
 
