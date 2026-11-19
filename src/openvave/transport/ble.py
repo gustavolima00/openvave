@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from openvave.errors import (
@@ -17,13 +18,16 @@ from openvave.errors import (
     MultipleDevicesError,
     NoDeviceFoundError,
 )
-from openvave.models import DeviceInfo
+from openvave.models import DeviceInfo, ScanEntry
 
 if TYPE_CHECKING:
     from bleak import BleakClient
     from bleak.backends.characteristic import BleakGATTCharacteristic
     from bleak.backends.device import BLEDevice
     from bleak.backends.scanner import AdvertisementData
+
+    from openvave.devices import KnownDevices
+    from openvave.transport import Transport
 
 logger = logging.getLogger("openvave")
 
@@ -157,6 +161,107 @@ async def discover(timeout: float = 5.0) -> list[DeviceInfo]:
     """Scan for ``timeout`` seconds and return every pedal advertising :data:`BLE_NAME`."""
     devices = await _scan(timeout)
     return [info for _, info in devices.values() if info.name == BLE_NAME]
+
+
+def strongest_first(devices: Sequence[DeviceInfo]) -> list[DeviceInfo]:
+    """``devices`` by signal strength, strongest first, unknown strength last, ties by
+    identifier (spec 005 data model, "ScanEntry" order)."""
+    return sorted(
+        devices,
+        key=lambda d: (d.rssi is None, -(d.rssi or 0), d.identifier.casefold()),
+    )
+
+
+async def scan(
+    timeout: float = 5.0,
+    *,
+    include_all: bool = False,
+    known: KnownDevices | None = None,
+    scanner_factory: Callable[..., Any] | None = None,
+) -> list[ScanEntry]:
+    """Search for pedals for the whole ``timeout``; connects to nothing (spec 005 R6, FR-003).
+
+    Rows: every advertiser of :data:`BLE_NAME`, strongest first (unknown strength last, ties by
+    identifier); with ``include_all`` the other advertisers follow in the same order, with
+    ``tank_g=False``. With ``known`` (a :class:`~openvave.KnownDevices`) each row carries the
+    pedal's ``nickname``, ``known`` and ``selected``. ``scanner_factory`` replaces
+    ``BleakScanner`` in tests.
+    """
+    found = [info for _, info in (await _scan(timeout, scanner_factory=scanner_factory)).values()]
+    tank = strongest_first([d for d in found if d.name == BLE_NAME])
+    others = strongest_first([d for d in found if d.name != BLE_NAME]) if include_all else []
+    default = known.default_identifier if known is not None else None
+    entries: list[ScanEntry] = []
+    for device in (*tank, *others):
+        entry = known.find(device.identifier) if known is not None else None
+        if entry is not None and entry.identifier.casefold() != device.identifier.casefold():
+            entry = None  # find() also matches nicknames; only the identifier counts here
+        entries.append(
+            ScanEntry(
+                device=replace(device, nickname=entry.nickname) if entry else device,
+                tank_g=device.name == BLE_NAME,
+                known=entry is not None,
+                selected=entry is not None
+                and default is not None
+                and default.casefold() == device.identifier.casefold(),
+            )
+        )
+    return entries
+
+
+async def seek(
+    identifier: str | None,
+    timeout: float,
+    *,
+    scanner_factory: Callable[..., Any] | None = None,
+) -> list[DeviceInfo]:
+    """Every advertiser seen by a scan that stops early: at once when ``identifier`` is seen
+    (case-insensitive), or :data:`SCAN_GRACE` after the first Tank-G when it is ``None``. Used by
+    ``openvave select`` and ``device --check``."""
+    devices = await _scan(
+        timeout, wanted_id=identifier, stop_early=True, scanner_factory=scanner_factory
+    )
+    return [info for _, info in devices.values()]
+
+
+IdentifyFactory = Callable[[DeviceInfo], Awaitable["Transport"]]
+"""``device -> transport`` (not yet open) used by :func:`identify`; injectable for tests."""
+
+
+async def _ble_transport(device: DeviceInfo) -> Transport:
+    return BleakTransport(device.identifier)
+
+
+async def identify(
+    entries: Sequence[ScanEntry],
+    *,
+    timeout: float = 2.0,
+    transport_factory: IdentifyFactory | None = None,
+) -> list[ScanEntry]:
+    """Firmware of each Tank-G row, connecting to one pedal at a time in the given order
+    (spec 005 R7). Only the confirmed ``0x11`` handshake is sent; the connection closes at once.
+
+    A row whose connection or handshake fails gets ``identify_error`` (the error's message) and
+    the next pedal is still tried. Rows that are not a Tank-G are returned unchanged.
+    """
+    from openvave.session import TankG
+
+    make = transport_factory or _ble_transport
+    result: list[ScanEntry] = []
+    for entry in entries:
+        if not entry.tank_g:
+            result.append(entry)
+            continue
+        try:
+            transport = await make(entry.device)
+            async with TankG.over(transport, timeout=timeout, device=entry.device) as pedal:
+                firmware = pedal.identity.firmware
+        except Exception as err:  # noqa: BLE001 - recorded on the row, the search goes on
+            logger.debug("identify %s failed: %r", entry.device.identifier, err)
+            result.append(replace(entry, firmware=None, identify_error=error_message(err)))
+        else:
+            result.append(replace(entry, firmware=firmware, identify_error=None))
+    return result
 
 
 class BleakTransport:

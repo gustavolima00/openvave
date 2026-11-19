@@ -63,6 +63,9 @@ CONTRACT_EXPORTS = {
     "Target",
     "resolve_target",
     "default_config_path",
+    "scan",  # spec 005 M1
+    "identify",
+    "ScanEntry",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -110,6 +113,7 @@ DATACLASSES = (
     "KnownDevice",  # spec 005
     "KnownDevices",
     "Target",
+    "ScanEntry",
 )
 FORBIDDEN = ("write", "erase", "address", "commit", "raw")
 """No TankG name may contain these: writes exist only as the named actions below (003 FR-007)."""

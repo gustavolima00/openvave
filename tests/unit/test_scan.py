@@ -11,14 +11,20 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace, TracebackType
 from typing import Any
 
 import pytest
 
+from openvave.devices import KnownDevices
 from openvave.errors import MultipleDevicesError
 from openvave.transport import ble
 from openvave.transport.ble import BLE_NAME, select_device
+from tests.support.scanner import SPEAKER as SPEAKER_ID
+from tests.support.scanner import TANK, UUID_1, UUID_2, UUID_3
+from tests.support.scanner import fake_scanner as timed_scanner
 
 PEDAL_A = ("AAAA-1111", BLE_NAME, -58)
 PEDAL_B = ("BBBB-2222", BLE_NAME, -71)
@@ -125,3 +131,91 @@ async def test_open_ble_uses_the_early_stop(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_default_grace_is_one_second() -> None:
     assert ble.SCAN_GRACE == 1.0
+
+
+# --- spec 005: scan() for ``openvave scan`` (T015) ----------------------------------------------
+
+WHEN = datetime(2026, 11, 19, 10, 0, tzinfo=UTC)
+
+
+def ids(entries: list[Any]) -> list[str]:
+    return [e.device.identifier for e in entries]
+
+
+async def test_scan_orders_tank_g_by_signal_strength() -> None:
+    entries = await ble.scan(
+        0.1,
+        scanner_factory=timed_scanner(
+            [(UUID_3, TANK, None), (UUID_2, TANK, -61), (UUID_1, TANK, -58), (SPEAKER_ID, "S", -30)]
+        ),
+    )
+    assert ids(entries) == [UUID_1, UUID_2, UUID_3]
+    assert all(e.tank_g for e in entries)
+    assert not any(e.known or e.selected or e.device.nickname for e in entries)
+
+
+async def test_scan_ties_are_ordered_by_identifier() -> None:
+    entries = await ble.scan(
+        0.1, scanner_factory=timed_scanner([(UUID_2, TANK, -60), (UUID_1, TANK, -60)])
+    )
+    assert ids(entries) == [UUID_1, UUID_2]
+
+
+async def test_scan_include_all_lists_other_advertisers_after_the_pedals() -> None:
+    entries = await ble.scan(
+        0.1,
+        include_all=True,
+        scanner_factory=timed_scanner(
+            [(SPEAKER_ID, "Some Speaker", -30), (UUID_1, TANK, -70), ("CCCC", "", None)]
+        ),
+    )
+    assert ids(entries) == [UUID_1, SPEAKER_ID, "CCCC"]
+    assert [e.tank_g for e in entries] == [True, False, False]
+
+
+async def test_scan_annotates_known_pedals(tmp_path: Path) -> None:
+    known = (
+        KnownDevices(path=tmp_path / "d.json")
+        .select(UUID_2, "home", now=WHEN)
+        .select(UUID_1.lower(), "stage", now=WHEN)
+    )
+    entries = await ble.scan(
+        0.1,
+        known=known,
+        scanner_factory=timed_scanner(
+            [(UUID_1, TANK, -58), (UUID_2, TANK, -61), (UUID_3, TANK, -70)]
+        ),
+    )
+    by_id = {e.device.identifier: e for e in entries}
+    assert by_id[UUID_1].device.nickname == "stage"
+    assert by_id[UUID_1].known and by_id[UUID_1].selected
+    assert by_id[UUID_2].device.nickname == "home"
+    assert by_id[UUID_2].known and not by_id[UUID_2].selected
+    assert not by_id[UUID_3].known and by_id[UUID_3].device.nickname is None
+
+
+async def test_scan_uses_the_whole_timeout_after_a_pedal_is_seen() -> None:
+    started = time.monotonic()
+    entries = await ble.scan(
+        0.4,
+        scanner_factory=timed_scanner([(0.02, (UUID_1, TANK, -58)), (0.3, (UUID_2, TANK, -61))]),
+    )
+    assert time.monotonic() - started >= 0.4
+    assert ids(entries) == [UUID_1, UUID_2]  # the late pedal is listed too (FR-003)
+
+
+async def test_discover_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[float, dict[str, Any]]] = []
+
+    async def fake_scan(timeout: float, **options: Any) -> dict[str, Any]:
+        calls.append((timeout, options))
+        a = SimpleNamespace(address=UUID_1, name=TANK)
+        s = SimpleNamespace(address=SPEAKER_ID, name="S")
+        return {
+            UUID_1: (a, ble.DeviceInfo(UUID_1, TANK, -58)),
+            SPEAKER_ID: (s, ble.DeviceInfo(SPEAKER_ID, "S", -30)),
+        }
+
+    monkeypatch.setattr(ble, "_scan", fake_scan)
+    assert await ble.discover(3.0) == [ble.DeviceInfo(UUID_1, TANK, -58)]
+    assert calls == [(3.0, {})]

@@ -158,33 +158,102 @@ rename and forget. Other commands do not use the selection yet (Milestone 2).
 
 ### Tests (write first, must fail)
 
-- [ ] T015 [P] [US1] `tests/unit/test_scan.py`: add cases for `scan()` rows: ordering (Tank-G first, RSSI descending, unknown RSSI last, ties by identifier), `include_all` adds non-Tank advertisers with `tank_g=False`, `known` annotates `nickname` / `known` / `selected`, the whole timeout is used even after a pedal is seen (FR-003), `discover()` unchanged
-- [ ] T016 [P] [US1] `tests/integration/test_identify.py`: `identify(entries)` connects to each Tank-G entry in order through an injected transport factory, sends exactly one `0x11` query per pedal (assert the frames), fills `firmware`; a failing connection or handshake sets `identify_error` and the next pedal is still tried; non-Tank entries are skipped
-- [ ] T017 [P] [US1] `tests/contract/test_cli_scan.py`: human output for two pedals / one default / none / default not seen / `--all` / `--identify` exactly as in `contracts/cli.md`; `Scanning for 5 s…` on stderr only; `--json` against `scan.schema.json`; exit codes 0, 3, 5 (scanner raising `BluetoothUnavailableError`); the transport factory is never called without `--identify`
-- [ ] T018 [P] [US2] `tests/contract/test_cli_select_device.py`: `select` with a full identifier in range, with `--name`, with a prefix matching one / two (exit 4, list) / none (exit 3), with no argument and one / two / zero pedals, with a known nickname and a scanner that raises if used, with `--offline` (full identifier only; prefix + `--offline` → exit 2); `Was:` line when a default is replaced; previous default stays known; bad nickname and nickname in use → exit 2 and the file is byte-identical; `--json` against `device.schema.json` with `"command": "select"`
-- [ ] T019 [P] [US3] `tests/contract/test_cli_device.py`: `device` with no file, with no default, with a default and two known pedals (text of `contracts/cli.md`, including the "choice, not an open connection" line and the configuration path), with `OPENVAVE_DEVICE` set (override line); `--check` in range → exit 0 and `In range: yes (-58 dBm)`, not in range → exit 3, no default → exit 2; without `--check` the scanner is never used; `--json` against `device.schema.json`
-- [ ] T020 [P] [US4] `tests/contract/test_cli_rename_forget.py`: `device rename OLD NEW` by nickname and by identifier, unknown OLD / bad NEW / NEW in use → exit 2; `forget` clears the default and keeps the devices, with no default prints `No default pedal.` exit 0; `forget TARGET` removes it (and the default when it was it), unknown → exit 2; `forget --all` empties; on an invalid file `forget` exits 2 with the hint and `forget --all` moves it to `devices.json.invalid-<timestamp>` and leaves a valid empty file; `--json` against `device.schema.json`; none of them uses the scanner
-- [ ] T021 [P] [US4] `tests/contract/test_cli_invalid_config.py`: with an invalid file, `scan` still lists pedals and prints the `warning: <path>: <problem> (nicknames unavailable)` line, `device` and `select` exit 2 with `error: <path>: <problem>` and the `forget --all` hint
+- [X] T015 [P] [US1] `tests/unit/test_scan.py`: add cases for `scan()` rows: ordering (Tank-G first, RSSI descending, unknown RSSI last, ties by identifier), `include_all` adds non-Tank advertisers with `tank_g=False`, `known` annotates `nickname` / `known` / `selected`, the whole timeout is used even after a pedal is seen (FR-003), `discover()` unchanged
+- [X] T016 [P] [US1] `tests/integration/test_identify.py`: `identify(entries)` connects to each Tank-G entry in order through an injected transport factory, sends exactly one `0x11` query per pedal (assert the frames), fills `firmware`; a failing connection or handshake sets `identify_error` and the next pedal is still tried; non-Tank entries are skipped
+- [X] T017 [P] [US1] `tests/contract/test_cli_scan.py`: human output for two pedals / one default / none / default not seen / `--all` / `--identify` exactly as in `contracts/cli.md`; `Scanning for 5 s…` on stderr only; `--json` against `scan.schema.json`; exit codes 0, 3, 5 (scanner raising `BluetoothUnavailableError`); the transport factory is never called without `--identify`
+- [X] T018 [P] [US2] `tests/contract/test_cli_select_device.py`: `select` with a full identifier in range, with `--name`, with a prefix matching one / two (exit 4, list) / none (exit 3), with no argument and one / two / zero pedals, with a known nickname and a scanner that raises if used, with `--offline` (full identifier only; prefix + `--offline` → exit 2); `Was:` line when a default is replaced; previous default stays known; bad nickname and nickname in use → exit 2 and the file is byte-identical; `--json` against `device.schema.json` with `"command": "select"`
+- [X] T019 [P] [US3] `tests/contract/test_cli_device.py`: `device` with no file, with no default, with a default and two known pedals (text of `contracts/cli.md`, including the "choice, not an open connection" line and the configuration path), with `OPENVAVE_DEVICE` set (override line); `--check` in range → exit 0 and `In range: yes (-58 dBm)`, not in range → exit 3, no default → exit 2; without `--check` the scanner is never used; `--json` against `device.schema.json`
+- [X] T020 [P] [US4] `tests/contract/test_cli_rename_forget.py`: `device rename OLD NEW` by nickname and by identifier, unknown OLD / bad NEW / NEW in use → exit 2; `forget` clears the default and keeps the devices, with no default prints `No default pedal.` exit 0; `forget TARGET` removes it (and the default when it was it), unknown → exit 2; `forget --all` empties; on an invalid file `forget` exits 2 with the hint and `forget --all` moves it to `devices.json.invalid-<timestamp>` and leaves a valid empty file; `--json` against `device.schema.json`; none of them uses the scanner
+- [X] T021 [P] [US4] `tests/contract/test_cli_invalid_config.py`: with an invalid file, `scan` still lists pedals and prints the `warning: <path>: <problem> (nicknames unavailable)` line, `device` and `select` exit 2 with `error: <path>: <problem>` and the `forget --all` hint
 
 ### Implementation
 
-- [ ] T022 [US1] `src/openvave/transport/ble.py`: add `scan(timeout=5.0, *, include_all=False, known=None, scanner_factory=None) -> list[ScanEntry]` on top of `_scan`, with the ordering rule; keep `discover()` as is (T015)
-- [ ] T023 [US1] `src/openvave/transport/ble.py`: add `identify(entries, *, timeout=2.0, transport_factory=None) -> list[ScanEntry]` using `TankG.over(BleakTransport(...))` for the handshake only (T016)
-- [ ] T024 [US1] `src/openvave/cli/__init__.py`: make the scanner injectable in `main()` next to `transport_factory` (parameter `scanner_factory`), and add the `scan` subcommand with `--all` and `--identify` (T017)
-- [ ] T025 [P] [US1] `src/openvave/cli/render.py`: `human_scan` and `scan_json` per `contracts/cli.md` and `scan.schema.json` (T017)
-- [ ] T026 [US2] `src/openvave/cli/__init__.py`: `select [TARGET] [--name NICKNAME] [--offline]` implementing R4 (nickname → identifier → prefix → none), saving only on success (T018)
-- [ ] T027 [US3] `src/openvave/cli/__init__.py`: `device [--check]` with an optional `rename OLD NEW` action (T019, T020)
-- [ ] T028 [US4] `src/openvave/cli/__init__.py`: `forget [TARGET | --all]`, including the move-aside of an invalid file (T020)
-- [ ] T029 [P] [US3] `src/openvave/cli/render.py`: `human_device`, `human_select`, `human_forget`, `human_rename`, `device_document` (shared JSON of `device.schema.json`) (T018–T020)
-- [ ] T030 [US4] `src/openvave/cli/__init__.py`: `_report` handling of `ConfigError` (`error: <path>: <problem>`, hint `openvave forget --all` for `invalid_file`, known nicknames for `unknown_nickname`) and the warning path used by `scan` (T021)
-- [ ] T031 [US1] `src/openvave/__init__.py`: export `scan`, `identify`, `ScanEntry`; extend `tests/contract/test_public_api.py`
-- [ ] T032 [US1] `CHANGELOG.md` [Unreleased]: the five commands, `OPENVAVE_CONFIG`, the file location; top-level `--help` description in `src/openvave/cli/__init__.py` mentions `scan` and `select`
+- [X] T022 [US1] `src/openvave/transport/ble.py`: add `scan(timeout=5.0, *, include_all=False, known=None, scanner_factory=None) -> list[ScanEntry]` on top of `_scan`, with the ordering rule; keep `discover()` as is (T015)
+- [X] T023 [US1] `src/openvave/transport/ble.py`: add `identify(entries, *, timeout=2.0, transport_factory=None) -> list[ScanEntry]` using `TankG.over(BleakTransport(...))` for the handshake only (T016)
+- [X] T024 [US1] `src/openvave/cli/__init__.py`: make the scanner injectable in `main()` next to `transport_factory` (parameter `scanner_factory`), and add the `scan` subcommand with `--all` and `--identify` (T017)
+- [X] T025 [P] [US1] `src/openvave/cli/render.py`: `human_scan` and `scan_json` per `contracts/cli.md` and `scan.schema.json` (T017)
+- [X] T026 [US2] `src/openvave/cli/__init__.py`: `select [TARGET] [--name NICKNAME] [--offline]` implementing R4 (nickname → identifier → prefix → none), saving only on success (T018)
+- [X] T027 [US3] `src/openvave/cli/__init__.py`: `device [--check]` with an optional `rename OLD NEW` action (T019, T020)
+- [X] T028 [US4] `src/openvave/cli/__init__.py`: `forget [TARGET | --all]`, including the move-aside of an invalid file (T020)
+- [X] T029 [P] [US3] `src/openvave/cli/render.py`: `human_device`, `human_select`, `human_forget`, `human_rename`, `device_document` (shared JSON of `device.schema.json`) (T018–T020)
+- [X] T030 [US4] `src/openvave/cli/__init__.py`: `_report` handling of `ConfigError` (`error: <path>: <problem>`, hint `openvave forget --all` for `invalid_file`, known nicknames for `unknown_nickname`) and the warning path used by `scan` (T021)
+- [X] T031 [US1] `src/openvave/__init__.py`: export `scan`, `identify`, `ScanEntry`; extend `tests/contract/test_public_api.py`
+- [X] T032 [US1] `CHANGELOG.md` [Unreleased]: the five commands, `OPENVAVE_CONFIG`, the file location; top-level `--help` description in `src/openvave/cli/__init__.py` mentions `scan` and `select`
 
 ### Live verification (milestone gate)
 
-- [ ] T033 [US1] Run quickstart §2 in a shell with a temporary `OPENVAVE_CONFIG` and paste the outputs under this task; confirm each matches `contracts/cli.md`
+- [X] T033 [US1] Run quickstart §2 in a shell with a temporary `OPENVAVE_CONFIG` and paste the outputs under this task; confirm each matches `contracts/cli.md`
 
-**Checkpoint**: Milestone 1 DONE — pedals can be searched, selected, shown, renamed and forgotten
+**Gate evidence (2026-11-19)**:
+- `uv run pytest -q`: 1984 passed, 6 skipped (M0 gate 1901 + 83 new; the only changed pre-existing
+  test files are `tests/unit/test_scan.py`, extended as T015 says, and
+  `tests/contract/test_public_api.py`). `uv run ruff check .`: all checks passed.
+  `uv run ruff format --check src tests`: formatted. `uv run mypy`: no issues in 27 source files.
+- Contract tests per command: `tests/contract/test_cli_scan.py`, `test_cli_select_device.py`,
+  `test_cli_device.py`, `test_cli_rename_forget.py`, `test_cli_invalid_config.py`. Every command
+  that must not use Bluetooth runs with `forbidden_scanner` (`tests/support/scanner.py`), which
+  fails the test if a scanner is built.
+- T033, quickstart §2 in a shell with `OPENVAVE_CONFIG="$(mktemp -d)/devices.json"`:
+
+  ```text
+  $ openvave device
+  No default pedal. Commands use the only Tank-G in range.
+  Choose one: openvave scan, then openvave select ID
+  Configuration: /var/folders/…/tmp.wzcILF5SO2/devices.json
+  (exit 0)
+  $ openvave select AA:BB:CC:DD:EE:01 --name stage --offline
+  Default pedal: stage  AA:BB:CC:DD:EE:01
+  Saved in /var/folders/…/tmp.wzcILF5SO2/devices.json
+  $ openvave select AA:BB:CC:DD:EE:02 --name home --offline
+  Default pedal: home  AA:BB:CC:DD:EE:02
+  Was: stage  AA:BB:CC:DD:EE:01
+  Saved in /var/folders/…/tmp.wzcILF5SO2/devices.json
+  $ openvave device
+  Default pedal: home  AA:BB:CC:DD:EE:02
+    selected 2026-11-19 11:05
+  Known pedals:
+    stage  AA:BB:CC:DD:EE:01
+  * home   AA:BB:CC:DD:EE:02
+  Configuration: /var/folders/…/tmp.wzcILF5SO2/devices.json
+  openvave connects for the length of one command; this is a choice, not an open connection.
+  $ openvave select stage && openvave device rename home rehearsal && openvave forget
+  Default pedal: stage  AA:BB:CC:DD:EE:01
+  Was: home  AA:BB:CC:DD:EE:02
+  Saved in /var/folders/…/devices.json
+  Renamed home → rehearsal  AA:BB:CC:DD:EE:02
+  Forgot the default (stage AA:BB:CC:DD:EE:01). It is still a known pedal; remove it with: openvave forget stage
+  $ openvave device --json
+  → "default": null, nicknames ["stage", "rehearsal"]; validates against contracts/device.schema.json
+  $ openvave select nobody
+  error: 'nobody' is not a known nickname, an identifier or a prefix of at least 4 hex digits; known nicknames: stage, rehearsal
+  (exit 2)
+  ```
+
+  Each matches `contracts/cli.md`. The last step of §2, `openvave info --device nobody` → exit 2,
+  is Milestone 2 behaviour (`info` resolves nicknames from T042/T045); it was not run, because in
+  M1 it would start a real Bluetooth scan for the text `nobody`.
+- Not verified here: `scan`, `scan --identify` and `select` against a real pedal (fake scanner
+  and fake transport only); that is the owner's quickstart §4 in M4.
+- Deviations (contract updated where it changes what users see):
+  - The four commands live in a new module, `src/openvave/cli/pedals.py` (T024, T026–T028);
+    `cli/__init__.py` registers their parsers, takes `scanner_factory` in `main()` and dispatches
+    them through `_run_pedal_command`, which returns their exit code with their output (needed for
+    `scan` / `device --check` printing a result with exit 3).
+  - Renderers are `human_select_device` (`human_select` already renders `preset select`),
+    `human_forget_default` / `human_forget_one` / `human_forget_all`, plus `short_identifier`
+    and `known_json`.
+  - `identify(..., transport_factory)` takes an async `DeviceInfo -> Transport`; the CLI adapts
+    its injected factory to it. With BLE it builds `BleakTransport(identifier)`, so bleak looks
+    the address up again before connecting (a pedal that is advertising is found at once).
+  - `transport/ble.py` also gains `strongest_first` (the row order) and `seek` (a scan that stops
+    when an identifier is seen, used by `select ID` and `device --check`); neither is exported.
+  - `scan`: the "not seen" line prints the full identifier; `No Tank-G found.` goes to stdout and
+    its hint to stderr; `Scanning for N s…` only in human mode. `device` without a default still
+    lists known pedals and the configuration path. `forget --all --json` adds `moved_to`.
+  - `select TEXT` where TEXT is no nickname, identifier or ≥ 4-hex-digit prefix exits 2 with
+    `ConfigError(reason="unknown_nickname")` listing the known nicknames, before any scan.
+
+**Checkpoint**: ✅ Milestone 1 DONE — pedals can be searched, selected, shown, renamed and forgotten
 
 ---
 

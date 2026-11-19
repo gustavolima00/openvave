@@ -18,6 +18,9 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
         result = await pedal.save_preset(unsafe=True, experimental=True,  # PERSISTENT: backup
                                          on_backup=store)                 # first, then save
 
+    entries = await openvave.scan(timeout=5.0)           # Tank-G pedals in range; no connection
+    entries = await openvave.identify(entries)           # + firmware (handshake only)
+
     known = openvave.KnownDevices.load()                 # known pedals (devices.json); pure ops
     known = known.select("8F3A21C4-…", nickname="stage") # returns a new value; known.save()
     target = openvave.resolve_target(option, environment, known)   # --device > env > default
@@ -81,6 +84,7 @@ from openvave.models import (
     PedalState,
     Region,
     RegionRead,
+    ScanEntry,
     SequencePlan,
     SequenceResult,
     SequenceStep,
@@ -94,7 +98,7 @@ from openvave.models import (
 from openvave.protocol.identity import TESTED_FIRMWARE
 from openvave.session import TankG
 from openvave.transport import Transport
-from openvave.transport.ble import discover
+from openvave.transport.ble import discover, identify, scan
 from openvave.transport.fake import FakeTransport
 
 __version__ = "0.4.0"
@@ -129,6 +133,7 @@ __all__ = [
     "Region",
     "RegionRead",
     "RequestTimeoutError",
+    "ScanEntry",
     "SequencePlan",
     "SequenceResult",
     "SequenceStep",
@@ -149,5 +154,7 @@ __all__ = [
     "WriteResult",
     "default_config_path",
     "discover",
+    "identify",
     "resolve_target",
+    "scan",
 ]

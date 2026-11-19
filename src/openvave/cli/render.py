@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from openvave._jsonform import field_json, hex_bytes, identity_json
 from openvave.models import (
@@ -35,6 +38,10 @@ from openvave.protocol.decode import decode_field, decode_region
 from openvave.protocol.state import classify
 from openvave.protocol.storage import EXPECTED_HEADER, position
 from openvave.protocol.writes import WRITABLE_FIELDS, sendable_by_default
+
+if TYPE_CHECKING:
+    from openvave.devices import KnownDevice, KnownDevices
+    from openvave.models import ScanEntry
 
 SCHEMA_VERSION = 2
 """JSON contract version; 2 since 0.2.0 (field renames, CHANGELOG)."""
@@ -1151,3 +1158,280 @@ def sequence_json(
             part["read_back"] = hex_bytes(result.read_back)
         document["result"] = part
     return document
+
+
+# -- known pedals: scan, select, device, forget (spec 005 contracts/cli.md) ----------------------
+
+_UUID_SHAPE = re.compile(
+    r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+)
+SELECT_HINT = "Select one: openvave select ID [--name NICKNAME]"
+NO_TANK_G = "No Tank-G found."
+NO_TANK_G_HINT = (
+    "hint: switch the pedal on and close the M-VAVE phone app; a pedal that is connected to the "
+    "app\n      or to another program stops advertising."
+)
+CHOICE_NOTE = (
+    "openvave connects for the length of one command; this is a choice, not an open connection."
+)
+
+
+def short_identifier(identifier: str) -> str:
+    """A UUID shortened to its first 8 characters plus ``…``; a MAC in full (research R8)."""
+    return identifier[:8] + "…" if _UUID_SHAPE.match(identifier) else identifier
+
+
+def rssi_text(rssi: int | None) -> str:
+    return f"{rssi} dBm" if rssi is not None else "? dBm"
+
+
+def _local_time(moment: datetime) -> str:
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def _table(rows: Sequence[Sequence[str]], *, right: Sequence[int] = ()) -> list[str]:
+    """Columns joined by two spaces, each padded to its widest cell (``right``: right-aligned);
+    trailing spaces removed."""
+    if not rows:
+        return []
+    widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]))]
+    lines = []
+    for row in rows:
+        cells = [
+            cell.rjust(widths[i]) if i in right else cell.ljust(widths[i])
+            for i, cell in enumerate(row)
+        ]
+        lines.append("  ".join(cells).rstrip())
+    return lines
+
+
+def _marked(marks: Sequence[bool], lines: Sequence[str]) -> list[str]:
+    return [("* " if mark else "  ") + line for mark, line in zip(marks, lines, strict=True)]
+
+
+def _scan_rows(entries: Sequence[ScanEntry], identified: bool) -> list[str]:
+    with_nicknames = any(e.device.nickname for e in entries)
+    rows: list[list[str]] = []
+    for entry in entries:
+        device = entry.device
+        row = [device.nickname or ""] if with_nicknames else []
+        row += [device.identifier, device.name or "-", rssi_text(device.rssi)]
+        extra = ""
+        if not entry.tank_g:
+            extra = "(not a Tank-G)"
+        elif identified:
+            extra = (
+                f"fw {entry.firmware}"
+                if entry.firmware is not None
+                else f"fw ? ({entry.identify_error or 'unknown error'})"
+            )
+        rows.append([*row, extra])
+    rssi_column = 3 if with_nicknames else 2
+    return _marked([e.selected for e in entries], _table(rows, right=(rssi_column,)))
+
+
+def human_scan(
+    entries: Sequence[ScanEntry], known: KnownDevices | None, *, identified: bool = False
+) -> str:
+    """``openvave scan`` stdout: rows, a count line, and a line when the default was not seen."""
+    lines = _scan_rows(entries, identified)
+    pedals = sum(1 for e in entries if e.tank_g)
+    if not pedals:
+        lines.append(NO_TANK_G)
+        return "\n".join(lines)
+    count = f"{pedals} {'pedal' if pedals == 1 else 'pedals'} found."
+    if any(e.selected for e in entries):
+        count += " * = default."
+    lines.append(f"{count} {SELECT_HINT}")
+    default = known.default if known is not None else None
+    if default is not None and not any(e.selected for e in entries):
+        if default.nickname:
+            lines.append(f"{default.nickname} ({default.identifier}) not seen")
+        else:
+            lines.append(f"default {default.identifier} not seen")
+    return "\n".join(lines)
+
+
+def scan_json(
+    entries: Sequence[ScanEntry],
+    known: KnownDevices | None,
+    *,
+    scanned_at: datetime,
+    scan_seconds: float,
+    identified: bool = False,
+) -> dict[str, Any]:
+    """The ``openvave scan --json`` document (``scan.schema.json``)."""
+    has_default = known is not None and known.default is not None
+    devices = []
+    for entry in entries:
+        row: dict[str, Any] = {
+            "identifier": entry.device.identifier,
+            "name": entry.device.name,
+            "rssi": entry.device.rssi,
+            "tank_g": entry.tank_g,
+            "nickname": entry.device.nickname,
+            "known": entry.known,
+            "selected": entry.selected,
+        }
+        if identified and entry.tank_g:
+            row["firmware"] = entry.firmware
+            row["identify_error"] = entry.identify_error
+        devices.append(row)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "command": "scan",
+        "scanned_at": scanned_at.isoformat(),
+        "scan_seconds": scan_seconds,
+        "default_seen": any(e.selected for e in entries) if has_default else None,
+        "devices": devices,
+    }
+
+
+def _time_json(moment: datetime | None) -> str | None:
+    return moment.isoformat() if moment is not None else None
+
+
+def known_json(device: KnownDevice) -> dict[str, Any]:
+    """One known pedal (``device.schema.json`` ``$defs/known``)."""
+    return {
+        "identifier": device.identifier,
+        "nickname": device.nickname,
+        "added_at": device.added_at.isoformat(),
+        "selected_at": _time_json(device.selected_at),
+        "last_name": device.last_name,
+        "last_firmware": device.last_firmware,
+        "last_seen_at": _time_json(device.last_seen_at),
+    }
+
+
+def device_document(command: str, known: KnownDevices, **extra: Any) -> dict[str, Any]:
+    """The document shared by ``device``, ``select``, ``forget`` and ``device rename``
+    (``device.schema.json``); ``extra`` adds the command's own keys."""
+    default = known.default
+    document: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "command": command,
+        "config_path": str(known.path),
+        "default": known_json(default) if default is not None else None,
+        "devices": [known_json(d) for d in known.devices],
+    }
+    for key, value in extra.items():
+        if isinstance(value, list):
+            document[key] = [known_json(v) for v in value]
+        elif key == "previous_default":
+            document[key] = known_json(value) if value is not None else None
+        else:
+            document[key] = value
+    return document
+
+
+def _known_label(device: KnownDevice) -> str:
+    return f"{device.nickname}  {device.identifier}" if device.nickname else device.identifier
+
+
+def _known_rows(known: KnownDevices) -> list[str]:
+    with_nicknames = any(d.nickname for d in known.devices)
+    rows = [([d.nickname or ""] if with_nicknames else []) + [d.identifier] for d in known.devices]
+    default = known.default_identifier
+    marks = [default is not None and d.identifier == default for d in known.devices]
+    return _marked(marks, _table(rows))
+
+
+def human_device(
+    known: KnownDevices, *, environment: str | None, in_range: tuple[bool, int | None] | None
+) -> str:
+    """``openvave device`` stdout (contracts/cli.md)."""
+    default = known.default
+    lines: list[str] = []
+    if default is None:
+        lines.append("No default pedal. Commands use the only Tank-G in range.")
+        lines.append("Choose one: openvave scan, then openvave select ID")
+    else:
+        lines.append(f"Default pedal: {_known_label(default)}")
+        parts = []
+        if default.selected_at is not None:
+            parts.append(f"selected {_local_time(default.selected_at)}")
+        if default.last_seen_at is not None:
+            seen = f"last seen {_local_time(default.last_seen_at)}"
+            details = [d for d in (default.last_name,) if d]
+            if default.last_firmware is not None:
+                details.append(f"firmware {default.last_firmware}")
+            if details:
+                seen += f" ({', '.join(details)})"
+            parts.append(seen)
+        if parts:
+            lines.append("  " + ", ".join(parts))
+    if environment:
+        lines.append(f"OPENVAVE_DEVICE={environment} overrides the default in this shell.")
+    if known.devices:
+        lines.append("Known pedals:")
+        lines += _known_rows(known)
+    lines.append(f"Configuration: {known.path}")
+    if default is not None:
+        lines.append(CHOICE_NOTE)
+    if in_range is not None:
+        seen_now, rssi = in_range
+        if not seen_now:
+            lines.append("In range: no")
+        else:
+            lines.append(f"In range: yes ({rssi} dBm)" if rssi is not None else "In range: yes")
+    return "\n".join(lines)
+
+
+def human_select_device(
+    device: KnownDevice,
+    *,
+    name: str | None,
+    rssi: int | None,
+    previous: KnownDevice | None,
+    path: Path,
+) -> str:
+    """``openvave select`` stdout: the new default, the one it replaced, where it is saved."""
+    details = [d for d in (name,) if d]
+    if rssi is not None:
+        details.append(f"{rssi} dBm")
+    line = f"Default pedal: {_known_label(device)}"
+    if details:
+        line += f"  ({', '.join(details)})"
+    lines = [line]
+    if previous is not None and previous.identifier != device.identifier:
+        lines.append(f"Was: {_known_label(previous)}")
+    lines.append(f"Saved in {path}")
+    return "\n".join(lines)
+
+
+def human_rename(old: str, device: KnownDevice) -> str:
+    """``Renamed stage → live  8F3A21C4…``."""
+    return f"Renamed {old} → {device.nickname}  {short_identifier(device.identifier)}"
+
+
+def _short_label(device: KnownDevice) -> str:
+    short = short_identifier(device.identifier)
+    return f"{device.nickname} {short}" if device.nickname else short
+
+
+def human_forget_default(device: KnownDevice | None) -> str:
+    """``openvave forget`` without a target."""
+    if device is None:
+        return "No default pedal."
+    return (
+        f"Forgot the default ({_short_label(device)}). It is still a known pedal; remove it "
+        f"with: openvave forget {device.nickname or device.identifier}"
+    )
+
+
+def human_forget_one(device: KnownDevice, *, was_default: bool) -> str:
+    """``openvave forget TARGET``."""
+    label = (
+        f"{device.nickname}  {short_identifier(device.identifier)}"
+        if device.nickname
+        else short_identifier(device.identifier)
+    )
+    return f"Forgot {label}" + (" (it was the default)" if was_default else "")
+
+
+def human_forget_all(count: int, moved_to: Path | None) -> str:
+    """``openvave forget --all``."""
+    if moved_to is not None:
+        return f"Moved the invalid file to {moved_to}; started an empty one."
+    return f"Forgot {count} known {'pedal' if count == 1 else 'pedals'}."

@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (command line, spec 005 milestone 1)
+
+- `openvave scan [--all] [--identify]`: lists every Tank-G in range, strongest signal first, for
+  the whole `--scan-timeout`, and connects to nothing. `*` marks the default pedal and known
+  pedals show their nickname; a default that is not in range gets a `not seen` line. `--all` adds
+  other Bluetooth advertisers flagged `(not a Tank-G)`. `--identify` connects to each pedal in
+  turn and adds its firmware (`fw 96`, or `fw ? (<reason>)`), sending only the `0x11` query.
+  Exit 0 when a Tank-G is listed, 3 when none, 5 when Bluetooth is unavailable. `--json`:
+  `specs/005-device-selection/contracts/scan.schema.json`.
+- `openvave select [TARGET] [--name NICKNAME] [--offline]`: makes a pedal the default. TARGET is
+  a known nickname (no scan), a full identifier (checked by a scan unless `--offline`) or an
+  identifier prefix of at least 4 hex digits matching one pedal in range; without TARGET, the only
+  pedal in range. Several candidates exit 4, none exit 3, a bad or already used nickname exit 2;
+  nothing is saved unless it succeeds. Never prompts.
+- `openvave device [--check]` shows the default pedal, the known pedals and the configuration
+  path, without Bluetooth; `--check` scans for the default (exit 3 when not in range).
+  `openvave device rename OLD NEW` changes a nickname.
+- `openvave forget [TARGET | --all]` clears the default, removes one known pedal, or all of them;
+  `--all` moves an invalid configuration file aside (`devices.json.invalid-<time>`).
+- `OPENVAVE_CONFIG` sets the configuration file; by default
+  `~/.config/openvave/devices.json` (`$XDG_CONFIG_HOME/openvave/devices.json` when set,
+  `%APPDATA%\openvave\devices.json` on Windows). An invalid file makes `device`, `select` and
+  `forget` exit 2 with a hint; `scan` still lists pedals with a warning.
+- Library: `openvave.scan(timeout, *, include_all=False, known=None)`,
+  `openvave.identify(entries)` and `openvave.ScanEntry`. `discover()` is unchanged.
+
+Other commands do not use the default pedal yet: `info`, `set` and the rest behave exactly as
+in 0.4.0.
+
 ### Added (library, spec 005 milestone 0)
 
 - `openvave.KnownDevices` and `openvave.KnownDevice`: the pedals you have selected, a default

@@ -70,13 +70,14 @@ Scanning for 5 s…
 2 pedals found. * = default. Select one: openvave select ID [--name NICKNAME]
 ```
 
-- `Scanning for N s…` goes to stderr. Rows: default marker, nickname (known pedals), identifier in
+- `Scanning for N s…` goes to stderr (human mode only). Rows: default marker, nickname (known pedals), identifier in
   full, advertised name, signal strength (`? dBm` when unknown); strongest first.
-- The default is known but not seen: a last line `stage (8F3A21C4-…-000000000001) not seen`.
+- The default is known but not seen: a last line `stage (8F3A21C4-0000-4000-8000-000000000001) not
+  seen` (full identifier; `default <identifier> not seen` when it has no nickname).
 - `--all`: other advertisers follow, each ending with `(not a Tank-G)`; an empty name shows `-`.
 - `--identify`: each Tank-G row gains `fw 96`, or `fw ? (<reason>)` when the connection or
   handshake failed. Sends only the confirmed `0x11` query.
-- None found (exit 3):
+- None found (exit 3; the first line on stdout, the hint on stderr):
 
 ```text
 No Tank-G found.
@@ -125,7 +126,8 @@ openvave connects for the length of one command; this is a choice, not an open c
 ```
 
 - Nothing selected: `No default pedal. Commands use the only Tank-G in range.` and
-  `Choose one: openvave scan, then openvave select ID`. Exit 0.
+  `Choose one: openvave scan, then openvave select ID`, then the known pedals (if any) and the
+  `Configuration:` line. Exit 0.
 - `OPENVAVE_DEVICE` set: a line `OPENVAVE_DEVICE=<value> overrides the default in this shell.`
 - `--check`: scans for the default (stops when seen) and adds `In range: yes (-58 dBm)` (exit 0) or
   `In range: no` (exit 3). With no default, `--check` exits 2.
@@ -143,7 +145,7 @@ exit 2. Prints `Renamed stage → live  8F3A21C4-…`. No Bluetooth.
   `No default pedal.`, exit 0.
 - TARGET (nickname or identifier): removes that known pedal; unknown → exit 2.
 - `--all`: removes everything. On an invalid file it moves it to
-  `devices.json.invalid-<YYYYmmdd-HHMMSS>` and says so.
+  `devices.json.invalid-<YYYYmmdd-HHMMSS>` and says so (`--json`: `moved_to`).
 - No Bluetooth. `--json`: [`device.schema.json`](device.schema.json) (`"command": "forget"`).
 
 ## Exit codes (no new code)

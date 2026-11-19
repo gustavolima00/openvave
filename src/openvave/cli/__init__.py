@@ -21,9 +21,10 @@ from pathlib import Path
 
 from openvave import __version__
 from openvave.backup import restore_problems
-from openvave.cli import files, render, watch
+from openvave.cli import files, pedals, render, watch
 from openvave.errors import (
     BluetoothUnavailableError,
+    ConfigError,
     MultipleDevicesError,
     OpenvaveError,
     WriteNotAppliedError,
@@ -138,7 +139,8 @@ def _parser() -> argparse.ArgumentParser:
         prog="openvave",
         description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded writes "
         "(edit buffer, preset select, bypass, loopback; stored presets only through preset save "
-        "and preset restore, with --unsafe and after an automatic backup). Unofficial. "
+        "and preset restore, with --unsafe and after an automatic backup). Find pedals with "
+        "scan and choose the default one with select. Unofficial. "
         "Not affiliated with or endorsed by M-VAVE / Cuvave.",
     )
     parser.add_argument("--version", action="version", version=f"openvave {__version__}")
@@ -316,6 +318,7 @@ def _parser() -> argparse.ArgumentParser:
         help="session record file (default captures/private/<YYYYMMDD-HHMMSS>-watch.jsonl)",
     )
     record.add_argument("--no-record", action="store_true", help="do not write a session record")
+    pedals.add_parsers(sub, common)
     return parser
 
 
@@ -904,7 +907,10 @@ def _prepare_backup(args: argparse.Namespace) -> None:
 
 def _report(err: OpenvaveError) -> None:
     print(f"error: {err}", file=sys.stderr)
-    if isinstance(err, MultipleDevicesError):
+    if isinstance(err, ConfigError):
+        if err.reason == "invalid_file":
+            print("hint: fix the file or reset it with: openvave forget --all", file=sys.stderr)
+    elif isinstance(err, MultipleDevicesError):
         for c in err.candidates:
             rssi = f"{c.rssi} dBm" if c.rssi is not None else "? dBm"
             print(f"  {c.identifier}  {c.name}  {rssi}", file=sys.stderr)
@@ -936,17 +942,62 @@ def _report(err: OpenvaveError) -> None:
         )
 
 
+PEDAL_COMMANDS = ("scan", "select", "device", "forget")
+"""Commands that find pedals or manage the known pedals (spec 005, ``openvave.cli.pedals``)."""
+
+
+def _run_pedal_command(
+    args: argparse.Namespace,
+    scanner_factory: Callable[..., object] | None,
+    transport_factory: TransportFactory | None,
+) -> int:
+    """Run ``scan``, ``select``, ``device`` or ``forget``; their output may come with exit 3."""
+    debug = os.environ.get("OPENVAVE_DEBUG") == "1"
+    with _logging(args.trace):
+        try:
+            if args.command == "scan":
+                output, code = asyncio.run(pedals.scan(args, scanner_factory, transport_factory))
+            elif args.command == "select":
+                output, code = asyncio.run(pedals.select(args, scanner_factory))
+            elif args.command == "device":
+                output, code = asyncio.run(pedals.device(args, scanner_factory))
+            else:
+                output, code = pedals.forget(args)
+        except pedals.UsageError as err:
+            print(f"openvave {args.command}: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
+        except OpenvaveError as err:
+            if debug:
+                traceback.print_exc()
+            _report(err)
+            return err.exit_code
+        except KeyboardInterrupt:
+            print("error: interrupted", file=sys.stderr)
+            return 130
+        except Exception as err:  # noqa: BLE001 - last-resort handler, exit 1
+            if debug:
+                traceback.print_exc()
+            print(f"error: unexpected {type(err).__name__}: {err}", file=sys.stderr)
+            print("hint: re-run with OPENVAVE_DEBUG=1 and report the traceback", file=sys.stderr)
+            return EXIT_INTERNAL
+    if output:
+        print(output)
+    return code
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
     transport_factory: TransportFactory | None = None,
+    scanner_factory: Callable[..., object] | None = None,
     stdin: watch.LineSource | None = None,
     clock: watch.Clock | None = None,
 ) -> int:
     """Run the CLI and return its exit code (contracts/cli.md).
 
-    ``transport_factory``, ``stdin`` (watch labels) and ``clock`` (watch timing) are injectable
-    for tests.
+    ``transport_factory``, ``scanner_factory`` (replaces ``BleakScanner`` for ``scan``,
+    ``select`` and ``device --check``), ``stdin`` (watch labels) and ``clock`` (watch timing)
+    are injectable for tests.
     """
     parser = _parser()
     try:
@@ -990,6 +1041,8 @@ def main(
         except UsageError as err:
             print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
+    if args.command in PEDAL_COMMANDS:
+        return _run_pedal_command(args, scanner_factory, transport_factory)
     factory = transport_factory or _ble_factory
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):
