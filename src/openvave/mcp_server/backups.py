@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from openvave.backup import restore_problems
+from openvave.backup import PRESET_KIND, restore_problems
 from openvave.cli.mcp import default_backup_dir
 from openvave.mcp_server.errors import InvalidFile
 
@@ -36,6 +36,18 @@ def manual_backup_path(folder: Path, when: datetime) -> Path:
     """``folder/tankg-backup-<YYYYmmdd-HHMMSS>.json`` that does not exist yet; on a clash
     ``-1``, ``-2`` … (never overwrites, like the CLI's automatic backups)."""
     stem = f"tankg-backup-{when.strftime('%Y%m%d-%H%M%S')}"
+    path = folder / f"{stem}.json"
+    n = 0
+    while path.exists():
+        n += 1
+        path = folder / f"{stem}-{n}.json"
+    return path
+
+
+def preset_file_path(folder: Path, position: str, when: datetime) -> Path:
+    """``folder/tankg-preset-<POS>-<YYYYmmdd-HHMMSS>.json`` that does not exist yet (spec 007
+    ``preset_export``); ``-1``, ``-2`` … on a clash."""
+    stem = f"tankg-preset-{position}-{when.strftime('%Y%m%d-%H%M%S')}"
     path = folder / f"{stem}.json"
     n = 0
     while path.exists():
@@ -68,10 +80,12 @@ def resolve_backup_file(folder: Path, name: str) -> Path:
 def _row(path: Path) -> dict[str, Any]:
     row: dict[str, Any] = {
         "file": path.name,
+        "kind": "backup",
         "created_at": None,
         "firmware": None,
         "presets": None,
         "restorable": False,
+        "importable": False,
         "problems": [],
     }
     try:
@@ -90,6 +104,17 @@ def _row(path: Path) -> dict[str, Any]:
             row["firmware"] = identity["firmware"]
         presets = document.get("presets")
         row["presets"] = len(presets) if isinstance(presets, list) else None
+        if document.get("kind") == PRESET_KIND:  # spec 007: one exported preset
+            from openvave.models import PresetFile
+
+            row["kind"] = "preset"
+            row["presets"] = 1
+            try:
+                PresetFile.from_document(document)
+            except ValueError as err:
+                row["problems"] = [str(err)]
+            row["importable"] = not row["problems"]
+            return row
     problems = restore_problems(document)
     row["problems"] = problems
     row["restorable"] = not problems
@@ -108,8 +133,9 @@ def _sort_key(path: Path, row: dict[str, Any]) -> datetime:
 
 def list_backups(folder: Path) -> list[dict[str, Any]]:
     """Every ``*.json`` regular file in ``folder``, newest first (``created_at``, else the file
-    time), each with the restore checks of ``openvave.backup.restore_problems``. A missing folder
-    is an empty list (nothing is created)."""
+    time), each with the restore checks of ``openvave.backup.restore_problems`` (``kind:
+    backup``) or, for an exported preset (``kind: preset``, spec 007), the import checks. A
+    missing folder is an empty list (nothing is created)."""
     if not folder.is_dir():
         return []
     rows = []
@@ -127,5 +153,6 @@ __all__ = [
     "ensure_dir",
     "list_backups",
     "manual_backup_path",
+    "preset_file_path",
     "resolve_backup_file",
 ]

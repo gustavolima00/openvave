@@ -49,6 +49,10 @@ Annotations: **RO** `readOnlyHint`, **D** `destructiveHint`, **I** `idempotentHi
 | `loopback` | `on` (bool), `dry_run`, `experimental` | `plan_loopback` / `set_loopback` | yes | ✗ | ✗ | ✓ | hidden |
 | `preset_save` | `to=null`, `dry_run`, `unsafe`, `experimental` | `plan_save` / `save_preset` | yes | ✗ | ✓ | ✗ | hidden |
 | `preset_restore` | `file` (name in the backup folder), `slot=null` \| `all=false`, `dry_run`, `unsafe`, `discard_edits`, `experimental` | `plan_restore` / `restore` | yes | ✗ | ✓ | ✗ | hidden |
+| `preset_export` | `position` | `export_preset()` → file (spec 007) | yes | ✗³ | ✗ | ✗ | listed |
+| `preset_copy` | `source`, `target`, `dry_run`, `unsafe`, `discard_edits`, `experimental` | `plan_copy` / `copy_preset` (spec 007) | yes | ✗ | ✓ | ✗ | hidden |
+| `preset_swap` | `first`, `second`, `dry_run`, `unsafe`, `discard_edits`, `experimental` | `plan_swap` / `swap_presets` (spec 007) | yes | ✗ | ✓ | ✗ | hidden |
+| `preset_import` | `file` (a preset file in the backup folder), `to`, `dry_run`, `unsafe`, `discard_edits`, `experimental` | `plan_import` / `import_preset` (spec 007) | yes | ✗ | ✓ | ✗ | hidden |
 
 ¹ takes the lock to close a held connection, but never opens one. ² waits for a running pedal call (holder lock) but never
 connects; a held pedal does not advertise, so it is added to the list as `connected: true`. ³ writes a file, so not read-only for the

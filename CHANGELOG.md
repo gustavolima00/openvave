@@ -114,6 +114,12 @@ All notable changes to this project are documented here. The format follows
   `import`, `swap`.
   Tested on fw 96 (2026-11-19): export, copy 1A → 9D, swap 9C ↔ 9D, import, then restore all;
   final backup equal to the first.
+- `openvave mcp` gains the same operations: `preset_copy`, `preset_swap`, `preset_import` (a
+  preset file named from the backup folder; a full backup points to `preset_restore`) and
+  `preset_export` (writes `tankg-preset-<POS>-<time>.json` into the backup folder). Same frames,
+  documents, `unsafe` / `dry_run` / `discard_edits` / `experimental` and elicitation as
+  `preset_save`; `--read-only` hides copy, swap and import. `backups_list` rows gain `kind`
+  (`backup` or `preset`) and `importable`.
 - Documented: the MASTER knob is not reported over Bluetooth (no byte moved while it was turned,
   observed).
 

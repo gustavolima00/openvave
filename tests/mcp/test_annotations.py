@@ -47,7 +47,7 @@ WRITES = {name for name, row in ROWS.items() if row.hidden}
 
 
 def test_the_contract_table_is_parsed() -> None:
-    assert len(ROWS) == 17
+    assert len(ROWS) == 21  # spec 007 adds export, copy, swap, import
     assert WRITES == {
         "pedal_set",
         "preset_select",
@@ -57,6 +57,9 @@ def test_the_contract_table_is_parsed() -> None:
         "loopback",
         "preset_save",
         "preset_restore",
+        "preset_copy",
+        "preset_swap",
+        "preset_import",
     }
 
 

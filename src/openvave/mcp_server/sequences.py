@@ -1,5 +1,5 @@
 """Persistent write tools (spec 006 US5, contracts/tools.md): ``preset_save`` and
-``preset_restore``.
+``preset_restore``; spec 007 adds ``preset_copy``, ``preset_swap`` and ``preset_import``.
 
 Both take the CLI's opt-ins unchanged (``unsafe`` is always required by the library), write the
 library's automatic backup into the server's backup folder before the first write, and return the
@@ -12,6 +12,7 @@ is not asked (CLI parity).
 # the tool parameters with ``typing.get_type_hints``, which cannot see the closure resolvers
 # below in string annotations.
 
+import json
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,7 +34,7 @@ from openvave.mcp_server import backups
 from openvave.mcp_server.errors import Declined, InvalidFile, InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
 from openvave.mcp_server.writes import DRY_RUN_REMINDER, parse_preset_position
-from openvave.models import Backup, SequencePlan, SequenceResult
+from openvave.models import IMAGE_ACTIONS, Backup, PresetFile, SequencePlan, SequenceResult
 from openvave.protocol.storage import position as position_of
 from openvave.session import OnBackup, TankG
 
@@ -84,6 +85,32 @@ def load_named_backup(folder: Path, name: str) -> Backup:
         raise InvalidFile(str(err).replace(str(path), name)) from None
 
 
+def load_named_preset(folder: Path, name: str) -> PresetFile:
+    """The exported preset file ``name`` in ``folder``; :class:`InvalidFile` otherwise (a full
+    backup points to ``preset_restore``)."""
+    path = backups.resolve_backup_file(folder, name)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as err:
+        raise InvalidFile(f"cannot read {name}: {err.strerror or err}") from None
+    except (UnicodeDecodeError, json.JSONDecodeError) as err:
+        raise InvalidFile(f"{name} is not a JSON preset file ({err})") from None
+    try:
+        return PresetFile.from_document(document)
+    except ValueError as err:
+        text = str(err).replace("preset restore FILE --slot POS", "preset_restore with slot")
+        raise InvalidFile(f"{name} cannot be imported: {text}") from None
+
+
+def two_slots(first: str | int, second: str | int, names: tuple[str, str]) -> tuple[int, int]:
+    """Two different preset positions; :class:`InvalidValue` for a bad or repeated one."""
+    a = parse_preset_position(first, names[0])
+    b = parse_preset_position(second, names[1])
+    if a == b:
+        raise InvalidValue(f"{names[0]} and {names[1]} are the same slot ({position_of(a)})")
+    return a, b
+
+
 def restore_target(slot: str | int | None, everything: bool) -> int | None:
     """``slot`` xor ``all`` → the slot index (``None`` for all); :class:`InvalidValue`."""
     if (slot is None) == (not everything):
@@ -98,13 +125,15 @@ def _summary(plan: SequencePlan, result: SequenceResult | None, source: str | No
         return render.human_sequence_no_change(plan, source)
     head = render.human_sequence_header(plan, source).splitlines()[0]
     summary = " ".join(head.split("   UNSAFE")[0].split())
-    if plan.action == "restore_all":
+    if plan.action in IMAGE_ACTIONS:
         summary += f" ({len(plan.changed_slots)} of 36 differ)"
     if result is None:
         if plan.refusal is not None:
             summary += f"; refused: {plan.refusal}"
         return summary + "; dry run: nothing sent, no backup taken"
-    done = "saved" if plan.action == "save" else "restored"
+    done = {"save": "saved", "copy": "copied", "import": "imported", "swap": "swapped"}.get(
+        plan.action, "restored"
+    )
     return f"{summary}; {done} and verified"
 
 
@@ -114,7 +143,8 @@ def register_sequences(
     annotations: Callable[[str], Any],
     record: Callable[[str], None],
 ) -> None:
-    """Add ``preset_save`` and ``preset_restore`` to ``server``."""
+    """Add ``preset_save``, ``preset_restore``, ``preset_copy``, ``preset_swap`` and
+    ``preset_import`` to ``server``."""
     folder_text = str(holder.options.backup_dir)
 
     def ask_save(
@@ -164,7 +194,7 @@ def register_sequences(
         source: str | None,
     ) -> dict[str, Any]:
         """Plan (``dry_run``) or run one save / restore: the CLI's ``sequence_json`` document."""
-        action = "save" if command == "preset save" else "restore"
+        action = command.split()[-1]
         held: dict[str, TankG] = {}
         saved: list[Path] = []
 
@@ -310,12 +340,168 @@ def register_sequences(
             file,
         )
 
+    def ask_copy(
+        ctx: Context, source: str | int, target: str | int, unsafe: bool, dry_run: bool
+    ) -> Elicit[Confirm] | _NotAsked:
+        if not unsafe or dry_run or not can_elicit(ctx):
+            return NOT_ASKED
+        try:
+            a, b = two_slots(source, target, ("source", "target"))
+        except InvalidValue:
+            return NOT_ASKED
+        return Elicit(
+            f"Overwrite stored preset {position_of(b)} with a copy of {position_of(a)}? "
+            f"A full backup is written to {folder_text} first.",
+            Confirm,
+        )
+
+    def ask_swap(
+        ctx: Context, first: str | int, second: str | int, unsafe: bool, dry_run: bool
+    ) -> Elicit[Confirm] | _NotAsked:
+        if not unsafe or dry_run or not can_elicit(ctx):
+            return NOT_ASKED
+        try:
+            a, b = two_slots(first, second, ("first", "second"))
+        except InvalidValue:
+            return NOT_ASKED
+        return Elicit(
+            f"Exchange stored presets {position_of(a)} and {position_of(b)}? "
+            f"A full backup is written to {folder_text} first.",
+            Confirm,
+        )
+
+    def ask_import(
+        ctx: Context, file: str, to: str | int, unsafe: bool, dry_run: bool
+    ) -> Elicit[Confirm] | _NotAsked:
+        if not unsafe or dry_run or not can_elicit(ctx):
+            return NOT_ASKED
+        try:
+            index = parse_preset_position(to, "to")
+            load_named_preset(holder.options.backup_dir, file)
+        except ValueError:
+            return NOT_ASKED
+        return Elicit(
+            f"Overwrite stored preset {position_of(index)} with the preset file {file}? "
+            f"A full backup is written to {folder_text} first.",
+            Confirm,
+        )
+
+    @server.tool(annotations=annotations("preset_copy"))
+    async def preset_copy(
+        confirmation: Annotated[ElicitationResult[Confirm], Resolve(ask_copy)],
+        source: str | int,
+        target: str | int,
+        dry_run: bool = False,
+        unsafe: bool = False,
+        discard_edits: bool = False,
+        experimental: bool = False,
+    ) -> dict[str, Any]:
+        """Copy stored preset source to target (1A-9D or 0-35); the pedal ends on target.
+        PERSISTENT: overwrites target. Needs unsafe: true (ask the owner first; the owner may
+        also be asked directly). A full backup is written to the backup folder first. Unsaved
+        edits to the current sound need discard_edits (the final select discards them).
+        dry_run: plan only, nothing sent."""
+        with tool_errors(record):
+            a, b = two_slots(source, target, ("source", "target"))
+            if not proceeds(confirmation):
+                raise Declined(DECLINED)
+        return await sequence(
+            "preset copy",
+            dry_run,
+            lambda p: p.plan_copy(
+                a, b, unsafe=unsafe, experimental=experimental, discard_edits=discard_edits
+            ),
+            lambda p, on_backup: p.copy_preset(
+                a,
+                b,
+                unsafe=unsafe,
+                experimental=experimental,
+                discard_edits=discard_edits,
+                on_backup=on_backup,
+            ),
+            position_of(a),
+        )
+
+    @server.tool(annotations=annotations("preset_swap"))
+    async def preset_swap(
+        confirmation: Annotated[ElicitationResult[Confirm], Resolve(ask_swap)],
+        first: str | int,
+        second: str | int,
+        dry_run: bool = False,
+        unsafe: bool = False,
+        discard_edits: bool = False,
+        experimental: bool = False,
+    ) -> dict[str, Any]:
+        """Exchange two stored presets (1A-9D or 0-35) with one write of the stored image,
+        verified by reading all 36 back; the pedal ends on the preset that was loaded.
+        PERSISTENT: overwrites both. Needs unsafe: true (ask the owner first). A full backup is
+        written to the backup folder first. Unsaved edits need discard_edits. dry_run: plan
+        only, nothing sent."""
+        with tool_errors(record):
+            a, b = two_slots(first, second, ("first", "second"))
+            if not proceeds(confirmation):
+                raise Declined(DECLINED)
+        return await sequence(
+            "preset swap",
+            dry_run,
+            lambda p: p.plan_swap(
+                a, b, unsafe=unsafe, experimental=experimental, discard_edits=discard_edits
+            ),
+            lambda p, on_backup: p.swap_presets(
+                a,
+                b,
+                unsafe=unsafe,
+                experimental=experimental,
+                discard_edits=discard_edits,
+                on_backup=on_backup,
+            ),
+            f"{position_of(a)} and {position_of(b)}",
+        )
+
+    @server.tool(annotations=annotations("preset_import"))
+    async def preset_import(
+        confirmation: Annotated[ElicitationResult[Confirm], Resolve(ask_import)],
+        file: str,
+        to: str | int,
+        dry_run: bool = False,
+        unsafe: bool = False,
+        discard_edits: bool = False,
+        experimental: bool = False,
+    ) -> dict[str, Any]:
+        """Write an exported preset file from the backup folder (file: a name listed by
+        backups_list with kind "preset", not a path) into to (1A-9D or 0-35); the pedal ends
+        on it. PERSISTENT: overwrites that stored preset. Needs unsafe: true (ask the owner
+        first). A full backup is written to the backup folder first. A file from another
+        firmware needs experimental; unsaved edits need discard_edits. dry_run: plan only."""
+        with tool_errors(record):
+            index = parse_preset_position(to, "to")
+            preset = load_named_preset(holder.options.backup_dir, file)
+            if not proceeds(confirmation):
+                raise Declined(DECLINED)
+        return await sequence(
+            "preset import",
+            dry_run,
+            lambda p: p.plan_import(
+                preset, index, unsafe=unsafe, experimental=experimental, discard_edits=discard_edits
+            ),
+            lambda p, on_backup: p.import_preset(
+                preset,
+                index,
+                unsafe=unsafe,
+                experimental=experimental,
+                discard_edits=discard_edits,
+                on_backup=on_backup,
+            ),
+            file,
+        )
+
 
 __all__ = [
     "NOT_ASKED",
     "Confirm",
     "can_elicit",
     "load_named_backup",
+    "load_named_preset",
     "proceeds",
     "register_sequences",
     "restore_target",

@@ -28,9 +28,10 @@ from openvave.mcp_server.errors import InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
 from openvave.mcp_server.results import add_knob_types, change_json, change_label, with_summary
 from openvave.mcp_server.sequences import register_sequences
-from openvave.mcp_server.writes import register_writes
+from openvave.mcp_server.writes import parse_preset_position, register_writes
 from openvave.models import ByteChange, DeviceInfo, PedalState, Region, RegionRead
 from openvave.protocol import classify, diff
+from openvave.protocol.storage import position as position_of
 from openvave.session import TankG
 
 logger = logging.getLogger("openvave.mcp")
@@ -42,7 +43,8 @@ INSTRUCTIONS = (
     "released after a few idle minutes, and the next pedal tool reconnects). Write tools take "
     "the command line's opt-ins as arguments: dry_run (plan only, nothing sent), experimental "
     "(messages not yet confirmed on hardware, untested firmware), discard_edits (lose unsaved "
-    "edits), and unsafe (preset_save / preset_restore: overwrite stored presets, after an "
+    "edits), and unsafe (preset_save / restore / copy / swap / import: overwrite stored presets, "
+    "after an "
     "automatic backup). Ask the owner before passing unsafe or discard_edits. Edits to the "
     "current sound are never saved unless preset_save is called."
 )
@@ -84,6 +86,11 @@ TOOLS: dict[str, ToolSpec] = {
     "loopback": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
     "preset_save": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
     "preset_restore": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
+    # spec 007 US5
+    "preset_export": ToolSpec(writes=False, read_only=False, destructive=False, idempotent=False),
+    "preset_copy": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
+    "preset_swap": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
+    "preset_import": ToolSpec(writes=True, read_only=False, destructive=True, idempotent=False),
 }
 """Every tool, its annotations and whether ``--read-only`` hides it (contracts/tools.md)."""
 
@@ -280,7 +287,8 @@ def build_server(holder: PedalHolder) -> MCPServer:
     async def preset_backup() -> dict[str, Any]:
         """Back up all 36 stored presets: read, verified against a whole-image read, and
         written to a new file in the backup folder (never overwriting). Sends only reads to
-        the pedal. The file name can be given to preset_restore later."""
+        the pedal. The file name can be given to preset_restore later (preset_export saves a
+        single preset for preset_import)."""
         with tool_errors(record):
             folder = backups.ensure_dir(holder.options.backup_dir)
             async with holder.use() as pedal:
@@ -299,6 +307,26 @@ def build_server(holder: PedalHolder) -> MCPServer:
         first = render.human_backup(backup, str(path)).splitlines()[0]
         summary = " ".join(first.split()) + f"; saved {path.name}"
         return {"summary": summary, **result}
+
+    @server.tool(annotations=TOOLS["preset_export"].annotations())
+    async def preset_export(position: str | int) -> dict[str, Any]:
+        """Save one stored preset (1A-9D or 0-35) to a new preset file in the backup folder
+        (never overwriting). Sends only reads to the pedal. The file name can be given to
+        preset_import later, to put this sound into any slot."""
+        with tool_errors(record):
+            index = parse_preset_position(position, "position")
+            folder = backups.ensure_dir(holder.options.backup_dir)
+            async with holder.use() as pedal:
+                exported = await pedal.export_preset(index)
+            document = exported.to_document()
+            where = position_of(index)
+            path = backups.preset_file_path(folder, where, datetime.now())
+            files.write_json_atomic(path, document, force=False)
+        return {
+            "summary": f"exported {where}: {document['raw']}; saved {path.name}",
+            "path": str(path),
+            **document,
+        }
 
     @server.tool(annotations=TOOLS["backups_list"].annotations())
     async def backups_list() -> dict[str, Any]:

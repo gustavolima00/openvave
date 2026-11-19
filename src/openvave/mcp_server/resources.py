@@ -137,9 +137,11 @@ openvave is unofficial: not affiliated with or endorsed by M-VAVE / Cuvave.
 - **Volatile** (lost at the next preset change or power cycle): `pedal_set`, `preset_select`,
   `preset_reload`, `bypass_on` / `bypass_off`, `loopback`. They change the current sound or
   state only; nothing is saved unless `preset_save` is called.
-- **Persistent** (overwrites stored presets): `preset_save` and `preset_restore`. Both need
-  `unsafe: true` and always write a full verified backup to the backup folder first; if that
-  backup fails, nothing is written. The owner may be asked to confirm.
+- **Persistent** (overwrites stored presets): `preset_save`, `preset_restore`, `preset_copy`,
+  `preset_swap` and `preset_import`. All need `unsafe: true` and always write a full verified
+  backup to the backup folder first; if that backup fails, nothing is written. The owner may be
+  asked to confirm. `preset_export` only reads the pedal (it writes a preset file into the
+  backup folder for `preset_import`).
 
 ## Opt-ins (arguments of each call, never remembered)
 
@@ -148,7 +150,7 @@ openvave is unofficial: not affiliated with or endorsed by M-VAVE / Cuvave.
   96 since spec 007: block switches, LED colour and loopback are confirmed) and any write on a
   firmware other than 96.
 - `discard_edits: true`: allows losing unsaved edits of the current sound.
-- `unsafe: true`: allows overwriting stored presets (save / restore).
+- `unsafe: true`: allows overwriting stored presets (save, restore, copy, swap, import).
 
 Ask the owner before passing `unsafe` or `discard_edits`.
 
