@@ -28,6 +28,7 @@ from tests.support.write_fixture import (
     ACK,
     NORMAL,
     TUNER,
+    demote,
     make_fake,
     write_frame,
     writes,
@@ -110,7 +111,8 @@ async def test_mixed_batch_sends_knob_block_first_then_switch_then_led() -> None
     assert unsafe_frames(fake.sent) == []
 
 
-async def test_plan_reads_only_and_lists_every_frame() -> None:
+async def test_plan_reads_only_and_lists_every_frame(monkeypatch: pytest.MonkeyPatch) -> None:
+    demote(monkeypatch, "block_switch", "led_colour")  # every fw 96 row is confirmed since spec 007
     fake = make_fake(NORMAL)
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_set_fields(
@@ -145,7 +147,10 @@ async def test_confirmed_only_batch_needs_no_experimental() -> None:
     assert len(writes(fake)) == 1
 
 
-async def test_experimental_refusal_refuses_the_whole_batch() -> None:
+async def test_experimental_refusal_refuses_the_whole_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     fake = make_fake(NORMAL)
     async with TankG.over(fake) as pedal:
         with pytest.raises(WriteRefusedError) as info:

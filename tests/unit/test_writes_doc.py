@@ -32,7 +32,7 @@ def test_an_altered_doc_is_detected() -> None:
     text = COMMAND_LAYER.read_text(encoding="utf-8")
     start = text.index(HEADING)
     section = text[start:]
-    altered = text[:start] + section.replace("| observed |", "| confirmed |", 1)
+    altered = text[:start] + section.replace("| confirmed |", "| observed |", 1)
     assert altered != text
     rows = [row.key() for row in parse_table(altered)]
     assert rows != [code_key(m) for m in WRITE_MESSAGES]
@@ -66,16 +66,27 @@ def test_targets_match_the_allowlist() -> None:
     assert (loopback.type, loopback.address, loopback.length) == (4, 0xD0000000, 1)
 
 
-def test_bypass_is_confirmed_and_loopback_observed() -> None:
-    # spec 004 T083/T090: bypass confirmed by sessions A and B; loopback sent in session A only
+def test_bypass_and_loopback_are_confirmed() -> None:
+    # spec 004 T083/T090: bypass confirmed by sessions A and B; spec 007 gate session C (2026-11-19)
+    # repeated loopback after spec 004 session A
     rows = {(row.kind, row.argument): row for row in load_write_rows()}
-    for key, confidence, steps in (
-        (("bypass", None), "confirmed", ("bypass", "bypass_b")),
-        (("loopback", None), "observed", ("loopback_off", "loopback_on")),
-    ):
-        row = rows[key]
-        assert (row.confidence, row.firmware) == (confidence, frozenset({96}))
-        assert row.evidence == tuple(f"captures/fw96/20261118-gate-{s}.jsonl" for s in steps)
+    bypass, loopback = rows[("bypass", None)], rows[("loopback", None)]
+    assert (bypass.confidence, bypass.firmware) == ("confirmed", frozenset({96}))
+    assert bypass.evidence == tuple(
+        f"captures/fw96/20261118-gate-{s}.jsonl" for s in ("bypass", "bypass_b")
+    )
+    assert (loopback.confidence, loopback.firmware) == ("confirmed", frozenset({96}))
+    assert loopback.evidence == (
+        "captures/fw96/20261118-gate-loopback_off.jsonl",
+        "captures/fw96/20261118-gate-loopback_on.jsonl",
+        "captures/fw96/20261119-gate-loopback_off_c.jsonl",
+        "captures/fw96/20261119-gate-loopback_on_c.jsonl",
+    )
+
+
+def test_every_write_row_is_confirmed() -> None:
+    # spec 007 US1: after gate session C no write row is left observed (fw 96)
+    assert {row.kind for row in load_write_rows() if row.confidence != "confirmed"} == set()
 
 
 def test_persistent_rows_match_the_allowlist() -> None:
@@ -135,10 +146,10 @@ def test_evidence_rule_catches_unbacked_promotion() -> None:
     assert _evidence_rule(row)
 
 
-def _sessions(row: WriteRow) -> set[str]:
-    """Gate sessions (``A``/``B``) of the excerpts a row cites."""
+def _sessions(row: WriteRow) -> set[tuple[str, str]]:
+    """Gate sessions (spec, ``A``/``B``/``C``) of the excerpts a row cites."""
     by_file = {path: step for step, path in RECORDED.items()}
-    session = {s.step: s.session for s in ALL_STEPS}
+    session = {s.step: (s.spec, s.session) for s in ALL_STEPS}
     return {session[by_file[p.rsplit("/", 1)[-1]]] for p in row.evidence}
 
 
@@ -147,7 +158,7 @@ def test_confirmed_rows_cite_two_gate_sessions() -> None:
     confirmed = [row for row in load_write_rows() if row.confidence == "confirmed"]
     assert confirmed
     for row in confirmed:
-        assert _sessions(row) >= {"A", "B"}, row.kind
+        assert len(_sessions(row)) >= 2, row.kind
 
 
 def _spec004_rule(row: WriteRow) -> list[str]:
@@ -161,7 +172,7 @@ def _spec004_rule(row: WriteRow) -> list[str]:
         step
         for step, path in zip(cited, row.evidence, strict=True)
         if step is not None
-        and STEPS_BY_NAME[step].spec == "004"
+        and STEPS_BY_NAME[step].spec in ("004", "007")
         and step in ROW_STEPS[row.kind]
         and "-gate-" in path
         and (REPO_ROOT / path).is_file()

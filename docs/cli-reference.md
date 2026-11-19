@@ -23,7 +23,7 @@
 | [`preset reload`](#preset-reload) | volatile | discard unsaved edits |
 | [`preset select`](#preset-select) | volatile | load a stored preset |
 | [`bypass on` / `bypass off`](#bypass) | volatile | bypass the pedal / leave bypass |
-| [`loopback on` / `off`](#loopback) | kept across power-off | Bluetooth audio in the USB recording (experimental) |
+| [`loopback on` / `off`](#loopback) | kept across power-off | Bluetooth audio in the USB recording |
 | [`preset save`](#preset-save) | **persistent** | store the current sound in a slot (`--unsafe`) |
 | [`preset restore`](#preset-restore) | **persistent** | write back a backup file (`--unsafe`) |
 
@@ -170,8 +170,8 @@ openvave set FIELD=VALUE [FIELD=VALUE ...] [--dry-run] [--experimental]
 | `noise_gate`, `gain`, `treble`, `middle`, `bass`, `volume`, `mod_speed`, `delay_time`, `reverb_mix` | 0–127 | |
 | `mod_fx`, `delay_mix`, `reverb_decay` | position 1–40 (keep type); with `--type TYPE`; or raw 0–127 with `--raw`. In `FIELD=VALUE` form: `POSITION`, `TYPE:POSITION`, `raw:N` | |
 | `amp_type`, `ir_cab` | 0–8 | |
-| `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` | `--experimental` |
-| `led_colour` | `#rrggbb` or `r,g,b` | `--experimental` |
+| `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` | |
+| `led_colour` | `#rrggbb` or `r,g,b` | |
 
 Types: `mod_fx` chorus, phaser, tremolo; `delay_mix` analog, tape, dual; `reverb_decay` room,
 spring, cloud ([Effect types](effect-types.md)). Works in normal and edit mode; refused in tuner
@@ -207,7 +207,7 @@ the position is required (exit 2 without it).
 ## loopback
 
 ```text
-openvave loopback {on,off} --experimental [--dry-run]
+openvave loopback {on,off} [--dry-run] [--experimental]
 ```
 
 Reads the status byte, writes `01` / `00`, reads it back. Equal value: nothing sent.

@@ -25,6 +25,7 @@ from tests.support.write_fixture import (
     FW97_QUERY_RX,
     NORMAL,
     TUNER,
+    demote,
     make_fake,
     nak,
     write_frame,
@@ -172,7 +173,8 @@ async def test_confirmed_knob_block_needs_no_opt_in() -> None:
     assert len(writes(fake)) == 1
 
 
-async def test_experimental_required_until_confirmed() -> None:
+async def test_experimental_required_until_confirmed(monkeypatch: pytest.MonkeyPatch) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     fake = make_fake()
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_set("mod_on", True)

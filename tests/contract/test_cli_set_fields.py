@@ -15,7 +15,7 @@ from openvave.protocol.bytemap import type_raw
 from tests.contract.test_cli_set import NOT_SAVED_NORMAL, run
 from tests.support import storage_fixture as sf
 from tests.support.captures import REPO_ROOT
-from tests.support.write_fixture import ACK, NORMAL, TUNER, make_fake, write_frame, writes
+from tests.support.write_fixture import ACK, NORMAL, TUNER, demote, make_fake, write_frame, writes
 
 SCHEMA = REPO_ROOT / "specs/004-remote-edit-save-restore/contracts/set-fields-result.schema.json"
 P = sf.PUBLIC_PRESET
@@ -81,7 +81,10 @@ def test_dry_run_prints_every_frame_and_sends_nothing(capsys: pytest.CaptureFixt
     assert writes(fake) == []
 
 
-def test_dry_run_shows_the_refusal(capsys: pytest.CaptureFixture[str]) -> None:
+def test_dry_run_shows_the_refusal(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     argv = ["set", "gain=95", "delay_on=on", "--dry-run"]
     code, out, err, fake = run(capsys, argv, make_fake(NORMAL))
     assert code == 0, err
@@ -159,7 +162,10 @@ def test_json_result(capsys: pytest.CaptureFixture[str]) -> None:
     }
 
 
-def test_json_dry_run_has_no_result(capsys: pytest.CaptureFixture[str]) -> None:
+def test_json_dry_run_has_no_result(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     code, out, _, _ = run(capsys, ["set", "gain=95", "delay_on=on", "--dry-run", "--json"])
     assert code == 0
     doc = json.loads(out)

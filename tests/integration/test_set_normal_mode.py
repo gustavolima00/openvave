@@ -23,6 +23,7 @@ from tests.support.write_fixture import (
     GLOBAL,
     NORMAL,
     TUNER,
+    demote,
     make_fake,
     write_frame,
     writes,
@@ -109,7 +110,10 @@ async def _no_sleep(_: float) -> None:
 
 
 @pytest.mark.parametrize(("field", "value"), [("mod_on", True), ("led_colour", "#ff0000")])
-async def test_observed_writes_need_experimental_in_normal_mode(field: str, value: object) -> None:
+async def test_observed_writes_need_experimental_in_normal_mode(
+    field: str, value: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "block_switch", "led_colour")  # every fw 96 row is confirmed since spec 007
     fake = make_fake(NORMAL)
     async with TankG.over(fake) as pedal:
         with pytest.raises(WriteRefusedError) as exc:

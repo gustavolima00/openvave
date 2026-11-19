@@ -18,7 +18,7 @@ to a pedal you did not choose. It identifies a connected pedal, decodes every by
 settings that is understood (all but 4 of 26) and **backs up** the 36 stored presets. It edits the
 current preset **remotely in normal mode**, as the phone app does (one field, or several over one
 connection), discards those edits with `preset reload`, selects presets, switches **bypass** and
-(experimental) **loopback**, and is the first release that can **change stored presets**:
+**loopback**, and is the first release that can **change stored presets**:
 `preset save` and `preset restore`. openvave changes stored presets **only** through those two
 commands, only with `--unsafe`, and always after an automatic, verified backup; every other write
 is volatile (see [Safety](docs/safety.md)). Every write openvave can send is listed, with its

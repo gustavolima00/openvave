@@ -28,6 +28,8 @@ SPEC004_SESSION_A_DATE = "20261118"
 SPEC004_SESSION_B_DATE = "20261118"
 """Expected date of spec 004 gate session B (after a power cycle, a new connection per command,
 another loaded preset and another target slot than session A)."""
+SPEC007_SESSION_C_DATE = "20261119"
+"""Date of spec 007 gate session C."""
 
 
 @dataclass(frozen=True)
@@ -99,18 +101,34 @@ SPEC004_SESSION_B: tuple[GateStep, ...] = (
 
 SPEC004_STEPS: tuple[GateStep, ...] = SPEC004_SESSION_A + SPEC004_SESSION_B
 
-ALL_STEPS: tuple[GateStep, ...] = SPEC003_STEPS + SPEC004_STEPS
+SPEC007_SESSION_C: tuple[GateStep, ...] = (
+    # spec 007 gate session C (2026-11-19, runbook specs/007-mapping-gaps/gate-session-c.md): the
+    # second independent session for the block switches, LED colour and loopback; a new connection
+    # per command, normal mode, preset 1B
+    GateStep("switch_amp_c", "block_switch", 0, session="C", spec="007"),
+    GateStep("switch_mod_c", "block_switch", 1, session="C", spec="007"),
+    GateStep("switch_reverb_c", "block_switch", 3, session="C", spec="007"),
+    GateStep("led_colour_c", "led_colour", 18, session="C", spec="007"),
+    GateStep("loopback_on_c", "loopback", session="C", spec="007"),
+    GateStep("switch_delay_c", "block_switch", 2, session="C", spec="007"),
+    GateStep("loopback_off_c", "loopback", session="C", spec="007"),
+)
+
+SPEC007_STEPS: tuple[GateStep, ...] = SPEC007_SESSION_C
+
+ALL_STEPS: tuple[GateStep, ...] = SPEC003_STEPS + SPEC004_STEPS + SPEC007_STEPS
 
 SESSION_DATES = {
     ("003", "A"): SESSION_A_DATE,
     ("003", "B"): SESSION_B_DATE,
     ("004", "A"): SPEC004_SESSION_A_DATE,
     ("004", "B"): SPEC004_SESSION_B_DATE,
+    ("007", "C"): SPEC007_SESSION_C_DATE,
 }
 
 ROW_STEPS: dict[str, frozenset[str]] = {
     "bypass": frozenset({"bypass", "bypass_b"}),
-    "loopback": frozenset({"loopback_off", "loopback_on"}),
+    "loopback": frozenset({"loopback_off", "loopback_on", "loopback_off_c", "loopback_on_c"}),
     "stored_slot": frozenset({"save", "restore_slot", "save_b", "restore_slot_b"}),
     "commit": frozenset(
         {
@@ -156,6 +174,14 @@ RECORDED: dict[str, str] = {
     "save_b": "20261118-gate-save_b.jsonl",
     "restore_slot_b": "20261118-gate-restore_slot_b.jsonl",
     "restore_all_b": "20261118-gate-restore_all_b.jsonl",
+    # spec 007 gate session C
+    "switch_amp_c": "20261119-gate-switch_amp_c.jsonl",
+    "switch_mod_c": "20261119-gate-switch_mod_c.jsonl",
+    "switch_delay_c": "20261119-gate-switch_delay_c.jsonl",
+    "switch_reverb_c": "20261119-gate-switch_reverb_c.jsonl",
+    "led_colour_c": "20261119-gate-led_colour_c.jsonl",
+    "loopback_on_c": "20261119-gate-loopback_on_c.jsonl",
+    "loopback_off_c": "20261119-gate-loopback_off_c.jsonl",
 }
 """Step → committed excerpt file name. Filled in each evidence commit (T055, T062, T082)."""
 

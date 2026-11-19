@@ -343,7 +343,9 @@ def _row(
         length=length,
         confidence=confidence,
         firmware=_FW96,
-        evidence=tuple(f"captures/fw96/{date}-gate-{e}.jsonl" for e in evidence),
+        evidence=tuple(
+            f"captures/fw96/{e if '-gate-' in e else f'{date}-gate-{e}'}.jsonl" for e in evidence
+        ),
     )
 
 
@@ -351,15 +353,29 @@ _SWITCH_STEPS = ("switch_amp", "switch_mod", "switch_delay", "switch_reverb")
 _SPEC004_A = "20261118"
 """Date of spec 004 gate sessions A and B (excerpts ``captures/fw96/20261118-gate-<step>``)."""
 
+
+def _c(step: str) -> str:
+    """A spec 007 gate session C excerpt (2026-11-19), as a dated evidence name for :func:`_row`."""
+    return f"20261119-gate-{step}_c"
+
+
 WRITE_MESSAGES: tuple[WriteMessage, ...] = (
     _row(
         "confirmed", "knob_block", None, KNOB_BLOCK_ADDRESS, KNOB_COUNT, "knob_gain", "knob_treble"
     ),
     *(
-        _row("observed", "block_switch", k, EDIT_BUFFER + k, 1, _SWITCH_STEPS[k])
+        _row(
+            "confirmed",
+            "block_switch",
+            k,
+            EDIT_BUFFER + k,
+            1,
+            _SWITCH_STEPS[k],
+            _c(_SWITCH_STEPS[k]),
+        )
         for k in range(SWITCH_COUNT)
     ),
-    _row("observed", "led_colour", None, LED_ADDRESS, LED_LENGTH, "led_colour"),
+    _row("confirmed", "led_colour", None, LED_ADDRESS, LED_LENGTH, "led_colour", _c("led_colour")),
     _row(
         "confirmed",
         "preset_select",
@@ -373,13 +389,15 @@ WRITE_MESSAGES: tuple[WriteMessage, ...] = (
     ),
     _row("confirmed", "bypass", None, BYPASS_BASE, 1, "bypass", "bypass_b", date=_SPEC004_A),
     _row(
-        "observed",
+        "confirmed",
         "loopback",
         None,
         LOOPBACK_ADDRESS,
         1,
         "loopback_off",
         "loopback_on",
+        _c("loopback_off"),
+        _c("loopback_on"),
         date=_SPEC004_A,
     ),
     _row(

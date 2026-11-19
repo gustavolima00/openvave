@@ -259,7 +259,7 @@ def _parser() -> argparse.ArgumentParser:
     loopback = sub.add_parser(
         "loopback",
         parents=[common],
-        help="switch the loopback flag (status byte 0xD0000000); experimental",
+        help="switch the loopback flag (status byte 0xD0000000)",
         description="Reads the flag, writes 01 (on) or 00 (off), re-reads. Never followed by a "
         "commit. Observed on fw 96: on mixes the pedal's Bluetooth audio into the USB "
         "recording, off leaves it out; the flag persists across a power cycle.",

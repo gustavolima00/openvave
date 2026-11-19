@@ -16,6 +16,7 @@ from tests.support.write_fixture import (
     EDIT,
     NORMAL,
     TUNER,
+    demote,
     make_fake,
     nak,
     write_frame,
@@ -73,7 +74,8 @@ async def test_no_change_when_equal(on: bool, status: bytes) -> None:
     assert writes(fake) == []
 
 
-async def test_refused_without_experimental() -> None:
+async def test_refused_without_experimental(monkeypatch: pytest.MonkeyPatch) -> None:
+    demote(monkeypatch, "loopback")  # every fw 96 row is confirmed since spec 007
     fake = make_fake(NORMAL, status=b"\x01")
     async with TankG.over(fake) as pedal:
         plan = await pedal.plan_loopback(False, sleep=_no_sleep)

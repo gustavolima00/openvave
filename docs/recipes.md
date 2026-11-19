@@ -14,7 +14,7 @@ command to see what it would send without sending it.
 - [Back up all 36 presets](#back-up-all-36-presets)
 - [Save the current sound to a preset (UNSAFE)](#save-the-current-sound-unsafe)
 - [Restore presets from a backup (UNSAFE)](#restore-presets-from-a-backup-unsafe)
-- [Loopback (experimental)](#loopback-experimental)
+- [Loopback](#loopback)
 - [Scripting with JSON](#scripting-with-json)
 
 ## Dial in a sound
@@ -24,7 +24,7 @@ knob fields in a single write, then each block switch and the LED colour separat
 acknowledged and checked by re-reading before the next one goes out.
 
 ```text
-$ openvave set gain=95 treble=58 reverb_decay=room:18 delay_on=on led_colour=#2040ff --experimental
+$ openvave set gain=95 treble=58 reverb_decay=room:18 delay_on=on led_colour=#2040ff
 Set 5 fields   (current preset 1B, normal mode)
   gain          60 → 95
   treble        60 → 58
@@ -52,18 +52,17 @@ Not saved. Discard: openvave preset reload   Keep: openvave preset save --unsafe
 | `noise_gate`, `gain`, `treble`, `middle`, `bass`, `volume`, `mod_speed`, `delay_time`, `reverb_mix` | 0–127 |
 | `mod_fx`, `delay_mix`, `reverb_decay` | `POSITION` (1–40, keep the type), `TYPE:POSITION`, or `raw:N` (0–127); see [Effect types](effect-types.md) |
 | `amp_type`, `ir_cab` | 0–8 |
-| `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` (needs `--experimental`) |
-| `led_colour` | `#rrggbb` or `r,g,b` (needs `--experimental`) |
+| `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` |
+| `led_colour` | `#rrggbb` or `r,g,b` |
 
-- `--experimental` is needed here only because of `delay_on` and `led_colour`, whose messages are
-  `observed`, not yet `confirmed`. Knobs and selectors alone need no flag:
-  `openvave set gain=95 treble=58 reverb_decay=room:18`.
-- **All or nothing up front.** If any field would be refused (out of range, a missing
-  `--experimental`, tuner mode, bypass …), nothing is sent:
+- On firmware 96 every field is `confirmed` and needs no flag (block switches and the LED colour
+  since spec 007 gate session C); on other firmware every write needs `--experimental`.
+- **All or nothing up front.** If any field would be refused (out of range, tuner mode, bypass,
+  untested firmware …), nothing is sent:
 
   ```text
-  $ openvave set gain=95 delay_on=on
-  error: refused (experimental_required): delay_on: block_switch is 'observed' in the protocol docs (Write messages); pass --experimental (experimental=True) to send it
+  $ openvave set gain=200 delay_on=on
+  error: gain: value out of range (0–127)
   ```
 
 - Fields already at their value are skipped; if all are, nothing is sent
@@ -267,18 +266,18 @@ openvave preset select 2C
 openvave preset save --to 9D --unsafe
 ```
 
-## Loopback (experimental)
+## Loopback
 
 ```text
-$ openvave loopback off --experimental --dry-run
+$ openvave loopback off --dry-run
 Loopback on → off   (status byte 0xD0000000: Bluetooth audio in the USB recording)
   write  00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a
   dry run: nothing sent
 ```
 
 `on` mixes the pedal's Bluetooth audio (for example a phone backing track) into its USB recording;
-`off` keeps it out of the recording (you still hear it). The setting survives a power cycle. It
-needs `--experimental` because the message has been seen in one session only. If the flag already
+`off` keeps it out of the recording (you still hear it). The setting survives a power cycle. If
+the flag already
 has the value, nothing is sent (`loopback is already on; nothing sent`).
 
 ## Scripting with JSON

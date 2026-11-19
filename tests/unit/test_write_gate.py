@@ -24,19 +24,21 @@ TARGETS = [
 ]
 
 
-def test_confidence_after_gate_session_b() -> None:
-    # session A (2026-11-17) made every row observed; session B confirmed these three (SC-005)
+def test_confidence_after_gate_session_c() -> None:
+    # spec 003 session A made every row observed, session B confirmed knob block and select;
+    # spec 004 confirmed bypass and the persistent rows; spec 007 gate session C (2026-11-19)
+    # confirmed the block switches, LED colour and loopback
     confidence = {(m.kind, m.argument): m.confidence for m in WRITE_MESSAGES}
     assert confidence == {
         ("knob_block", None): "confirmed",
-        ("block_switch", 0): "observed",
-        ("block_switch", 1): "observed",
-        ("block_switch", 2): "observed",
-        ("block_switch", 3): "observed",
-        ("led_colour", None): "observed",
+        ("block_switch", 0): "confirmed",
+        ("block_switch", 1): "confirmed",
+        ("block_switch", 2): "confirmed",
+        ("block_switch", 3): "confirmed",
+        ("led_colour", None): "confirmed",
         ("preset_select", None): "confirmed",
         ("bypass", None): "confirmed",  # spec 004 gate sessions A and B (T090)
-        ("loopback", None): "observed",  # spec 004 session A only
+        ("loopback", None): "confirmed",  # spec 004 session A + spec 007 session C
         ("stored_slot", None): "confirmed",  # persistent: still needs --unsafe
         ("commit", None): "confirmed",
         ("stored_image", None): "confirmed",
@@ -54,15 +56,22 @@ def test_spec004_confirmed_rows_are_sendable_on_fw96(kind: str, argument: int | 
     assert sendable_by_default(kind, argument, 97) is False
 
 
-def test_loopback_still_needs_the_opt_in() -> None:
-    assert sendable_by_default("loopback", None, 96) is False
+SESSION_C_ROWS = [("block_switch", k) for k in range(4)] + [
+    ("led_colour", None),
+    ("loopback", None),
+]
 
 
-@pytest.mark.parametrize(
-    ("kind", "argument"), [("block_switch", k) for k in range(4)] + [("led_colour", None)]
-)
-def test_observed_rows_still_need_the_opt_in(kind: str, argument: int | None) -> None:
-    assert sendable_by_default(kind, argument, 96) is False
+@pytest.mark.parametrize(("kind", "argument"), SESSION_C_ROWS)
+def test_session_c_rows_are_sendable_on_fw96(kind: str, argument: int | None) -> None:
+    assert sendable_by_default(kind, argument, 96) is True
+
+
+@pytest.mark.parametrize(("kind", "argument"), SESSION_C_ROWS)
+def test_session_c_rows_still_need_the_opt_in_on_other_firmware(
+    kind: str, argument: int | None
+) -> None:
+    assert sendable_by_default(kind, argument, 97) is False
 
 
 CONFIRMED_IN_B = [("knob_block", None), *(("preset_select", i) for i in (0, 6, 35))]
@@ -91,6 +100,8 @@ def promoted(knob: str, ack: str, firmware: frozenset[int] = frozenset({96})) ->
     for m in WRITE_MESSAGES:
         if m.kind == "knob_block":
             m = dataclasses.replace(m, confidence=knob, firmware=firmware)
+        elif m.kind == "led_colour":
+            m = dataclasses.replace(m, confidence="observed")
         elif m.kind == "ack":
             m = dataclasses.replace(m, confidence=ack)
         out.append(m)

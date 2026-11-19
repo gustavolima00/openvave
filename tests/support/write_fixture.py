@@ -8,6 +8,7 @@ in its edit buffer, like ``captures/fw96/20261116-probe-connect.jsonl``.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from openvave.transport.fake import FakeTransport, Replies
 from tests.support import storage_fixture as sf
@@ -79,3 +80,32 @@ def make_fake(
 def writes(fake: FakeTransport) -> list[bytes]:
     """The ``0x22`` frames the fake received."""
     return [f for f in fake.sent if f[2] == 0x22]
+
+
+def demote(monkeypatch: Any, *kinds: str) -> None:
+    """Make the rows of ``kinds`` ``observed`` (they need the experimental opt-in again).
+
+    Since spec 007 gate session C every fw 96 write row is ``confirmed``; tests of the
+    ``experimental_required`` path demote a row instead of relying on one being left observed.
+    Patches the table lookups the session and the CLI renderer use.
+    """
+    import dataclasses
+
+    from openvave import session
+    from openvave.cli import render
+    from openvave.protocol import writes as _writes
+
+    table = tuple(
+        dataclasses.replace(m, confidence="observed") if m.kind in kinds else m
+        for m in _writes.WRITE_MESSAGES
+    )
+
+    def message_for(kind: str, argument: int | None, messages: Any = table) -> Any:
+        return _writes.message_for(kind, argument, messages)
+
+    def sendable(kind: str, argument: int | None, firmware: int, *, messages: Any = table) -> bool:
+        return _writes.sendable_by_default(kind, argument, firmware, messages=messages)
+
+    monkeypatch.setattr(session, "message_for", message_for)
+    monkeypatch.setattr(session, "sendable_by_default", sendable)
+    monkeypatch.setattr(render, "sendable_by_default", sendable)

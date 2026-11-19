@@ -20,6 +20,7 @@ from tests.support.write_fixture import (
     EDIT,
     NORMAL,
     TUNER,
+    demote,
     make_fake,
     nak,
     write_frame,
@@ -99,7 +100,10 @@ def test_dry_run_sends_no_write(capsys: pytest.CaptureFixture[str]) -> None:
     assert writes(fake) == []
 
 
-def test_dry_run_shows_the_refusal(capsys: pytest.CaptureFixture[str]) -> None:
+def test_dry_run_shows_the_refusal(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     code, out, err, fake = run(capsys, ["set", "gain", "90", "--dry-run"], make_fake(TUNER))
     assert code == 0, err
     assert "refused: tuner_mode" in out
@@ -151,7 +155,10 @@ def test_json_result(capsys: pytest.CaptureFixture[str]) -> None:
     ]
 
 
-def test_json_dry_run_has_no_result(capsys: pytest.CaptureFixture[str]) -> None:
+def test_json_dry_run_has_no_result(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "led_colour")  # every fw 96 row is confirmed since spec 007
     code, out, _, _ = run(capsys, ["set", "led_colour", "#ff0000", "--dry-run", "--json"])
     assert code == 0
     doc = json.loads(out)
@@ -304,7 +311,10 @@ def test_json_dry_run_refusals_validate(
     assert doc["plan"]["refusal"] == reason
 
 
-def test_experimental_required_message(capsys: pytest.CaptureFixture[str]) -> None:
+def test_experimental_required_message(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "block_switch")  # every fw 96 row is confirmed since spec 007
     code, _, err, fake = run(capsys, ["set", "mod_on", "on"])
     assert code == 1
     assert "--experimental" in err

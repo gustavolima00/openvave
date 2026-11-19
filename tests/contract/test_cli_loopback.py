@@ -12,7 +12,7 @@ from openvave.cli import main
 from openvave.transport.fake import FakeTransport
 from tests.contract.test_cli_set import factory_for
 from tests.support.captures import REPO_ROOT
-from tests.support.write_fixture import ACK, NORMAL, make_fake, nak, writes
+from tests.support.write_fixture import ACK, NORMAL, demote, make_fake, nak, writes
 
 SCHEMA = REPO_ROOT / "specs/004-remote-edit-save-restore/contracts/write-result.schema.json"
 LOOPBACK_OFF = "00 59 22 09 00 00 04 00 00 00 d0 01 00 00 00 2a"
@@ -67,8 +67,9 @@ def test_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_dry_run_without_experimental_prints_the_refusal(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    demote(monkeypatch, "loopback")  # every fw 96 row is confirmed since spec 007
     code, out, err = run(capsys, ["off", "--dry-run"], make_fake(NORMAL, status=b"\x01"))
     assert code == 0, err
     assert "  refused: experimental_required (loopback is 'observed'; needs --experimental)" in (
@@ -85,7 +86,10 @@ def test_no_change(capsys: pytest.CaptureFixture[str], argv: list[str], status: 
     assert writes(fake) == []
 
 
-def test_refused_without_experimental(capsys: pytest.CaptureFixture[str]) -> None:
+def test_refused_without_experimental(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    demote(monkeypatch, "loopback")  # every fw 96 row is confirmed since spec 007
     fake = make_fake(NORMAL, status=b"\x01")
     code, out, err = run(capsys, ["off"], fake)
     assert code == 1

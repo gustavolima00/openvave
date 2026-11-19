@@ -31,9 +31,9 @@ unlocks a persistent write by itself.
 | knob block (every knob and selector) | `set` knobs, selectors, typed knobs | confirmed | — |
 | preset select | `preset select`, `preset reload`, `bypass off`, end of save/restore | confirmed | — |
 | bypass | `bypass on` | confirmed | — |
-| block switch | `set amp_on` / `mod_on` / `delay_on` / `reverb_on` | observed | `--experimental` |
-| LED colour | `set led_colour` | observed | `--experimental` |
-| loopback | `loopback on` / `off` | observed | `--experimental` |
+| block switch | `set amp_on` / `mod_on` / `delay_on` / `reverb_on` | confirmed | — |
+| LED colour | `set led_colour` | confirmed | — |
+| loopback | `loopback on` / `off` | confirmed | — |
 | stored slot, commit, stored image | `preset save`, `preset restore` | confirmed | `--unsafe` |
 
 Each row, with its evidence, is under "Write messages" in

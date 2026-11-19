@@ -88,6 +88,12 @@ All notable changes to this project are documented here. The format follows
   destructive and not idempotent.
 ### Changed
 
+- **Block switches, LED colour and loopback are `confirmed`** on firmware 96 (spec 007 gate
+  session C, 2026-11-19, a second independent session after spec 003/004 session A):
+  `set amp_on|mod_on|delay_on|reverb_on`, `set led_colour` and `loopback on|off` no longer need
+  `--experimental`. Every write openvave can send is now `confirmed` on fw 96; other firmware still
+  needs `--experimental`. New evidence: `captures/fw96/20261119-gate-*_c.jsonl`.
+
 - `preset save` and `preset restore` without `--backup-dir` now write their automatic backup to
   `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
   on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current

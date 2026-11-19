@@ -322,7 +322,8 @@ delivered; the rest stays open.
 
 Still open after spec 004:
 
-- A second gate session for `loopback`, the block switches and `led_colour`, to reach `confirmed`.
+- ~~A second gate session for `loopback`, the block switches and `led_colour`~~: done in spec 007
+  gate session C (2026-11-19); all `confirmed`.
 - Is the commit required (slot write without `0xF0000000`, then a power cycle)? Not run (T080a).
 - A pedal knob turned after a remote write (T080b, not run); the source of the short mute in the
   save / restore sequence.

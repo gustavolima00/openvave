@@ -73,9 +73,9 @@ Notes:
   (hypothesis until heard). The manual's lists of models are images we have not transcribed, and
   the app names neither, so these pages do not either.
 - **Preset bytes 18–20** hold the colour of the preset LED, as red, green, blue. Writing
-  `ff 00 00` turned the LED red in one session (observed), so `set led_colour` exists behind
-  `--experimental`; `preset dump` still lists the three bytes as `unknown` until the byte map has a
-  second session.
+  `ff 00 00` turned the LED red (spec 004) and `00 ff 00` was written and read back in a second
+  session (spec 007), so `set led_colour` needs no flag on firmware 96; `preset dump` still lists
+  the three bytes as `unknown` until the byte map names them (spec 007).
 - Turning a knob on the pedal does nothing outside the pedal's edit mode (owner report). A remote
   change from openvave or the app works in normal mode.
 
@@ -165,8 +165,8 @@ Both messages are `confirmed` on firmware 96. Details: [Recipes → Bypass](reci
 The pedal's single status byte (`0xD0000000`) is a **loopback** flag. With it on (`01`, the value seen in
 every early session), sound the pedal receives over Bluetooth audio, such as a backing track from a phone,
 is mixed into its USB recording; with it off (`00`) you still hear that audio but it is not
-recorded. The flag survives a power cycle. It was seen in one session (`observed`), so
-`openvave loopback on|off` needs `--experimental`.
+recorded. The flag survives a power cycle. `openvave loopback on|off` switches it; the message is
+`confirmed` on firmware 96 (two gate sessions).
 
 ## What is not known yet
 

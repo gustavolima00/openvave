@@ -979,7 +979,8 @@ class TankG:
 
         ``plan.before`` is the status byte (``0xD0000000`` × 1). Allowed in every recognised
         state; refused in an unrecognised one. ``no_change`` when the flag already has the value.
-        The message is ``observed`` (not ``confirmed``), so ``experimental`` is needed.
+        The message is ``confirmed`` on fw 96 (spec 004 session A, spec 007 session C);
+        ``experimental`` is needed only on other firmware.
         """
         target = WriteTarget.loopback()
         state, glob, _, reads = await self._read_state(sleep)

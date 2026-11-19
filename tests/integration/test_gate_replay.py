@@ -27,6 +27,7 @@ from tests.integration.gate_fixtures import (
     RECORDED,
     SPEC003_STEPS,
     SPEC004_STEPS,
+    SPEC007_STEPS,
     GateStep,
     excerpt_path,
 )
@@ -239,6 +240,6 @@ async def replay_004(step: GateStep, path: Path) -> WriteResult | SequenceResult
     return result
 
 
-@pytest.mark.parametrize("step", [_param(s) for s in SPEC004_STEPS])
+@pytest.mark.parametrize("step", [_param(s) for s in SPEC004_STEPS + SPEC007_STEPS])
 async def test_gate_004_step_replays(step: GateStep) -> None:
     await replay_004(step, excerpt_path(step))
