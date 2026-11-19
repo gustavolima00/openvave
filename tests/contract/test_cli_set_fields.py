@@ -60,9 +60,9 @@ def test_human_output(capsys: pytest.CaptureFixture[str]) -> None:
         "         [6] gain 95",
         "         [7] treble 58",
         "         [15] reverb_decay 17 (room 18)",
-        "         [18] 32",
-        "         [19] 64",
-        "         [20] 255",
+        "         [18] led_red 32",
+        "         [19] led_green 64",
+        "         [20] led_blue 255",
         NOT_SAVED_NORMAL,
     ]
     assert writes(fake) == [KNOB, DELAY_ON, LED]

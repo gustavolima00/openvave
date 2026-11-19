@@ -9,12 +9,21 @@ from openvave.protocol import BYTE_MAP, decode_region, diff, parse_read_reply
 from tests.integration.fixture_pairs import FW96, PAIRS, SELECTIONS, FixturePair
 from tests.support.captures import PRESET, load_capture
 
-REGIONS = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET}
+REGIONS = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET, "status": Region.STATUS}
+GATE_LABELS = {
+    "global": "global t4 0x20000000 x4",
+    "preset": "preset t4 0x10000000 x21",
+    "status": "status t4 0xD0000000 x1",
+}
 
 
-def reads(path: object, region: Region) -> list[RegionRead]:
+def reads(path: object, region: Region, gate: bool = False) -> list[RegionRead]:
     key = next(k for k, r in REGIONS.items() if r is region)
-    return [parse_read_reply(region, frame) for frame in load_capture(path).rx_all(key)]
+    label = GATE_LABELS[key] if gate else key
+    capture = load_capture(path)
+    if gate and label not in capture.all_rx:
+        return []  # a gate excerpt reads only the regions its write needs
+    return [parse_read_reply(region, frame) for frame in capture.rx_all(label)]
 
 
 def entry(region: Region, name: str) -> ByteMapEntry:
@@ -25,18 +34,19 @@ def entry(region: Region, name: str) -> ByteMapEntry:
 def test_single_step_moves_only_its_field(pair: FixturePair) -> None:
     region = REGIONS[pair.region]
     field = entry(region, pair.name)
-    series = reads(pair.path, region)
+    series = reads(pair.path, region, pair.gate)
     assert len(series) >= 2
+    allowed = {field.offset, *pair.moves}
     moved = 0
     for before, after in zip(series, series[1:], strict=False):
         changes = diff(before, after)
-        assert all(c.offset == field.offset for c in changes), (pair.file, changes)
-        assert all(c.field == field for c in changes)
-        moved += len(changes)
+        assert all(c.offset in allowed for c in changes), (pair.file, changes)
+        assert all(c.field == field for c in changes if c.offset == field.offset)
+        moved += sum(1 for c in changes if c.offset == field.offset)
     assert moved >= 1, f"{pair.file}: {pair.name} never moved"
     other = [r for r in REGIONS.values() if r is not region]
     for o in other:
-        others = reads(pair.path, o)
+        others = reads(pair.path, o, pair.gate)
         assert all(not diff(a, b) for a, b in zip(others, others[1:], strict=False))
     values = [read.data[field.offset] for read in series]
     if pair.reaches is not None:
@@ -69,7 +79,7 @@ def test_every_pair_file_exists_and_is_indexed_once_per_field() -> None:
     for pair in PAIRS:
         assert pair.path.is_file(), pair.file
     committed = {p.name for p in FW96.glob("*-step-*.jsonl")}
-    assert committed == {p.file for p in PAIRS}, "every committed step excerpt is indexed"
+    assert committed == {p.file for p in PAIRS if not p.gate}, "every step excerpt is indexed"
 
 
 def test_reverb_section_reads_move_only_byte_15() -> None:

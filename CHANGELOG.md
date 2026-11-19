@@ -94,6 +94,18 @@ All notable changes to this project are documented here. The format follows
   `--experimental`. Every write openvave can send is now `confirmed` on fw 96; other firmware still
   needs `--experimental`. New evidence: `captures/fw96/20261119-gate-*_c.jsonl`.
 
+### Added
+
+- **Every byte is named on firmware 96** (spec 007): preset bytes 18–20 are `led_red`,
+  `led_green`, `led_blue` (0–255, the preset's footswitch LED colour; `preset dump` and `info` add
+  `LED colour #rrggbb`), and the status byte is `loopback` (`on`/`off`). All `confirmed` (spec 004
+  gate session A and spec 007 gate session C). JSON only gains entries in `fields`;
+  `unknown_offsets` is now empty for these regions; `schema_version` stays 2.
+- `ir_cab` position 0 is shown as `off` (the cabinet simulation off: manual, app, and heard on the
+  pedal in spec 007 gate session C); 1–8 stay `#1`–`#8`.
+- Documented: the MASTER knob is not reported over Bluetooth (no byte moved while it was turned,
+  observed).
+
 - `preset save` and `preset restore` without `--backup-dir` now write their automatic backup to
   `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
   on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current
@@ -102,9 +114,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Documentation
 
-- `ir_cab` position 0 is most likely "cab off" (the manual says the first IR slot turns the IR off,
-  and the phone app shows `OFF` for 0, then 1–8): documented as a hypothesis; openvave still prints
-  `#0`. The manual's PRESET and LIVE modes are openvave's `normal` and `edit`.
+- The manual's PRESET and LIVE modes are openvave's `normal` and `edit`.
 - The app-feature inventory no longer calls the loopback and LED-colour meanings hypotheses (both
   observed in spec 004 gate session A), and gives the app's IR cab display correctly.
 

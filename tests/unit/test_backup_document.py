@@ -78,7 +78,7 @@ def test_document_validates_against_schema() -> None:
     first = doc["presets"][6]
     assert (first["index"], first["position"], first["bank"], first["slot"]) == (6, "2C", 2, "C")
     assert doc["presets"][1]["raw"] == sf.PUBLIC_PRESET.hex(" ")
-    assert doc["presets"][1]["unknown_offsets"] == [18, 19, 20]
+    assert doc["presets"][1]["unknown_offsets"] == []
     assert len(doc["image"].split()) == 758
 
 
@@ -94,7 +94,7 @@ def test_field_items_match_decoded_field_schema() -> None:
     field_schema = json.loads(FIELD_SCHEMA_PATH.read_text(encoding="utf-8"))
     doc = make_backup().to_document()
     for preset in doc["presets"]:
-        assert len(preset["fields"]) == 18
+        assert len(preset["fields"]) == 21
         for item in preset["fields"]:
             jsonschema.validate(item, field_schema)
 

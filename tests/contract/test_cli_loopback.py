@@ -136,7 +136,7 @@ def test_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert doc["plan"]["before"] == "01"
     assert doc["result"]["after"] == "00"
     assert doc["result"]["changes"] == [
-        {"region": "status", "offset": 0, "before": 1, "after": 0, "name": None}
+        {"region": "status", "offset": 0, "before": 1, "after": 0, "name": "loopback"}
     ]
 
 

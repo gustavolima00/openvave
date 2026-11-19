@@ -21,8 +21,8 @@ Knobs, in panel order:
 
 | # | Panel label | Field | Preset byte | Values | Confidence |
 |---|---|---|---|---|---|
-| 1 | MASTER | — | — | not mapped (see notes) | — |
-| 2 | IR CAB | `ir_cab` | 17 | 9 positions, 0–8 (0 = cab off, hypothesis) | confirmed |
+| 1 | MASTER | — | — | not reported over Bluetooth (see notes) | observed |
+| 2 | IR CAB | `ir_cab` | 17 | 9 positions: 0 = cab off, 1–8 cabinets | confirmed (0 = off: heard once) |
 | 3 | RVB MIX | `reverb_mix` | 16 | 0–127 | confirmed |
 | 4 | RVB DECAY | `reverb_decay` | 15 | 0–127: room, spring, cloud ([types](effect-types.md)) | confirmed (types: observed) |
 | 5 | DLY TIME | `delay_time` | 14 | 0–127 | confirmed |
@@ -45,7 +45,7 @@ Not knobs:
 | delay block on/off | `delay_on` | 2 | `on` / `off` | confirmed |
 | mod block on/off | `mod_on` | 1 | `on` / `off` | confirmed |
 | amp block on/off | `amp_on` | 0 | `on` / `off` | confirmed |
-| preset LED colour | `led_colour` (write only) | 18–20 | R, G, B 0–255 each | observed |
+| preset LED colour | `led_red`, `led_green`, `led_blue` (read); `led_colour` (write) | 18–20 | R, G, B 0–255 each | confirmed |
 
 ### Footswitches
 
@@ -62,20 +62,22 @@ been checked. The jack on the left edge is marked XLR OUT.
 
 Notes:
 
-- **MASTER has no byte.** It was not part of the mapping sessions, and no byte of the preset,
-  global block or status is known to follow it. It is probably an overall output level kept
-  outside the presets, but that is untested; `openvave watch` while turning it would tell.
+- **MASTER has no byte.** Turned fully down and up twice during `openvave watch` (spec 007 gate
+  session C, 2026-11-19), it changed no byte of the global block, the preset or the status
+  (observed). It is an output level the pedal keeps to itself, outside the presets.
 - **Values are raw.** 0–127 is the knob's full sweep (every knob reached both ends on the pedal).
   There are no units: openvave does not know what gain 60 means in dB or delay time 40 in ms.
 - **Amp types and IR cabs have no names.** Each is a 9-position selector, 0–8 on the wire.
   openvave prints `#0`–`#8` (the raw value). The phone app shows amp types as 1–9 and the IR cab
-  as `OFF` for 0 and 1–8 otherwise; the manual agrees that the first IR position turns the cab off
-  (hypothesis until heard). The manual's lists of models are images we have not transcribed, and
+  as `OFF` for 0 and 1–8 otherwise; the manual agrees that the first IR position turns the cab off,
+  and it sounded that way on the pedal (spec 007), so openvave prints `off` for 0 and `#1`–`#8`
+  for the cabinets. The manual's lists of models are images we have not transcribed, and
   the app names neither, so these pages do not either.
 - **Preset bytes 18–20** hold the colour of the preset LED, as red, green, blue. Writing
   `ff 00 00` turned the LED red (spec 004) and `00 ff 00` was written and read back in a second
-  session (spec 007), so `set led_colour` needs no flag on firmware 96; `preset dump` still lists
-  the three bytes as `unknown` until the byte map names them (spec 007).
+  session (spec 007, LED turned green), so `set led_colour` needs no flag on firmware 96 and
+  `preset dump` shows the three bytes as `led_red`, `led_green`, `led_blue` plus `LED colour
+  #rrggbb`.
 - Turning a knob on the pedal does nothing outside the pedal's edit mode (owner report). A remote
   change from openvave or the app works in normal mode.
 
@@ -171,7 +173,7 @@ recorded. The flag survives a power cycle. `openvave loopback on|off` switches i
 ## What is not known yet
 
 - The audio processing order (above).
-- The MASTER knob, and the footswitches press by press.
+- The footswitches press by press.
 - Names for the 9 amp types and 9 IR cabs.
 - Device-info bytes (the `Device info` block of `info`), apart from the firmware version.
 - Whether the "off" zones between effect types really silence the effect (the manual says so; not

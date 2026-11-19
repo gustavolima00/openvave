@@ -115,7 +115,7 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
     ]
     knob = regions["current_preset"]["fields"]
     assert [(f["offset"], f["value"]) for f in knob] == [
-        (offset, recorded(PRESET)[offset]) for offset in range(18)
+        (offset, recorded(PRESET)[offset]) for offset in range(21)
     ]
     assert [f["name"] for f in regions["global"]["fields"]] == [
         "browse_bank",
@@ -124,13 +124,13 @@ def test_json_fields(capsys: pytest.CaptureFixture[str]) -> None:
         "mode",
     ]
     assert regions["device_info"]["fields"] == []
-    assert regions["status"]["fields"] == []
+    assert [(f["name"], f["display"]) for f in regions["status"]["fields"]] == [("loopback", "on")]
     for region in regions.values():
         assert region["map_firmware"] == 96
     assert regions["global"]["unknown_offsets"] == []
-    assert regions["status"]["unknown_offsets"] == [0]
+    assert regions["status"]["unknown_offsets"] == []
     assert regions["device_info"]["unknown_offsets"] == list(range(32))
-    assert regions["current_preset"]["unknown_offsets"] == [18, 19, 20]
+    assert regions["current_preset"]["unknown_offsets"] == []
 
 
 def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture[str]) -> None:
@@ -139,7 +139,7 @@ def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture
     doc = info_json(capsys)
     assert doc["schema_version"] == 2
     items = [f for region in doc["regions"].values() for f in region["fields"]]
-    assert len(items) == 4 + 18  # global 0-3, preset 0-17
+    assert len(items) == 4 + 21 + 1  # global 0-3, preset 0-20, status 0
     for item in items:
         jsonschema.validate(item, schema, cls=jsonschema.Draft202012Validator)
 
@@ -176,8 +176,8 @@ def test_human_region_blocks(capsys: pytest.CaptureFixture[str]) -> None:
     assert "      [0]  browsed bank                   0    0–8        observed" in lines
     assert "      [2]  slot                           1    0–3        observed" in lines
     assert "      [3]  mode                      normal    selector   confirmed" in lines
-    assert "      unknown: 0" in lines  # status only: global is fully named
-    assert "      unknown: 0" in lines
+    assert "      [0]  loopback                      on    on/off     confirmed" in lines
+    assert not [line for line in lines if "unknown:" in line]  # every byte is named (spec 007)
     device_block = lines[lines.index(dump_lines(recorded(DEVICE_INFO))[0]) :]
     assert not device_block[2].startswith("      ")  # device info stays undecoded
 

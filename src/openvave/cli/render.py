@@ -143,9 +143,28 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     return line
 
 
+LED_PARTS = ("led_red", "led_green", "led_blue")
+
+
+def led_colour_text(decoded: DecodedRegion) -> str | None:
+    """``#rrggbb`` of the preset LED from bytes 18–20, or ``None`` when the region has none."""
+    parts = {f.entry.name: f.value for f in decoded.fields if f.entry.name in LED_PARTS}
+    if set(parts) != set(LED_PARTS):
+        return None
+    return "#" + "".join(f"{parts[name]:02x}" for name in LED_PARTS)
+
+
 def field_lines(decoded: DecodedRegion, indent: str = FIELD_INDENT) -> list[str]:
-    """One line per named field, then ``unknown: …`` listing the unknown offsets."""
-    lines = [field_line(f, indent) for f in decoded.fields]
+    """One line per named field (the LED colour also as ``#rrggbb``), then ``unknown: …``
+    listing the unknown offsets."""
+    lines = []
+    for f in decoded.fields:
+        line = field_line(f, indent)
+        if f.entry.name == LED_PARTS[-1]:
+            colour = led_colour_text(decoded)
+            if colour is not None:
+                line += f"  LED colour {colour}"
+        lines.append(line)
     if decoded.unknown_offsets:
         lines.append(f"{indent}unknown: " + " ".join(str(o) for o in decoded.unknown_offsets))
     return lines

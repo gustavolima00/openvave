@@ -242,7 +242,7 @@ def test_deprecated_known_fields_alias() -> None:
     from openvave.models import KNOWN_FIELDS, FieldSpec
 
     preset = KNOWN_FIELDS[openvave.Region.CURRENT_PRESET]
-    assert [s.offset for s in preset] == list(range(18))
+    assert [s.offset for s in preset] == list(range(21))
     by_offset = {s.offset: (s.name, s.label, s.confidence) for s in preset}
     assert by_offset[6] == ("gain", "gain", "confirmed")  # renamed from knob_unknown in 0.2.0
     assert by_offset[15] == ("reverb_decay", "reverb decay", "confirmed")
@@ -255,7 +255,7 @@ def test_deprecated_known_fields_alias() -> None:
     ]
     assert all(isinstance(s, FieldSpec) for s in preset)
     assert KNOWN_FIELDS[openvave.Region.DEVICE_INFO] == ()
-    assert KNOWN_FIELDS[openvave.Region.STATUS] == ()
+    assert [s.name for s in KNOWN_FIELDS[openvave.Region.STATUS]] == ["loopback"]
 
 
 def test_tankg_write_actions_are_named() -> None:

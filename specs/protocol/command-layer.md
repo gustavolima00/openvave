@@ -126,8 +126,8 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
   0-based; Notes give what position 0 means, e.g. slot `0` = A).
 - `switch`: `on` for the `on` raw value, `off` for the `off` one.
 - `flag`: `on` when `raw & mask` is non-zero, else `off`.
-- `selector`: the position's label where the row has labels (only `mode`: `0` edit, `1` normal,
-  `2` tuner), else `#` and the raw value (`#7`).
+- `selector`: the position's label where the row has one (`mode`: `0` edit, `1` normal, `2`
+  tuner; `ir_cab`: `0` off), else `#` and the raw value (`#7`).
 - Outside its Range (or a switch value that is neither `on` nor `off`): the raw value is shown
   as-is and flagged out of range, never clamped.
 - `unknown`: no field; the offset is listed as unknown and only the raw byte is shown.
@@ -155,11 +155,11 @@ Decoding a byte (what `preset dump`, `info` and `watch` display):
 | preset | 14 | — | `delay_time` | continuous | 0–127 | delay time knob | confirmed | 96 | `captures/fw96/20261116-step-delay_time.jsonl`, `captures/fw96/20261116-step-delay_time-1917.jsonl` | Alone, 0 → 127, swept three times. Session 19:17 (labelled `delay time`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x00` |
 | preset | 15 | — | `reverb_decay` | continuous | 0–127 | reverb decay knob | confirmed | 96 | `captures/fw96/20261116-probe-connect.jsonl`, `captures/fw96/20261117-reverb-sections-app.jsonl`, `captures/fw96/20261116-step-reverb_decay.jsonl`, `captures/fw96/20261116-step-reverb_decay-1917.jsonl` | Session 1 (probe, 2026-11-16): `05` → `7f` when only this knob was turned to max in edit mode. Session 2 (`openvave watch`, 2026-11-16 18:25): in edit mode, only this knob swept fully down then up, twice; only preset byte 15 moved, reaching `0` and `127` (excerpt: cycles 936–942; the owner named the step afterwards, the record has no stdin label). Session 19:17 (labelled `reverb decay`): alone, swept fully down and up, reaching `0` and `127`. The phone app splits this one byte into three colour sections of 44 values (blue, orange, green), each numbered 1–40 with `X` past 40; see "Reverb decay sections" (2026-11-17, observed). The raw byte stays one continuous knob. fw96: `0x05` |
 | preset | 16 | — | `reverb_mix` | continuous | 0–127 | reverb mix knob | confirmed | 96 | `captures/fw96/20261116-step-reverb_mix.jsonl`, `captures/fw96/20261116-step-reverb_mix-1917.jsonl` | Alone, 4 → 127 → 0 → 127 (session 18:25). The earlier probe moved it together with IR cab (hypothesis then). Session 19:17 (labelled `reverb mix`): alone, swept fully down and up, reaching `0` and `127`. fw96: `0x04` |
-| preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. Hypothesis (app code and manual, 2026-11-19): `0` turns the cab simulation off and 1–8 are the 8 (user-replaceable) IRs; the app shows `OFF` for 0 and the raw value otherwise, and shows amp type as raw + 1. Not heard yet. fw96: `0x07` |
-| preset | 18 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
-| preset | 19 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): green component of the preset's LED colour. fw96: `0x16` |
-| preset | 20 | — | — | unknown | — | — | — | 96 | — | Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): blue component of the preset's LED colour. fw96: `0x43` |
-| status | 0 | — | — | unknown | — | — | — | 96 | — | `0x01` in all seven watch sessions of 2026-11-16, on all ten compared presets and in edit, normal and tuner modes: it does not track the selected preset. The app reads it as "loopback enabled" and its toggle writes it (see "Status byte = loopback flag"). Spec 004 gate session A (2026-11-18): openvave wrote `00` (kept across a power cycle) and `01` back (`captures/fw96/20261118-gate-loopback_off.jsonl`, `…-loopback_on.jsonl`). Owner test the same day: with `01` the pedal's Bluetooth audio (phone backing track) is in the USB recording, with `00` it is heard but not recorded, so it **is** the loopback flag; it stays unnamed here until the byte map can cite a status-byte step fixture (the fixture-pair index covers global and preset bytes only). fw96: `0x01` |
+| preset | 17 | — | `ir_cab` | selector | 0–8 | IR cab selector | confirmed | 96 | `captures/fw96/20261116-step-ir_cab.jsonl`, `captures/fw96/20261116-step-ir_cab-1917.jsonl` | Stepped, alone: 7 → 6 → 2 → 0 → 2 → 7 → 8 (session 18:25); 0, 1, 4, 7, 8 across presets. Session 19:17 (labelled): 0 → 1 → … → 8, one click at a time: **9 positions, 0–8**. `0` turns the cab simulation off and 1–8 are the 8 (user-replaceable) IRs: the manual says so, the app shows `OFF` for 0 (and amp type as raw + 1), and the owner heard it in spec 007 gate session C (2026-11-19: `set ir_cab 0` sounded like no cabinet, `1` like a cabinet). Label `0` = `off` since spec 007. fw96: `0x07` |
+| preset | 18 | — | `led_red` | continuous | 0–255 | preset LED colour (app colour picker, set led_colour) | confirmed | 96 | `captures/fw96/20261118-gate-normal_led_colour.jsonl`, `captures/fw96/20261119-gate-led_colour_c.jsonl` | Red part of the preset's footswitch LED colour (bytes 18–20 = R, G, B, written together with `set led_colour` / the app's colour picker). No pedal control moves it, so the evidence is openvave's own write and re-read: spec 004 gate session A (2026-11-18, normal mode, 1B) wrote `ff 00 00` and the 1B LED turned red; spec 007 gate session C (2026-11-19, normal mode, 1B) wrote `00 ff 00` and it turned green (owner). Named in spec 007; unknown before. Earlier notes: Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): red component of the preset's LED colour (bytes 18–20 = R, G, B; see "Preset LED colour"). fw96: `0x43` |
+| preset | 19 | — | `led_green` | continuous | 0–255 | preset LED colour (app colour picker, set led_colour) | confirmed | 96 | `captures/fw96/20261118-gate-normal_led_colour.jsonl`, `captures/fw96/20261119-gate-led_colour_c.jsonl` | Green part of the preset's footswitch LED colour (bytes 18–20 = R, G, B, written together with `set led_colour` / the app's colour picker). No pedal control moves it, so the evidence is openvave's own write and re-read: spec 004 gate session A (2026-11-18, normal mode, 1B) wrote `ff 00 00` and the 1B LED turned red; spec 007 gate session C (2026-11-19, normal mode, 1B) wrote `00 ff 00` and it turned green (owner). Named in spec 007; unknown before. Earlier notes: Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): green component of the preset's LED colour. fw96: `0x16` |
+| preset | 20 | — | `led_blue` | continuous | 0–255 | preset LED colour (app colour picker, set led_colour) | confirmed | 96 | `captures/fw96/20261118-gate-normal_led_colour.jsonl`, `captures/fw96/20261119-gate-led_colour_c.jsonl` | Blue part of the preset's footswitch LED colour (bytes 18–20 = R, G, B, written together with `set led_colour` / the app's colour picker). No pedal control moves it, so the evidence is openvave's own write and re-read: spec 004 gate session A (2026-11-18, normal mode, 1B) wrote `ff 00 00` and the 1B LED turned red; spec 007 gate session C (2026-11-19, normal mode, 1B) wrote `00 ff 00` and it turned green (owner). Named in spec 007; unknown before. Earlier notes: Differs per preset (see Preset comparison); no control moved it. Hypothesis (app code, 2026-11-17): blue component of the preset's LED colour. fw96: `0x43` |
+| status | 0 | — | `loopback` | switch | on=1 off=0 | loopback toggle (app, openvave loopback) | confirmed | 96 | `captures/fw96/20261118-gate-loopback_off.jsonl`, `captures/fw96/20261118-gate-loopback_on.jsonl`, `captures/fw96/20261119-gate-loopback_on_c.jsonl`, `captures/fw96/20261119-gate-loopback_off_c.jsonl` | Loopback flag: `1` mixes the pedal's Bluetooth audio (e.g. a phone backing track) into its USB recording, `0` leaves it out (still heard); kept across a power cycle without a commit. `0x01` in all seven watch sessions of 2026-11-16 (every preset and mode). Spec 004 gate session A (2026-11-18): `00` and `01` written and read back, meaning heard by the owner the same day. Spec 007 gate session C (2026-11-19): read `00`, `01` and `00` written and read back. Named in spec 007 (unknown before; the fixture index now covers the status region). fw96: `0x01` |
 
 Edit-mode experiment (2026-11-16, fw 96, `openvave info` between steps, nothing saved):
 
@@ -227,7 +227,7 @@ rows are `confirmed`).
 Stored presets read during the walk (sessions 18:41 and 18:43; nothing saved), identified by
 position only. Bytes not listed were equal on all ten: preset 0 and 3 (`01`). 1C holds the same
 bytes as 1B (the fw96 capture), and 2A the same as 1A. preset 18–20 differ per preset but never
-moved with a control; their meaning is unknown.
+moved with a control: they are the preset's LED colour (named in spec 007).
 
 | Byte | 1A | 1B | 1C | 1D | 2A | 2B | 9A | 9B | 9C | 9D | Field |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -247,9 +247,9 @@ moved with a control; their meaning is unknown.
 | `preset[15]` | 35 | 05 | 05 | 09 | 35 | 18 | 0c | 0c | 38 | 0c | reverb decay |
 | `preset[16]` | 0f | 04 | 04 | 05 | 0f | 00 | 05 | 05 | 00 | 08 | reverb mix |
 | `preset[17]` | 07 | 07 | 07 | 04 | 07 | 00 | 00 | 01 | 01 | 08 | IR cab |
-| `preset[18]` | ff | 43 | 43 | 77 | ff | 87 | ff | 55 | ff | 55 | unknown |
-| `preset[19]` | f7 | 16 | 16 | b3 | f7 | 00 | 00 | aa | aa | ff | unknown |
-| `preset[20]` | 00 | 43 | 43 | b3 | 00 | ca | 00 | ff | ff | 7f | unknown |
+| `preset[18]` | ff | 43 | 43 | 77 | ff | 87 | ff | 55 | ff | 55 | LED red |
+| `preset[19]` | f7 | 16 | 16 | b3 | f7 | 00 | 00 | aa | aa | ff | LED green |
+| `preset[20]` | 00 | 43 | 43 | b3 | 00 | ca | 00 | ff | ff | 7f | LED blue |
 
 ### Reverb decay sections (fw 96, phone app, 2026-11-17)
 
@@ -359,9 +359,13 @@ that control was used.
 | edit mode | mode | — | global 3 (`0`) | 2026-11-16 |
 | tuner | mode | no | global 3 (`2`) | 2026-11-16 |
 | bank / preset selection | selection | no | global 0, 1, 2 (+ preset bytes) | 2026-11-16 |
+| MASTER | knob | — | **no byte**: turned fully down and up twice, nothing in global, preset or status changed (`watch`, 68 cycles; observed) | 2026-11-19 |
+| preset LED colour | app / openvave write only | no | preset 18–20 (no pedal control) | 2026-11-17 |
+| loopback | app / openvave write only | no | status 0 (no pedal control) | 2026-11-18 |
 
 Not yet known: whether other controls exist that we have not tried. Amp type and IR cab have 9
-positions each (0–8), and every knob reaches 0 and 127 (session 19:17).
+positions each (0–8; IR cab `0` = cab off, heard 2026-11-19), and every knob reaches 0 and 127
+(session 19:17).
 
 ### Background polling
 
@@ -609,8 +613,8 @@ sends a colour change as a 3-byte write to `0x10000012`. The stored values look 
 the preset (hypothesis; the owner could confirm by comparing a preset's LED with its bytes).
 Gate session A (2026-11-17) wrote `ff 00 00` to 18–20 in edit mode and the re-read shows it, but
 the LED could not be judged: in edit mode the pedal's LEDs show the block colours, and leaving
-edit mode restores the buffer. Confirming the meaning needs a write outside edit mode (the app
-does this; openvave refuses it, FR-009) or a stored-preset comparison.
+edit mode restores the buffer. Since then the meaning was seen in normal mode twice (spec 004 gate
+session A: red; spec 007 gate session C: green), and the bytes are named in the byte map.
 
 ### Status byte = loopback flag (app code, 2026-11-17)
 
@@ -639,10 +643,12 @@ tested.
 - ~~Does a host write need edit mode (global 3 = `0`)?~~ No: applied in normal mode, mode stays
   `1` (check 1, 2026-11-17, confirmed over two connections).
 - ~~Preset 18–20 = LED colour?~~ Yes in normal mode (spec 004 gate session A, 2026-11-18: `ff 00 00`
-  turned the preset LED red); the row stays `observed` (one session).
+  turned the preset LED red; spec 007 gate session C, 2026-11-19: `00 ff 00` turned it green).
+  Named `led_red`, `led_green`, `led_blue` (`confirmed`) in spec 007.
 - ~~Status byte = loopback flag?~~ Yes: `01` mixes the pedal's Bluetooth audio into the USB
   recording, `00` leaves it out; it survives a power cycle without a commit (gate session A and
-  the owner's follow-up test, 2026-11-18; row `observed`).
+  the owner's follow-up test, 2026-11-18; repeated in spec 007 gate session C). Named `loopback`
+  in the byte map (`confirmed`) in spec 007.
 
 **Closed by spec 004 (0.4.0, fw 96, gate sessions A and B on 2026-11-18):**
 
@@ -689,8 +695,9 @@ tested.
   image write, and non-zero write status codes (no NAK seen yet).
 - Still unknown from earlier: the meaning of the header `a5 5a`; the names of the 9 amp types and
   the 8 IR cabs (the app has no names: amp type as 1–9, IR cab `OFF` then 1–8; the manual's lists
-  are images, not transcribed). That IR cab `0` is "cab off" (app code and manual) is a hypothesis
-  until heard. Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair.
+  are images, not transcribed). IR cab `0` = cab off was heard in spec 007 gate session C. ~~Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair~~: done in
+  spec 007 (the fixture index covers gate excerpts and the status region; preset 18–20 are named
+  `led_red`, `led_green`, `led_blue` the same way).
 - ~~The automatic backup defaults to the current directory, which may be a git working tree~~
   (after 0.5.0: `~/.local/share/openvave/backups` or `$OPENVAVE_BACKUP_DIR`)
   (observed in every gate step; follow-up: a git-ignored default or a warning).

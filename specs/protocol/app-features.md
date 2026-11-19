@@ -72,7 +72,7 @@ MIDI page and no firmware update on this screen.
 |---|---|---|---|
 | 36 presets `1A`–`9D` | names are generated from the index; nothing is read or written for names | hypothesis | — |
 | tap a preset | select `i`, wait 100 ms, read `0x10000000` × 21 | confirmed | volatile (unsaved edits are lost) |
-| preset LED colour swatch + colour picker | shown from preset bytes 18–20 (R, G, B); picker writes 3 bytes at `0x10000012` | write and LED meaning observed (spec 004 gate session A: `ff 00 00` turned the preset LED red in normal mode) | volatile until saved |
+| preset LED colour swatch + colour picker | shown from preset bytes 18–20 (R, G, B); picker writes 3 bytes at `0x10000012` | confirmed (spec 004 gate session A: `ff 00 00` turned the preset LED red; spec 007 gate session C: `00 ff 00` turned it green; both normal mode) | volatile until saved |
 
 ### Effect chain
 
@@ -108,7 +108,7 @@ the `X` positions between two types turn the module off (manual). openvave uses 
 | Save to | same, with a slot chosen in a dialog (the dialog passes an empty name; Tank-G has no names) | hypothesis (openvave's `preset save --to` sends the same writes: confirmed) | persistent |
 | BYPASS on | write `01` to `0xE1000000 + i` (loaded `i`) | observed (check 2) | volatile: all blocks off, clean sound; edit buffer reads all zero and global slot reads `ff` |
 | BYPASS off | select `i` (`0xE0000000 + i`), then read `0x10000000` × 21 | observed (check 2) | volatile; reloads the stored preset, so unsaved edits are lost |
-| Loopback | read `0xD0000000` × 1 on connect; toggle writes `01` / `00` there (no commit) | read confirmed; write and meaning observed (spec 004 gate session A: `01` mixes the pedal's Bluetooth audio into the USB recording) | kept across a power cycle without a commit |
+| Loopback | read `0xD0000000` × 1 on connect; toggle writes `01` / `00` there (no commit) | confirmed (read; write in spec 004 gate session A and spec 007 gate session C); meaning observed (`01` mixes the pedal's Bluetooth audio into the USB recording) | kept across a power cycle without a commit |
 
 ### More menu
 

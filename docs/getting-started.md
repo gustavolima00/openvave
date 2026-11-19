@@ -115,7 +115,7 @@ Global        type 4 @ 0x20000000, 4 bytes    [meaning: unknown]
       [3]  mode                      normal    selector   confirmed
 Status        type 4 @ 0xD0000000, 1 byte     [meaning: unknown]
   00: 01
-      unknown: 0
+      [0]  loopback                      on    on/off     confirmed
 ```
 
 The `state:` line is the quickest summary: the pedal is in normal mode on preset 1B. Bank and slot
@@ -148,17 +148,20 @@ state: normal, preset 1B
       [15] reverb decay                   5    0–127      confirmed  type: room 6
       [16] reverb mix                     4    0–127      confirmed
       [17] IR cab                        #7    selector   confirmed
-      unknown: 18 19 20
+      [18] LED red                       67    0–255      confirmed
+      [19] LED green                     22    0–255      confirmed
+      [20] LED blue                      67    0–255      confirmed  LED colour #431643
 ```
 
 Each line is `[byte]  field  value  range  confidence`. Knob values are the raw 0–127 numbers,
 with no unit. `#4` is a stepped selector position (0–8). `type: room 6` reads a typed knob as an
-effect type and a position (see [Effect types](effect-types.md)). The 21 bytes are explained in
+effect type and a position (see [Effect types](effect-types.md)); IR cab `0` shows as `off`. Bytes
+18–20 are the preset's footswitch LED colour, also shown as `#rrggbb`. The 21 bytes are explained in
 [The Tank-G explained](tank-g.md).
 
-A value outside its documented range is printed raw with `OUT OF RANGE`, never clamped.
-`unknown:` lists bytes whose meaning is not known (bytes 18–20 hold the preset LED colour; the
-byte map lists them as unknown until that has more evidence).
+A value outside its documented range is printed raw with `OUT OF RANGE`, never clamped. On
+firmware 96 every byte of the global block, the preset and the status byte is named; a byte whose
+meaning were unknown would be listed on an `unknown:` line.
 
 ### `openvave watch`: see what each control does
 

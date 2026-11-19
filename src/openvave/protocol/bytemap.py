@@ -62,7 +62,9 @@ def _knob(offset: int, name: str, label: str, field: str, notes: str, *extra: st
     )
 
 
-def _selector(offset: int, name: str, label: str, note: str = "") -> ByteMapEntry:
+def _selector(
+    offset: int, name: str, label: str, note: str = "", labels: Mapping[int, str] | None = None
+) -> ByteMapEntry:
     """A 9-position stepped knob of the current preset (0–8), counted click by click."""
     return ByteMapEntry(
         region=Region.CURRENT_PRESET,
@@ -72,6 +74,7 @@ def _selector(offset: int, name: str, label: str, note: str = "") -> ByteMapEntr
         encoding=Encoding.SELECTOR,
         min=0,
         max=8,
+        labels=dict(labels or {}),
         control=f"{label} selector",
         confidence="confirmed",
         firmware=MAP_FIRMWARE,
@@ -116,7 +119,36 @@ def _position(offset: int, name: str, label: str, top: int, notes: str) -> ByteM
     )
 
 
-_PER_PRESET = "differs per preset (see Preset comparison); no control moved it"
+_FW96_LED = (
+    _FW96 + "20261118-gate-normal_led_colour.jsonl",
+    _FW96 + "20261119-gate-led_colour_c.jsonl",
+)
+_FW96_LOOPBACK = (
+    _FW96 + "20261118-gate-loopback_off.jsonl",
+    _FW96 + "20261118-gate-loopback_on.jsonl",
+    _FW96 + "20261119-gate-loopback_on_c.jsonl",
+    _FW96 + "20261119-gate-loopback_off_c.jsonl",
+)
+
+
+def _led(offset: int, part: str) -> ByteMapEntry:
+    """One colour part of the preset's footswitch LED (spec 007; no pedal control moves it)."""
+    return ByteMapEntry(
+        region=Region.CURRENT_PRESET,
+        offset=offset,
+        name=f"led_{part}",
+        label=f"LED {part}",
+        encoding=Encoding.CONTINUOUS,
+        min=0,
+        max=255,
+        control="preset LED colour (app colour picker, set led_colour)",
+        confidence="confirmed",
+        firmware=MAP_FIRMWARE,
+        evidence=_FW96_LED,
+        notes="written with 18-20 together; LED turned red (ff 00 00, 2026-11-18) and green "
+        "(00 ff 00, 2026-11-19) in normal mode",
+    )
+
 
 BYTE_MAP: tuple[ByteMapEntry, ...] = (
     _position(0, "browse_bank", "browsed bank", 8, "0-based bank shown while browsing"),
@@ -162,11 +194,31 @@ BYTE_MAP: tuple[ByteMapEntry, ...] = (
         _FW96_REVERB_APP,
     ),
     _knob(16, "reverb_mix", "reverb mix", "reverb_mix", "0-127 swept"),
-    _selector(17, "ir_cab", "IR cab", "; hypothesis: 0 = cab off (app shows OFF, manual)"),
-    _unknown(Region.CURRENT_PRESET, 18, _PER_PRESET),
-    _unknown(Region.CURRENT_PRESET, 19, _PER_PRESET),
-    _unknown(Region.CURRENT_PRESET, 20, _PER_PRESET),
-    _unknown(Region.STATUS, 0, "0x01 in all seven sessions, every preset and mode"),
+    _selector(
+        17,
+        "ir_cab",
+        "IR cab",
+        "; 0 = cab off: manual, app shows OFF, heard 2026-11-19 (spec 007 session C)",
+        {0: "off"},
+    ),
+    _led(18, "red"),
+    _led(19, "green"),
+    _led(20, "blue"),
+    ByteMapEntry(
+        region=Region.STATUS,
+        offset=0,
+        name="loopback",
+        label="loopback",
+        encoding=Encoding.SWITCH,
+        on_value=1,
+        off_value=0,
+        control="loopback toggle (app, openvave loopback)",
+        confidence="confirmed",
+        firmware=MAP_FIRMWARE,
+        evidence=_FW96_LOOPBACK,
+        notes="1 = the pedal's Bluetooth audio is mixed into the USB recording; kept across a "
+        "power cycle without a commit",
+    ),
 )
 """Every byte of ``GLOBAL`` (4), ``CURRENT_PRESET`` (21) and ``STATUS`` (1): 26 offsets."""
 

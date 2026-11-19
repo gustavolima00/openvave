@@ -47,7 +47,9 @@ DECODED_LINES = [
     "      [15] reverb decay                   5    0–127      confirmed  type: room 6",
     "      [16] reverb mix                     4    0–127      confirmed",
     "      [17] IR cab                        #7    selector   confirmed",
-    "      unknown: 18 19 20",
+    "      [18] LED red                       67    0–255      confirmed",
+    "      [19] LED green                     22    0–255      confirmed",
+    "      [20] LED blue                      67    0–255      confirmed  LED colour #431643",
 ]
 QUERY = bytes.fromhex("00 59 11 00 00 00 ff")
 PRESET_READ = bytes.fromhex("00 59 23 08 00 00 04 00 00 00 10 15 00 00 d6")
@@ -130,6 +132,9 @@ def test_json_content(capsys: pytest.CaptureFixture[str]) -> None:
         (15, "reverb_decay", 5, "confirmed"),
         (16, "reverb_mix", 4, "confirmed"),
         (17, "ir_cab", 7, "confirmed"),
+        (18, "led_red", 0x43, "confirmed"),
+        (19, "led_green", 0x16, "confirmed"),
+        (20, "led_blue", 0x43, "confirmed"),
     ]
 
 
@@ -178,7 +183,7 @@ def test_human_block_untested_firmware(capsys: pytest.CaptureFixture[str]) -> No
 def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:
     preset = preset_json(capsys)["preset"]
     assert preset["map_firmware"] == 96
-    assert preset["unknown_offsets"] == [18, 19, 20]
+    assert preset["unknown_offsets"] == []
     decay = next(f for f in preset["fields"] if f["name"] == "reverb_decay")
     assert decay == {
         "offset": 15,
@@ -235,6 +240,9 @@ def test_json_untested_firmware(capsys: pytest.CaptureFixture[str]) -> None:
             (15, "reverb_decay", 5, "confirmed"),
             (16, "reverb_mix", 4, "confirmed"),
             (17, "ir_cab", 7, "confirmed"),
+            (18, "led_red", 0x43, "confirmed"),
+            (19, "led_green", 0x16, "confirmed"),
+            (20, "led_blue", 0x43, "confirmed"),
         ]
     ]
 

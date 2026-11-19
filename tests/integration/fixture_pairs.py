@@ -19,7 +19,7 @@ FW96 = CAPTURES_DIR / "fw96"
 @dataclass(frozen=True)
 class FixturePair:
     region: str
-    """``global`` or ``preset`` (record names)."""
+    """``global``, ``preset`` or ``status`` (record names)."""
     name: str
     """Byte map name."""
     file: str
@@ -27,6 +27,13 @@ class FixturePair:
     reaches: tuple[int, int] | None = None
     """Exact (min, max) of the raw value over the excerpt, when it is a sweep."""
     single: bool = True
+    gate: bool = False
+    """A gate excerpt (one openvave write, then re-reads; record labels ``preset t4 0x10000000
+    x21`` …) rather than a ``watch`` step (labels ``preset`` …). Spec 007: fields no pedal control
+    moves (LED colour, loopback) are evidenced by openvave's own write and its re-read."""
+    moves: tuple[int, ...] = ()
+    """Other offsets allowed to move in the same step (the LED colour's three bytes move in one
+    write); empty = only the field's own byte."""
 
     @property
     def path(self) -> Path:
@@ -42,6 +49,22 @@ def _step(
 ) -> FixturePair:
     return FixturePair(region, name, f"20261116-step-{field}.jsonl", reaches)
 
+
+def _gate(region: str, name: str, file: str, moves: tuple[int, ...] = ()) -> FixturePair:
+    return FixturePair(region, name, file, gate=True, moves=moves)
+
+
+_LED = (18, 19, 20)
+_LED_STEPS = (
+    "20261118-gate-normal_led_colour.jsonl",  # spec 004 session A: ff 00 00, LED turned red
+    "20261119-gate-led_colour_c.jsonl",  # spec 007 session C: 00 ff 00, LED turned green
+)
+_LOOPBACK_STEPS = (
+    "20261118-gate-loopback_off.jsonl",  # spec 004 session A
+    "20261118-gate-loopback_on.jsonl",
+    "20261119-gate-loopback_on_c.jsonl",  # spec 007 session C
+    "20261119-gate-loopback_off_c.jsonl",
+)
 
 PAIRS: tuple[FixturePair, ...] = (
     # session 2 (2026-11-16 18:25), one knob at a time in edit mode
@@ -95,6 +118,13 @@ PAIRS: tuple[FixturePair, ...] = (
     FixturePair("global", "browse_bank", "20261116-step-preset_select-bank.jsonl", single=False),
     FixturePair("global", "bank", "20261116-step-preset_select-bank.jsonl", single=False),
     FixturePair("global", "slot", "20261116-step-preset_select-slots.jsonl", single=False),
+    # spec 007: gate excerpts for the bytes no pedal control moves
+    *(
+        _gate("preset", name, file, _LED)
+        for name in ("led_red", "led_green", "led_blue")
+        for file in _LED_STEPS
+    ),
+    *(_gate("status", "loopback", file) for file in _LOOPBACK_STEPS),
 )
 
 SELECTIONS: dict[str, list[tuple[int, int, int]]] = {

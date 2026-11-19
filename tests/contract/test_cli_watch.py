@@ -122,7 +122,7 @@ def test_human_walkthrough(
         "Type a label and Enter before each step; q to quit.",
         "  global  00 00 01 01   browsed bank = 0, bank = 0, slot = 1, mode = normal",
         "  preset  01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43",
-        "  status  01",
+        "  status  01   loopback = on",
         "  state   normal, preset 1B",  # spec 004 R13
     ]
     body = lines[5:-1]
@@ -142,7 +142,7 @@ def test_human_walkthrough(
     assert run.records() == []
 
 
-def test_unknown_byte_shows_raw_hex(
+def test_led_byte_shows_its_name(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     run = run_watch(
@@ -154,7 +154,8 @@ def test_unknown_byte_shows_raw_hex(
     )
     assert run.code == 0, run.err
     change = [line for line in run.out.splitlines() if "preset[19]" in line]
-    assert [strip_time(c) for c in change] == ["  preset[19]  unknown           0x16 → 0x10"]
+    # an unknown byte would show raw hex; since spec 007 every fw 96 preset byte is named
+    assert [strip_time(c) for c in change] == ["  preset[19]  LED green           22 → 16"]
 
 
 def test_json_lines_validate(

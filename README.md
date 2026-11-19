@@ -15,7 +15,7 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 Version 0.5.0 finds and remembers pedals (`scan`, `select`, `device`, `forget`) and never connects
 to a pedal you did not choose. It identifies a connected pedal, decodes every byte of the current preset and global
-settings that is understood (all but 4 of 26) and **backs up** the 36 stored presets. It edits the
+settings (all 26 bytes are named on firmware 96) and **backs up** the 36 stored presets. It edits the
 current preset **remotely in normal mode**, as the phone app does (one field, or several over one
 connection), discards those edits with `preset reload`, selects presets, switches **bypass** and
 **loopback**, and is the first release that can **change stored presets**:

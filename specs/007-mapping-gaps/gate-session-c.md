@@ -49,13 +49,15 @@ are promoted to `confirmed` (spec 007 tasks).
 - The pedal was on **1B**, not 1A (session A of spec 003/004 also used 1B). The session is still
   independent: another day, a new connection per command, normal mode.
 - Sent as approved, each ACK `00 59 00 01 00 00 00 ff` and applied on re-read: amp off, mod on,
-  reverb off, LED `00 ff 00` (bytes 18–20 read back `00 ff 00`), reload 1B (buffer = stored 1B).
+  reverb off, LED `00 ff 00` (bytes 18–20 read back `00 ff 00`; the 1B footswitch LED turned
+  green), reload 1B (buffer = stored 1B). Every visual check in the table matched (owner).
 - Step 4 adapted to 1B (delay was off): **delay on** `00 59 22 09 00 00 04 02 00 00 10 01 00 00 01
   e7`, ACK, applied, then reload 1B.
 - Loopback read `00` at the start, so `loopback off` sent nothing; **on** `… 01 29` ACK → `01`,
   then **off** `… 00 2a` ACK → `00` (the pedal ends as it started).
-- IR cab 0 and 1 were written (knob block, confirmed) and reloaded; listening result: pending.
-- MASTER watch: 68 cycles, 0 changes in global, preset and status (whether MASTER was turned end to
-  end: pending owner confirmation).
+- IR cab 0 and 1 were written (knob block, confirmed) and reloaded. Owner: **0 sounded like no
+  cabinet, 1 like a cabinet** (as expected).
+- MASTER watch: turned fully down and up twice (owner); 68 cycles, 0 changes in global, preset and
+  status → MASTER is not reported over Bluetooth (observed).
 - Backup C1 equals C0 apart from `created_at`.
 - Excerpts: `captures/fw96/20261119-gate-{switch_amp,switch_mod,switch_delay,switch_reverb,led_colour,loopback_on,loopback_off}_c.jsonl`.

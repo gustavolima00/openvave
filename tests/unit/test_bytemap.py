@@ -114,7 +114,7 @@ def test_every_observed_field_has_a_fixture_pair() -> None:
     """No observed/confirmed row without its real before/after excerpt (FR-009, FR-020)."""
     from tests.integration.fixture_pairs import PAIRS
 
-    keys = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET}
+    keys = {"global": Region.GLOBAL, "preset": Region.CURRENT_PRESET, "status": Region.STATUS}
     indexed = {(keys[p.region], p.name) for p in PAIRS}
     for e in BYTE_MAP:
         if e.confidence in ("observed", "confirmed"):
@@ -145,3 +145,27 @@ def test_per_preset_bytes_are_named_or_documented() -> None:
         (e,) = [x for x in BYTE_MAP if x.region is regions[region_name] and x.offset == offset]
         if e.name is None:
             assert "differs per preset" in e.notes, f"{region_name}[{offset}]: {e.notes!r}"
+
+
+def test_no_unknown_bytes_left_on_fw96() -> None:
+    """Spec 007 SC-002: every global, preset and status byte is named."""
+    assert [e for e in BYTE_MAP if e.encoding is Encoding.UNKNOWN] == []
+
+
+def test_led_colour_and_loopback_are_named() -> None:
+    names = {(e.region, e.offset): e for e in BYTE_MAP}
+    for offset, name in ((18, "led_red"), (19, "led_green"), (20, "led_blue")):
+        e = names[(Region.CURRENT_PRESET, offset)]
+        assert (e.name, e.encoding, e.min, e.max) == (name, Encoding.CONTINUOUS, 0, 255)
+    loop = names[(Region.STATUS, 0)]
+    assert (loop.name, loop.encoding, loop.on_value, loop.off_value) == (
+        "loopback",
+        Encoding.SWITCH,
+        1,
+        0,
+    )
+
+
+def test_ir_cab_zero_is_off() -> None:
+    ir = next(e for e in BYTE_MAP if e.name == "ir_cab")
+    assert dict(ir.labels) == {0: "off"}

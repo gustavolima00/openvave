@@ -50,9 +50,12 @@ def test_preset_fields() -> None:
         (15, "reverb_decay", 5, "5", "confirmed"),
         (16, "reverb_mix", 4, "4", "confirmed"),
         (17, "ir_cab", 7, "#7", "confirmed"),
+        (18, "led_red", 0x43, "67", "confirmed"),
+        (19, "led_green", 0x16, "22", "confirmed"),
+        (20, "led_blue", 0x43, "67", "confirmed"),
     ]
     decoded = decode_region(PRESET_READ, 96)
-    assert decoded.unknown_offsets == (18, 19, 20)
+    assert decoded.unknown_offsets == ()
     assert decoded.read is PRESET_READ
     assert decoded.map_firmware == 96
     assert not decoded.firmware_untested
@@ -84,10 +87,16 @@ def test_slot_loading_state_is_out_of_range() -> None:
     assert field.display == "255"
 
 
-def test_status_all_unknown() -> None:
+def test_status_is_the_loopback_flag() -> None:
     decoded = decode_region(STATUS_READ, 96)
-    assert decoded.fields == ()
-    assert decoded.unknown_offsets == (0,)
+    assert [(f.entry.name, f.display) for f in decoded.fields] == [("loopback", "on")]
+    assert decoded.unknown_offsets == ()
+
+
+def test_ir_cab_zero_displays_off() -> None:
+    frame = with_region_data(CAP.rx(PRESET), 17, 0)
+    field = decode_region(read_of(Region.CURRENT_PRESET, PRESET, frame), 96).fields[17]
+    assert (field.display, field.out_of_range) == ("off", False)
 
 
 def test_device_info_undecoded() -> None:
@@ -180,7 +189,7 @@ def test_diff_lists_changes_in_offset_order() -> None:
         (Region.CURRENT_PRESET, 19, 0x16, 0x09),
     ]
     assert changes[0].field is not None and changes[0].field.name == "reverb_decay"
-    assert changes[1].field is None
+    assert changes[1].field is not None and changes[1].field.name == "led_green"
 
 
 def test_diff_rejects_different_regions() -> None:
