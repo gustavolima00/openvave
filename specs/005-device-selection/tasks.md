@@ -232,8 +232,22 @@ rename and forget. Other commands do not use the selection yet (Milestone 2).
   Each matches `contracts/cli.md`. The last step of §2, `openvave info --device nobody` → exit 2,
   is Milestone 2 behaviour (`info` resolves nicknames from T042/T045); it was not run, because in
   M1 it would start a real Bluetooth scan for the text `nobody`.
-- Not verified here: `scan`, `scan --identify` and `select` against a real pedal (fake scanner
-  and fake transport only); that is the owner's quickstart §4 in M4.
+- Early hardware smoke check (2026-11-19, owner's pedal on, fw 96, phone app closed, macOS,
+  temporary `OPENVAVE_CONFIG`, reads only; identifier redacted as `<UUID>`), run in the owner's
+  terminal after the push. All exit 0:
+  - `scan`: one row `<UUID>  TANK-Gv2_BLE  -57 dBm`, `1 pedal found. Select one: …`.
+  - `scan --identify`: the same row with `fw 96` (handshake only).
+  - `scan --json`: one device, `tank_g: true`, `known: false`, `default_seen: null`.
+  - `select --name stage` (no TARGET, the only pedal): `Default pedal: stage  <UUID>
+    (TANK-Gv2_BLE, -56 dBm)`, saved.
+  - `device`: default `stage`, `selected …`, one known pedal, the choice line.
+  - `device --check`: `In range: yes (-56 dBm)`.
+  - `scan` again: `* stage  <UUID>  TANK-Gv2_BLE  -57 dBm`, `* = default.`
+  - `info`: unchanged 0.4.0 output (firmware 96, normal, preset 1B); it does not use the default
+    yet (M2).
+  - `forget --all`: `Forgot 1 known pedal.`
+  Timings were not captured (the script's timer did not work). The full quickstart §4 (phone app
+  connected, two processes, timings for SC-002 / SC-005) stays with M4 (T058–T061).
 - Deviations (contract updated where it changes what users see):
   - The four commands live in a new module, `src/openvave/cli/pedals.py` (T024, T026–T028);
     `cli/__init__.py` registers their parsers, takes `scanner_factory` in `main()` and dispatches
