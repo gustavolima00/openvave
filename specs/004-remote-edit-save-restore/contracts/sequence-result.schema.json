@@ -7,18 +7,18 @@
   "additionalProperties": true,
   "properties": {
     "schema_version": {"const": 2},
-    "command": {"enum": ["preset save", "preset restore"]},
+    "command": {"enum": ["preset save", "preset restore", "preset copy", "preset swap", "preset import"], "description": "copy, swap and import added by spec 007"},
     "read_at": {"type": "string", "format": "date-time"},
     "backup_saved_to": {"type": ["string", "null"], "description": "path of the automatic backup; null on dry run, no change or refusal"},
     "plan": {
       "type": "object",
       "required": ["action", "pedal_state", "target_index", "return_index", "changed_slots", "diff", "steps", "reads", "no_change", "refusal", "dry_run"],
       "properties": {
-        "action": {"enum": ["save", "restore_slot", "restore_all"]},
+        "action": {"enum": ["save", "restore_slot", "restore_all", "copy", "import", "swap"]},
         "pedal_state": {"enum": ["normal", "edit", "tuner", "bypass", "unrecognised"]},
         "target_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 35},
         "return_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 35},
-        "source": {"type": ["string", "null"], "description": "backup file path for restore"},
+        "source": {"type": ["string", "null"], "description": "backup file path for restore, preset file path for import, source position for copy, the two positions for swap"},
         "changed_slots": {"type": "array", "items": {"type": "string", "pattern": "^[1-9][A-D]$"}},
         "diff": {
           "type": "array",

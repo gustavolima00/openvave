@@ -11,10 +11,10 @@ sits behind a separate opt-in and an automatic backup.
 | Read only | nothing | `info`, `preset dump`, `watch`, `preset backup` | — |
 | **Volatile** | the sound you hear now (edit buffer), which preset is loaded, bypass | `set`, `preset select`, `preset reload`, `bypass on/off` | `preset reload`, select a preset, or power-cycle |
 | Volatile, but kept | the loopback flag (survives a power cycle, but is not a preset) | `loopback on/off` | set it back |
-| **Persistent** | stored presets | `preset save`, `preset restore` only | `preset restore` from a backup |
+| **Persistent** | stored presets | `preset save`, `restore`, `copy`, `swap`, `import` only | `preset restore` from a backup |
 
-Nothing but `preset save` and `preset restore` can change a stored preset, and openvave never
-saves on its own after a `set`.
+Nothing but those five commands can change a stored preset, and openvave never saves on its own
+after a `set`. `preset export` only reads.
 
 ## The two opt-ins
 
@@ -54,9 +54,11 @@ Each row, with its evidence, is under "Write messages" in
 5. **Never retries.** A NAK, a lost connection or a write that did not apply stops the command and
    reports what was and was not sent.
 
-## Save and restore
+## Save, restore, copy, swap and import
 
-On top of that, `preset save` and `preset restore`:
+On top of that, the five commands that change stored presets (`preset save`, `restore`, `copy`,
+`swap`, `import`) use only `confirmed` writes (stored slot or stored image, commit, preset select)
+and:
 
 - take a **full, cross-checked backup** of all 36 presets before the first write and write it to
   `--backup-dir` (by default `~/.local/share/openvave/backups`, outside any project folder; never
@@ -64,7 +66,7 @@ On top of that, `preset save` and `preset restore`:
   cannot be skipped;
 - read a written slot back before committing it, and stop if it differs;
 - verify the result at the end (slot contents, loaded preset, buffer; a full read after
-  `--all`);
+  `--all` and `swap`);
 - on failure, list every step, say whether stored presets may have changed, and print the
   recovery commands.
 

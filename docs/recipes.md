@@ -14,6 +14,7 @@ command to see what it would send without sending it.
 - [Back up all 36 presets](#back-up-all-36-presets)
 - [Save the current sound to a preset (UNSAFE)](#save-the-current-sound-unsafe)
 - [Restore presets from a backup (UNSAFE)](#restore-presets-from-a-backup-unsafe)
+- [Copy, swap, share a preset (UNSAFE)](#copy-swap-share-a-preset-unsafe)
 - [Loopback](#loopback)
 - [Scripting with JSON](#scripting-with-json)
 
@@ -259,12 +260,20 @@ A power loss during the next second has an unknown outcome.
 - A file made on another firmware needs `--experimental` as well.
 - `--dry-run` prints every frame (the image in full) and takes no backup.
 
-To copy a preset from one slot to another, select the source, then save it with `--to`:
+## Copy, swap, share a preset (UNSAFE)
 
 ```bash
-openvave preset select 2C
-openvave preset save --to 9D --unsafe
+openvave preset copy 2C 9D --unsafe          # 9D becomes a copy of 2C; the pedal ends on 9D
+openvave preset swap 2B 4D --unsafe          # exchange two slots; the pedal stays on its preset
+openvave preset export 1D --output tone.json # read-only: one preset to a file
+openvave preset import tone.json --to 3A --unsafe
 ```
+
+Each persistent command takes the automatic backup first, prints the exact frames with
+`--dry-run`, and verifies by reading back, as `preset save` does. Copy and import use the save
+sequence; swap writes the stored image once with the two slots exchanged (the `restore --all`
+write). With unsaved edits on the loaded preset they need `--discard-edits` (the final select
+discards them).
 
 ## Loopback
 

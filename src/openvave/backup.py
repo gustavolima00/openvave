@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from openvave._jsonform import field_json, hex_bytes, identity_json
-from openvave.models import Backup, DeviceIdentity, Region, RegionRead, StoredPreset
+from openvave.models import Backup, DeviceIdentity, PresetFile, Region, RegionRead, StoredPreset
 from openvave.protocol.decode import decode_region
 from openvave.protocol.storage import (
     EXPECTED_HEADER,
@@ -25,6 +25,9 @@ from openvave.protocol.storage import (
 
 KIND = "openvave.preset-backup"
 FORMAT_VERSION = 1
+PRESET_KIND = "openvave.preset"
+"""``kind`` of a single-preset file (``preset export`` / ``preset import``, spec 007)."""
+PRESET_FORMAT_VERSION = 1
 
 
 def stored_preset(index: int, data: bytes, firmware: int) -> StoredPreset:
@@ -176,3 +179,53 @@ def restore_problems(document: Any, firmware: int | None = None) -> list[str]:
             f"the pedal runs {firmware}"
         )
     return problems
+
+
+def preset_file_document(preset: PresetFile, tool_version: str) -> dict[str, Any]:
+    """The single-preset file document; ``fields`` are for reading only (recomputed on load)."""
+    decoded = stored_preset(preset.source_index, preset.data, preset.identity.firmware)
+    return {
+        "kind": PRESET_KIND,
+        "format_version": PRESET_FORMAT_VERSION,
+        "created_at": preset.created_at.isoformat(),
+        "tool": f"openvave {tool_version}",
+        "identity": identity_json(preset.identity),
+        "source_index": preset.source_index,
+        "source_position": position(preset.source_index),
+        "raw": hex_bytes(preset.data),
+        "fields": [field_json(f) for f in decoded.decoded.fields],
+    }
+
+
+def preset_file_from_document(document: Any) -> PresetFile:
+    """Rebuild a :class:`PresetFile`; :class:`ValueError` names the problem."""
+    if not isinstance(document, Mapping):
+        raise ValueError("not an openvave preset file (expected a JSON object)")
+    kind = document.get("kind")
+    if kind == KIND:
+        raise ValueError("this is a full backup file; use preset restore FILE --slot POS instead")
+    if kind != PRESET_KIND:
+        raise ValueError(f"kind {kind!r} is not an openvave preset file ({PRESET_KIND})")
+    if document.get("format_version") != PRESET_FORMAT_VERSION:
+        raise ValueError(
+            f"format_version {document.get('format_version')!r} is not supported "
+            f"(expected {PRESET_FORMAT_VERSION})"
+        )
+    try:
+        ident = document["identity"]
+        identity = DeviceIdentity(
+            raw=bytes.fromhex(ident["raw"]),
+            name=ident["name"],
+            firmware=int(ident["firmware"]),
+            firmware_untested=bool(ident["firmware_untested"]),
+        )
+        data = bytes.fromhex(document["raw"])
+        created_at = datetime.fromisoformat(document["created_at"])
+        source_index = int(document["source_index"])
+    except (KeyError, TypeError, ValueError) as err:
+        raise ValueError(f"malformed preset file: {err!r}") from err
+    if len(data) != PRESET_SIZE:
+        raise ValueError(f"raw must be {PRESET_SIZE} bytes, got {len(data)}")
+    return PresetFile(
+        identity=identity, created_at=created_at, source_index=source_index, data=data
+    )

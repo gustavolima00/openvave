@@ -103,6 +103,15 @@ All notable changes to this project are documented here. The format follows
   `unknown_offsets` is now empty for these regions; `schema_version` stays 2.
 - `ir_cab` position 0 is shown as `off` (the cabinet simulation off: manual, app, and heard on the
   pedal in spec 007 gate session C); 1–8 stay `#1`–`#8`.
+- **Preset management** (spec 007 US5), all from confirmed writes, each with `--unsafe`, the
+  automatic backup, `--dry-run` and verification like `preset save` / `restore`:
+  `openvave preset copy SOURCE TARGET` (save sequence, ends on TARGET), `preset swap FIRST SECOND`
+  (one stored-image write with the two slots exchanged, verified by a full read, ends on the loaded
+  preset), `preset export POSITION [--output PATH]` (read-only, a `kind: openvave.preset` file) and
+  `preset import FILE --to POSITION`. Library: `plan_copy` / `copy_preset`, `plan_swap` /
+  `swap_presets`, `plan_import` / `import_preset`, `export_preset`, `PresetFile`. JSON: the
+  sequence-result schema adds the commands `preset copy|swap|import` and the actions `copy`,
+  `import`, `swap`.
 - Documented: the MASTER knob is not reported over Bluetooth (no byte moved while it was turned,
   observed).
 

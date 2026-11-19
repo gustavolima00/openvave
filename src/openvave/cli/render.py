@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from openvave._jsonform import field_json, hex_bytes, identity_json
 from openvave.models import (
+    IMAGE_ACTIONS,
     Backup,
     ByteChange,
     DecodedField,
@@ -970,12 +971,13 @@ def _diff_line(change: ByteChange) -> str:
 
 def human_sequence_header(plan: SequencePlan, source: str | None) -> str:
     """``Save current sound to 1C (index 2)   UNSAFE: …`` and what changes (FR-030)."""
-    if plan.action == "restore_all":
+    if plan.action in IMAGE_ACTIONS:
         differ = " ".join(position(i) for i in plan.changed_slots) or "header only"
         count = len(plan.changed_slots)
+        head = f"Swap {source}" if plan.action == "swap" else f"Restore all presets from {source}"
         return "\n".join(
             [
-                f"Restore all presets from {source}   UNSAFE: overwrites stored presets",
+                f"{head}   UNSAFE: overwrites stored presets",
                 f"  differ: {differ} ({count} of {len(plan.after) // 21})",
             ]
         )
@@ -983,6 +985,10 @@ def human_sequence_header(plan: SequencePlan, source: str | None) -> str:
     assert index is not None
     if plan.action == "save":
         head = f"Save current sound to {position(index)} (index {index})"
+    elif plan.action == "copy":
+        head = f"Copy {source} to {position(index)} (index {index})"
+    elif plan.action == "import":
+        head = f"Import {source} into {position(index)} (index {index})"
     else:
         head = f"Restore {position(index)} from {source}"
     lines = [f"{head}   UNSAFE: overwrites a stored preset"]
@@ -995,6 +1001,11 @@ def human_sequence_no_change(plan: SequencePlan, source: str | None) -> str:
     if plan.action == "save":
         assert plan.target_index is not None
         return f"{position(plan.target_index)} already holds this sound; nothing sent"
+    if plan.action in ("copy", "import"):
+        assert plan.target_index is not None
+        return f"{position(plan.target_index)} already holds {source}; nothing sent"
+    if plan.action == "swap":
+        return f"{source} hold the same sound; nothing sent"
     return f"pedal already matches {source}; nothing sent"
 
 
@@ -1035,6 +1046,10 @@ def human_sequence_plan(
 
 
 def _verify_line(plan: SequencePlan, source: str | None, verified: bool) -> str:
+    if plan.action == "swap":
+        count = len(plan.after) // 21
+        status = "swapped" if verified else "NOT swapped"
+        return f"  verify {count} of {count} presets and header as planned   {status}"
     if plan.action == "restore_all":
         count = len(plan.after) // 21
         status = "restored" if verified else "NOT restored"
@@ -1045,6 +1060,11 @@ def _verify_line(plan: SequencePlan, source: str | None, verified: bool) -> str:
     if plan.action == "save":
         return f"  verify stored {where} = written bytes, pedal on {where}, buffer = stored   " + (
             "saved" if verified else "NOT saved"
+        )
+    if plan.action in ("copy", "import"):
+        done = "copied" if plan.action == "copy" else "imported"
+        return f"  verify stored {where} = {source}, pedal on {where}, buffer = stored   " + (
+            done if verified else f"NOT {done}"
         )
     return f"  verify stored {where} = {source} {where}, pedal on {where}, buffer = stored   " + (
         "restored" if verified else "NOT restored"
@@ -1098,8 +1118,8 @@ def sequence_failure_lines(
             lines.append(f"  {label:<{STEP_LABEL_WIDTH}}{STEP_STATUS[outcome.status]}")
     plan = result.plan
     acked = all(o.status in ("acked", "waited") for o in result.steps)
-    if acked or (result.read_back is not None and plan.action != "restore_all"):
-        if plan.action == "restore_all":
+    if acked or (result.read_back is not None and plan.action not in IMAGE_ACTIONS):
+        if plan.action in IMAGE_ACTIONS:
             if result.mismatched_slots:
                 lines.append("  differ:  " + " ".join(position(i) for i in result.mismatched_slots))
         elif result.read_back is not None and result.read_back != plan.after:
@@ -1179,7 +1199,7 @@ def sequence_json(
             "verified": result.verified,
             "mismatched_slots": [position(i) for i in result.mismatched_slots],
         }
-        if plan.action != "restore_all" and result.read_back is not None:
+        if plan.action not in IMAGE_ACTIONS and result.read_back is not None:
             part["read_back"] = hex_bytes(result.read_back)
         document["result"] = part
     return document

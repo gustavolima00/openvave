@@ -369,6 +369,41 @@ class Backup:
 
 
 @dataclass(frozen=True)
+class PresetFile:
+    """One stored preset exported to a file (spec 007 US5): ``preset export`` / ``import``."""
+
+    identity: DeviceIdentity
+    """The pedal it was read from (firmware decides whether an import needs the opt-in)."""
+    created_at: datetime
+    """When it was read."""
+    source_index: int
+    """The stored preset it came from (0–35)."""
+    data: bytes
+    """The 21 preset bytes."""
+
+    def __post_init__(self) -> None:
+        if len(self.data) != 21:
+            raise ValueError(f"a preset is 21 bytes, got {len(self.data)}")
+        if not 0 <= self.source_index <= 35:
+            raise ValueError(f"source index must be 0-35, got {self.source_index}")
+
+    def to_document(self) -> dict[str, Any]:
+        """The single-preset file document (``kind: openvave.preset``, format version 1)."""
+        from openvave import __version__
+        from openvave.backup import preset_file_document
+
+        return preset_file_document(self, __version__)
+
+    @classmethod
+    def from_document(cls, document: Mapping[str, Any]) -> PresetFile:
+        """Rebuild an exported preset; :class:`ValueError` names what is wrong (a full backup
+        file points to ``preset restore``)."""
+        from openvave.backup import preset_file_from_document
+
+        return preset_file_from_document(document)
+
+
+@dataclass(frozen=True)
 class WritePlan:
     """What a write action would send, built from fresh reads (spec 003, research R5).
 
@@ -422,7 +457,9 @@ class WriteResult:
     since the pedal does not report its slot while bypassed (spec 004 FR-010)."""
 
 
-SequenceAction = Literal["save", "restore_slot", "restore_all"]
+SequenceAction = Literal["save", "restore_slot", "restore_all", "copy", "import", "swap"]
+IMAGE_ACTIONS = frozenset({"restore_all", "swap"})
+"""Sequence actions that write the whole stored image and verify it with a full backup read."""
 StepStatus = Literal["acked", "nak", "no_reply", "not_sent", "waited"]
 
 
@@ -451,7 +488,8 @@ class SequencePlan:
     """
 
     action: SequenceAction
-    """``save``, ``restore_slot`` or ``restore_all``."""
+    """``save``, ``restore_slot``, ``restore_all``; spec 007 adds ``copy``, ``import`` (one slot,
+    like ``restore_slot``) and ``swap`` (an image write, like ``restore_all``)."""
     state: PedalState
     """The pedal state as read while planning."""
     target_index: int | None

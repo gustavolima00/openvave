@@ -49,6 +49,7 @@ from openvave.errors import (
     WriteRefusedError,
 )
 from openvave.models import (
+    IMAGE_ACTIONS,
     Backup,
     DecodedRegion,
     DeviceIdentity,
@@ -61,6 +62,7 @@ from openvave.models import (
     FieldEdit,
     FieldStatus,
     PedalState,
+    PresetFile,
     Region,
     RegionRead,
     SequenceAction,
@@ -1110,48 +1112,111 @@ class TankG:
             raise ValueError(
                 f"backup header {backup.header.hex(' ')} is not {EXPECTED_HEADER.hex(' ')}"
             )
+        mismatch = backup.identity.firmware != self.identity.firmware
+        if slot is not None:
+            data = backup.presets[slot].data
+            return await self._plan_into_slot(
+                "restore_slot",
+                slot,
+                lambda _image: data,
+                unsafe=unsafe,
+                experimental=experimental,
+                discard_edits=discard_edits,
+                firmware_mismatch=mismatch,
+                sleep=sleep,
+            )
+        return await self._plan_image(
+            "restore_all",
+            lambda _image: backup.image,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            firmware_mismatch=mismatch,
+            sleep=sleep,
+        )
+
+    async def _plan_into_slot(
+        self,
+        action: SequenceAction,
+        slot: int,
+        data_for: Callable[[Callable[[int], Awaitable[bytes]]], bytes | Awaitable[bytes]],
+        *,
+        unsafe: bool,
+        experimental: bool,
+        discard_edits: bool,
+        firmware_mismatch: bool,
+        sleep: Sleep | None,
+    ) -> SequencePlan:
+        """A one-slot sequence (restore --slot, copy, import): write ``slot``, commit, select it.
+
+        ``data_for(read_slot)`` gives the 21 bytes to write; ``read_slot(i)`` reads stored preset
+        ``i`` and records the frame in the plan's reads (copy reads its source this way)."""
         state, _, buffer, reads = await self._read_state(sleep)
         if state.index is None:
             self._refuse_state(state)
         assert state.index is not None
         loaded = state.index
-        mismatch = backup.identity.firmware != self.identity.firmware
-        if slot is not None:
-            current, frame = await self._stored_with_frame(slot)
-            reads = (*reads, frame)
-            loaded_stored = current
-            if loaded != slot:
-                loaded_stored, frame = await self._stored_with_frame(loaded)
-                reads = (*reads, frame)
-            return self._slot_plan(
-                "restore_slot",
-                state,
-                slot,
-                current,
-                backup.presets[slot].data,
-                reads,
-                unsafe,
-                experimental,
-                edits_pending=buffer.data != loaded_stored and not discard_edits,
-                firmware_mismatch=mismatch,
-            )
+        frames: list[bytes] = list(reads)
+
+        async def read_slot(index: int) -> bytes:
+            data, frame = await self._stored_with_frame(index)
+            frames.append(frame)
+            return data
+
+        produced = data_for(read_slot)
+        data = await produced if inspect.isawaitable(produced) else produced
+        assert isinstance(data, bytes)
+        current = await read_slot(slot)
+        loaded_stored = current if loaded == slot else await read_slot(loaded)
+        return self._slot_plan(
+            action,
+            state,
+            slot,
+            current,
+            data,
+            tuple(frames),
+            unsafe,
+            experimental,
+            edits_pending=buffer.data != loaded_stored and not discard_edits,
+            firmware_mismatch=firmware_mismatch,
+        )
+
+    async def _plan_image(
+        self,
+        action: SequenceAction,
+        image_for: Callable[[bytes], bytes],
+        *,
+        unsafe: bool,
+        experimental: bool,
+        discard_edits: bool,
+        firmware_mismatch: bool,
+        sleep: Sleep | None,
+    ) -> SequencePlan:
+        """An image sequence (restore --all, swap): write the 758-byte image ``image_for(current
+        image)``, commit, select the preset that was loaded."""
+        state, _, buffer, reads = await self._read_state(sleep)
+        if state.index is None:
+            self._refuse_state(state)
+        assert state.index is not None
+        loaded = state.index
         image_read = StorageRead.image()
         image_frame = build_storage_read(image_read)
         image = parse_storage_reply(image_read, await self._request(image_frame))
+        after = image_for(image)
         start = STORE_OFFSET + PRESET_SIZE * loaded
         changed = tuple(
-            i for i in range(PRESET_COUNT) if _slot_bytes(image, i) != _slot_bytes(backup.image, i)
+            i for i in range(PRESET_COUNT) if _slot_bytes(image, i) != _slot_bytes(after, i)
         )
-        no_change = image == backup.image
+        no_change = image == after
         image_target = WriteTarget.stored_image()
-        steps = _sequence_steps(_write_step(image_target, backup.image), loaded)
+        steps = _sequence_steps(_write_step(image_target, after), loaded)
         return SequencePlan(
-            action="restore_all",
+            action=action,
             state=state,
             target_index=None,
             return_index=loaded,
             before=image,
-            after=backup.image,
+            after=after,
             changed_slots=changed,
             diff=(),
             steps=() if no_change else steps,
@@ -1164,7 +1229,7 @@ class TankG:
                 experimental=experimental,
                 edits_pending=buffer.data != image[start : start + PRESET_SIZE]
                 and not discard_edits,
-                firmware_mismatch=mismatch,
+                firmware_mismatch=firmware_mismatch,
             ),
             reads=(*reads, image_frame),
         )
@@ -1195,6 +1260,195 @@ class TankG:
             backup,
             slot=slot,
             all=all,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            sleep=sleep,
+        )
+        return await self._run_sequence(plan, experimental, on_backup, on_plan, sleep)
+
+    async def export_preset(self, index: int) -> PresetFile:
+        """Read stored preset ``index`` (0–35) into a :class:`PresetFile`. Reads only."""
+        WriteTarget.stored_slot(index)  # validates the index
+        data = await self._storage_read(StorageRead.preset(index))
+        return PresetFile(
+            identity=self.identity,
+            created_at=datetime.now(UTC),
+            source_index=index,
+            data=data,
+        )
+
+    async def plan_copy(
+        self,
+        source: int,
+        target: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        sleep: Sleep | None = None,
+    ) -> SequencePlan:
+        """Plan copying stored preset ``source`` to ``target`` (spec 007). Reads only.
+
+        The ``restore --slot`` sequence with ``source``'s bytes: slot write, read back, commit,
+        select ``target``. Same refusals as :meth:`plan_restore` with a slot.
+        :class:`ValueError` for an index outside 0–35 or ``source == target``.
+        """
+        WriteTarget.stored_slot(source)
+        WriteTarget.stored_slot(target)
+        if source == target:
+            raise ValueError("source and target are the same slot")
+
+        async def source_bytes(read_slot: Callable[[int], Awaitable[bytes]]) -> bytes:
+            return await read_slot(source)
+
+        return await self._plan_into_slot(
+            "copy",
+            target,
+            source_bytes,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            firmware_mismatch=False,
+            sleep=sleep,
+        )
+
+    async def copy_preset(
+        self,
+        source: int,
+        target: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None = None,
+        sleep: Sleep | None = None,
+    ) -> SequenceResult:
+        """Copy stored preset ``source`` to ``target``. **Persistent** (``unsafe=True``).
+
+        Runs :meth:`plan_copy`'s plan as :meth:`save_preset` does: automatic backup first,
+        verified, nothing retried; the pedal ends on ``target``.
+        """
+        plan = await self.plan_copy(
+            source,
+            target,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            sleep=sleep,
+        )
+        return await self._run_sequence(plan, experimental, on_backup, on_plan, sleep)
+
+    async def plan_import(
+        self,
+        preset: PresetFile,
+        target: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        sleep: Sleep | None = None,
+    ) -> SequencePlan:
+        """Plan writing an exported preset into ``target`` (spec 007). Reads only.
+
+        The ``restore --slot`` sequence with the file's bytes; a file from another firmware is
+        refused with ``firmware_mismatch`` unless ``experimental``.
+        """
+        WriteTarget.stored_slot(target)
+        data = preset.data
+        return await self._plan_into_slot(
+            "import",
+            target,
+            lambda _read: data,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            firmware_mismatch=preset.identity.firmware != self.identity.firmware,
+            sleep=sleep,
+        )
+
+    async def import_preset(
+        self,
+        preset: PresetFile,
+        target: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None = None,
+        sleep: Sleep | None = None,
+    ) -> SequenceResult:
+        """Write an exported preset into ``target``. **Persistent** (``unsafe=True``); ends on
+        ``target``."""
+        plan = await self.plan_import(
+            preset,
+            target,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            sleep=sleep,
+        )
+        return await self._run_sequence(plan, experimental, on_backup, on_plan, sleep)
+
+    async def plan_swap(
+        self,
+        first: int,
+        second: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        sleep: Sleep | None = None,
+    ) -> SequencePlan:
+        """Plan exchanging stored presets ``first`` and ``second`` (spec 007). Reads only.
+
+        Reads the whole image and plans the ``restore --all`` sequence with the two slots
+        exchanged (one confirmed image write, commit, select the preset that was loaded).
+        ``no_change`` when both hold the same bytes. :class:`ValueError` for ``first ==
+        second`` or an index outside 0–35.
+        """
+        WriteTarget.stored_slot(first)
+        WriteTarget.stored_slot(second)
+        if first == second:
+            raise ValueError("cannot swap a slot with itself")
+
+        def swapped(image: bytes) -> bytes:
+            out = bytearray(image)
+            a = STORE_OFFSET + PRESET_SIZE * first
+            b = STORE_OFFSET + PRESET_SIZE * second
+            out[a : a + PRESET_SIZE] = image[b : b + PRESET_SIZE]
+            out[b : b + PRESET_SIZE] = image[a : a + PRESET_SIZE]
+            return bytes(out)
+
+        return await self._plan_image(
+            "swap",
+            swapped,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard_edits,
+            firmware_mismatch=False,
+            sleep=sleep,
+        )
+
+    async def swap_presets(
+        self,
+        first: int,
+        second: int,
+        *,
+        unsafe: bool = False,
+        experimental: bool = False,
+        discard_edits: bool = False,
+        on_backup: OnBackup,
+        on_plan: OnPlan | None = None,
+        sleep: Sleep | None = None,
+    ) -> SequenceResult:
+        """Exchange stored presets ``first`` and ``second``. **Persistent** (``unsafe=True``);
+        verified by a full backup read, as a full restore; ends on the preset that was loaded."""
+        plan = await self.plan_swap(
+            first,
+            second,
             unsafe=unsafe,
             experimental=experimental,
             discard_edits=discard_edits,
@@ -1286,7 +1540,7 @@ class TankG:
         if reason == "unsafe_required":
             text = (
                 f"{_ACTION_NAMES[plan.action]} overwrites "
-                f"{'stored presets' if plan.action == 'restore_all' else 'a stored preset'}; "
+                f"{'stored presets' if plan.action in IMAGE_ACTIONS else 'a stored preset'}; "
                 "pass --unsafe (unsafe=True) to accept that"
             )
             if pending:
@@ -1314,7 +1568,7 @@ class TankG:
         """The sequence runner (spec 004 R8, R9, R15): the only sender of persistent writes."""
         self._raise_sequence_refusal(plan, experimental)
         if plan.no_change:
-            unchanged = plan.before if plan.action != "restore_all" else None
+            unchanged = plan.before if plan.action not in IMAGE_ACTIONS else None
             return SequenceResult(plan, (), False, True, unchanged, None)
         assert plan.refusal is None and plan.steps
         if on_plan is not None:
@@ -1391,7 +1645,7 @@ class TankG:
         bank, slot = divmod(index, 4)
         on_target = glob.data[1] == bank and glob.data[2] == slot
         name = _ACTION_NAMES[plan.action]
-        if plan.action == "restore_all":
+        if plan.action in IMAGE_ACTIONS:
             after = await self.backup()
             mismatched = tuple(
                 i
@@ -1836,6 +2090,9 @@ _ACTION_NAMES = {
     "save": "preset save",
     "restore_slot": "preset restore",
     "restore_all": "preset restore",
+    "copy": "preset copy",
+    "import": "preset import",
+    "swap": "preset swap",
 }
 
 

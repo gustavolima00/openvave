@@ -164,6 +164,10 @@ and verifies the result.
 | `plan_loopback(on)` | `set_loopback(on)` | `WriteResult` | no (flag survives power-off) |
 | `plan_save(to=None)` | `save_preset(to=None, …)` | `SequenceResult` | **yes** |
 | `plan_restore(backup, slot= / all=True)` | `restore(backup, …)` | `SequenceResult` | **yes** |
+| `plan_copy(source, target)` | `copy_preset(source, target, …)` | `SequenceResult` | **yes** |
+| `plan_swap(first, second)` | `swap_presets(first, second, …)` | `SequenceResult` | **yes** |
+| `plan_import(preset_file, target)` | `import_preset(preset_file, target, …)` | `SequenceResult` | **yes** |
+| — | `export_preset(index)` | `PresetFile` | no (reads only) |
 
 Keyword options mirror the CLI flags: `experimental=True` (`--experimental`),
 `discard_edits=True` (`--discard-edits`), `unsafe=True` (`--unsafe`). A plan is the CLI's
@@ -255,7 +259,15 @@ async with TankG.connect() as pedal:
     with open("backup-a.json") as fh:
         backup = Backup.from_document(json.load(fh))
     result = await pedal.restore(backup, all=True, unsafe=True, on_backup=keep)  # or slot=2
+
+    await pedal.copy_preset(0, 10, unsafe=True, on_backup=keep)  # 1A → 3C, ends on 3C
+    await pedal.swap_presets(5, 15, unsafe=True, on_backup=keep)  # 2B ↔ 4D
+    tone = await pedal.export_preset(13)  # PresetFile; tone.to_document() for the file
+    await pedal.import_preset(tone, 6, unsafe=True, on_backup=keep)  # into 2C
 ```
+
+`PresetFile.from_document(json.load(fh))` reads a file written by `preset export`; it raises
+`ValueError` for another kind (a full backup points to `restore`), version or size.
 
 - `unsafe=True` is always required; without it the call raises `WriteRefusedError`
   (`unsafe_required`) before any backup or write.

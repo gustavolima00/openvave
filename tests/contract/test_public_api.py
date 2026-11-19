@@ -50,6 +50,7 @@ CONTRACT_EXPORTS = {
     "WritePlan",
     "WriteResult",
     "PedalState",  # spec 004
+    "PresetFile",  # spec 007
     "SequencePlan",  # spec 004 M2
     "SequenceStep",
     "SequenceResult",
@@ -135,6 +136,13 @@ WRITE_ACTIONS = {
     "save_preset",
     "plan_restore",
     "restore",
+    # spec 007 US5
+    "plan_copy",
+    "copy_preset",
+    "plan_swap",
+    "swap_presets",
+    "plan_import",
+    "import_preset",
     "plan_set_fields",  # batch set: several fields over one session
     "set_fields",
 }
@@ -263,6 +271,7 @@ def test_tankg_write_actions_are_named() -> None:
     assert WRITE_ACTIONS <= public
     assert public - WRITE_ACTIONS == {
         "backup",
+        "export_preset",  # spec 007: reads one stored preset
         "close",  # spec 005
         "connect",
         "connect_selected",  # spec 005

@@ -19,8 +19,9 @@ settings (all 26 bytes are named on firmware 96) and **backs up** the 36 stored 
 current preset **remotely in normal mode**, as the phone app does (one field, or several over one
 connection), discards those edits with `preset reload`, selects presets, switches **bypass** and
 **loopback**, and is the first release that can **change stored presets**:
-`preset save` and `preset restore`. openvave changes stored presets **only** through those two
-commands, only with `--unsafe`, and always after an automatic, verified backup; every other write
+`preset save`, `preset restore`, `preset copy`, `preset swap` and `preset import` (plus a
+read-only `preset export`). openvave changes stored presets **only** through those commands, only
+with `--unsafe`, and always after an automatic, verified backup; every other write
 is volatile (see [Safety](docs/safety.md)). Every write openvave can send is listed, with its
 evidence, under "Write messages" in [`command-layer.md`](specs/protocol/command-layer.md); nothing
 else can be encoded. Protocol notes live in [`specs/protocol/`](specs/protocol/); feature specs are

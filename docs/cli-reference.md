@@ -19,6 +19,7 @@
 | [`preset dump`](#preset-dump) | no | the 21-byte current preset, decoded |
 | [`watch`](#watch) | no | poll and print every byte that changes |
 | [`preset backup`](#preset-backup) | no | save all 36 stored presets to a verified JSON file |
+| [`preset export`](#preset-export) | no | save one stored preset to a JSON preset file |
 | [`set`](#set) | volatile | change fields of the current preset |
 | [`preset reload`](#preset-reload) | volatile | discard unsaved edits |
 | [`preset select`](#preset-select) | volatile | load a stored preset |
@@ -26,6 +27,9 @@
 | [`loopback on` / `off`](#loopback) | kept across power-off | Bluetooth audio in the USB recording |
 | [`preset save`](#preset-save) | **persistent** | store the current sound in a slot (`--unsafe`) |
 | [`preset restore`](#preset-restore) | **persistent** | write back a backup file (`--unsafe`) |
+| [`preset copy`](#preset-copy) | **persistent** | copy one stored preset to another slot (`--unsafe`) |
+| [`preset swap`](#preset-swap) | **persistent** | exchange two stored presets (`--unsafe`) |
+| [`preset import`](#preset-import) | **persistent** | write a preset file into a slot (`--unsafe`) |
 
 `openvave --version` prints the version.
 
@@ -59,9 +63,9 @@ the `device` object carries `nickname` and `chosen_by`.
 |---|---|---|
 | `--dry-run` | every write command | do the reads, print the frame(s), send nothing (save/restore: no backup) |
 | `--experimental` | every write command | allow messages not yet `confirmed`, and untested firmware |
-| `--discard-edits` | `preset select`, `preset reload`, `bypass on`, `preset restore` | go ahead although unsaved edits are lost |
-| `--unsafe` | `preset save`, `preset restore` | required: accept that stored presets are overwritten |
-| `--backup-dir DIR` | `preset save`, `preset restore` | where the automatic backup goes (default `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups` on Windows, or `~/.local/share/openvave/backups`; created if missing; never overwrites) |
+| `--discard-edits` | `preset select`, `preset reload`, `bypass on`, `preset restore`, `copy`, `swap`, `import` | go ahead although unsaved edits are lost |
+| `--unsafe` | `preset save`, `restore`, `copy`, `swap`, `import` | required: accept that stored presets are overwritten |
+| `--backup-dir DIR` | `preset save`, `restore`, `copy`, `swap`, `import` | where the automatic backup goes (default `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups` on Windows, or `~/.local/share/openvave/backups`; created if missing; never overwrites) |
 
 Positions are `1A`–`9D` (case-insensitive) or an index `0`–`35`.
 
@@ -234,6 +238,49 @@ position with the save sequence; `--all` writes the 758-byte image, commits, sel
 that was loaded and verifies with a full read. Automatic backup first (`…-before-restore.json`). A
 file from another firmware needs `--experimental`.
 
+## preset copy
+
+```text
+openvave preset copy SOURCE TARGET --unsafe [--discard-edits] [--backup-dir DIR] [--dry-run]
+                     [--experimental]
+```
+
+Writes `SOURCE`'s stored bytes to `TARGET` with the save sequence (slot write, read back, commit,
+select `TARGET`, verify). The pedal ends on `TARGET`. Automatic backup first
+(`…-before-copy.json`). Equal slots: nothing sent. `SOURCE` = `TARGET` is a usage error.
+
+## preset swap
+
+```text
+openvave preset swap FIRST SECOND --unsafe [--discard-edits] [--backup-dir DIR] [--dry-run]
+                     [--experimental]
+```
+
+Writes the stored image with the two slots exchanged in one message (the `restore --all` write),
+commits, selects the preset that was loaded and verifies with a full read. Automatic backup first
+(`…-before-swap.json`). Slots holding the same sound: nothing sent.
+
+## preset export
+
+```text
+openvave preset export POSITION [--output PATH] [--force]
+```
+
+Reads one stored preset and writes a preset file (`kind: openvave.preset`, the 21 bytes, firmware,
+source position, decoded fields for reading). Read-only. Default file
+`./tankg-preset-<POS>-<date>-<time>.json`; never overwrites without `--force`.
+
+## preset import
+
+```text
+openvave preset import FILE --to POSITION --unsafe [--discard-edits] [--backup-dir DIR]
+                       [--dry-run] [--experimental]
+```
+
+Writes a preset file's 21 bytes into `POSITION` with the save sequence and selects it. The file is
+checked before connecting (a full backup file is refused with a hint to use `preset restore`); a
+file from another firmware needs `--experimental`. Automatic backup first (`…-before-import.json`).
+
 ## Exit codes
 
 | Code | Meaning |
@@ -266,7 +313,7 @@ removing, renaming or retyping a field bumps it.
 | `preset backup` (and the backup file) | [`backup.schema.json`](../specs/003-preset-backup-edit-writes/contracts/backup.schema.json) |
 | `set FIELD VALUE`, `preset select`, `preset reload`, `bypass`, `loopback` | [`write-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/write-result.schema.json) |
 | `set FIELD=VALUE ...` (also when a batch stops midway) | [`set-fields-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/set-fields-result.schema.json) |
-| `preset save`, `preset restore` (also when a sequence stops midway) | [`sequence-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/sequence-result.schema.json) |
+| `preset save`, `restore`, `copy`, `swap`, `import` (also when a sequence stops midway) | [`sequence-result.schema.json`](../specs/004-remote-edit-save-restore/contracts/sequence-result.schema.json) |
 
 `info`, `preset dump` and the `watch --json` start and change events carry a top-level
 `pedal_state` (`normal`, `edit`, `tuner`, `bypass`, `loading`, `unrecognised`). Typed knobs are

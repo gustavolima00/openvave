@@ -37,13 +37,14 @@ from openvave.models import (
     DeviceInfo,
     EditPlan,
     EditResult,
+    PresetFile,
     SequencePlan,
     SequenceResult,
     WritePlan,
     WriteResult,
 )
 from openvave.protocol.bytemap import REVERB_SECTION_STEPS, TYPED_FIELDS
-from openvave.protocol.storage import parse_position
+from openvave.protocol.storage import parse_position, position
 from openvave.protocol.writes import WRITABLE_FIELDS
 from openvave.session import (
     DEFAULT_SCAN_TIMEOUT,
@@ -125,6 +126,14 @@ def _write_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _discard_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--discard-edits",
+        action="store_true",
+        help="go on with unsaved edits (the final select discards them)",
+    )
+
+
 def _unsafe_options(parser: argparse.ArgumentParser, action: str) -> None:
     _write_options(parser)
     parser.add_argument(
@@ -146,8 +155,9 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="openvave",
         description="Client for the M-VAVE Tank-G pedal: reads, backups and guarded writes "
-        "(edit buffer, preset select, bypass, loopback; stored presets only through preset save "
-        "and preset restore, with --unsafe and after an automatic backup). Find pedals with "
+        "(edit buffer, preset select, bypass, loopback; stored presets only through preset "
+        "save, restore, copy, swap and import, with --unsafe and after an automatic backup). "
+        "Find pedals with "
         "scan and choose the default one with select. Unofficial. "
         "Not affiliated with or endorsed by M-VAVE / Cuvave.",
     )
@@ -226,6 +236,52 @@ def _parser() -> argparse.ArgumentParser:
         help="restore even with unsaved edits (the final select discards them)",
     )
     _unsafe_options(restore, "restore")
+    copy = preset_sub.add_parser(
+        "copy",
+        parents=[common],
+        help="copy one stored preset to another slot (UNSAFE: overwrites the target; --unsafe)",
+        description="Writes SOURCE's stored bytes to TARGET, reads them back, commits and selects "
+        "TARGET (the restore --slot sequence). Takes a full backup first.",
+    )
+    copy.add_argument("source", help="slot to copy from (1A–9D or 0–35)")
+    copy.add_argument("target", help="slot to overwrite (1A–9D or 0–35)")
+    _discard_option(copy)
+    _unsafe_options(copy, "copy")
+    swap = preset_sub.add_parser(
+        "swap",
+        parents=[common],
+        help="exchange two stored presets (UNSAFE: overwrites both; needs --unsafe)",
+        description="Writes the stored image with the two slots exchanged in one message, commits "
+        "and selects the preset that was loaded; verified by a full read. Full backup first.",
+    )
+    swap.add_argument("first", help="a slot (1A–9D or 0–35)")
+    swap.add_argument("second", help="the other slot")
+    _discard_option(swap)
+    _unsafe_options(swap, "swap")
+    export = preset_sub.add_parser(
+        "export",
+        parents=[common],
+        help="save one stored preset to a JSON preset file (read-only)",
+    )
+    export.add_argument("position", help="slot to export (1A–9D or 0–35)")
+    export.add_argument(
+        "--output",
+        metavar="PATH",
+        default=None,
+        help="preset file (default ./tankg-preset-<POS>-<YYYYmmdd-HHMMSS>.json)",
+    )
+    export.add_argument("--force", action="store_true", help="overwrite an existing file")
+    imp = preset_sub.add_parser(
+        "import",
+        parents=[common],
+        help="write a preset file into a slot (UNSAFE: overwrites it; needs --unsafe)",
+        description="The restore --slot sequence with the file's 21 bytes; selects the slot. "
+        "The file is checked before connecting. Takes a full backup first.",
+    )
+    imp.add_argument("file", help="an openvave preset file (preset export)")
+    imp.add_argument("--to", metavar="POSITION", required=True, help="target slot (1A–9D or 0–35)")
+    _discard_option(imp)
+    _unsafe_options(imp, "import")
     bypass = sub.add_parser(
         "bypass",
         parents=[common],
@@ -697,7 +753,7 @@ async def _sequence(
     source: str | None,
 ) -> str:
     """Run ``preset save`` / ``preset restore``: plan (dry run) or the guarded sequence."""
-    action = "save" if command == "preset save" else "restore"
+    action = command.split()[-1]
     saved: list[str] = []
 
     def on_plan(plan: SequencePlan) -> None:
@@ -803,6 +859,86 @@ async def _preset_restore(args: argparse.Namespace, factory: TransportFactory) -
     )
 
 
+async def _preset_copy(args: argparse.Namespace, factory: TransportFactory) -> str:
+    source, target = args.source_index, args.target_index
+    unsafe, experimental, discard = args.unsafe, args.experimental, args.discard_edits
+    return await _sequence(
+        args,
+        factory,
+        "preset copy",
+        lambda p: p.plan_copy(
+            source, target, unsafe=unsafe, experimental=experimental, discard_edits=discard
+        ),
+        lambda p, on_backup, on_plan: p.copy_preset(
+            source,
+            target,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard,
+            on_backup=on_backup,
+            on_plan=on_plan,
+        ),
+        position(source),
+    )
+
+
+async def _preset_swap(args: argparse.Namespace, factory: TransportFactory) -> str:
+    first, second = args.first_index, args.second_index
+    unsafe, experimental, discard = args.unsafe, args.experimental, args.discard_edits
+    return await _sequence(
+        args,
+        factory,
+        "preset swap",
+        lambda p: p.plan_swap(
+            first, second, unsafe=unsafe, experimental=experimental, discard_edits=discard
+        ),
+        lambda p, on_backup, on_plan: p.swap_presets(
+            first,
+            second,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard,
+            on_backup=on_backup,
+            on_plan=on_plan,
+        ),
+        f"{position(first)} and {position(second)}",
+    )
+
+
+async def _preset_import(args: argparse.Namespace, factory: TransportFactory) -> str:
+    preset: PresetFile = args.preset
+    target = args.index
+    unsafe, experimental, discard = args.unsafe, args.experimental, args.discard_edits
+    return await _sequence(
+        args,
+        factory,
+        "preset import",
+        lambda p: p.plan_import(
+            preset, target, unsafe=unsafe, experimental=experimental, discard_edits=discard
+        ),
+        lambda p, on_backup, on_plan: p.import_preset(
+            preset,
+            target,
+            unsafe=unsafe,
+            experimental=experimental,
+            discard_edits=discard,
+            on_backup=on_backup,
+            on_plan=on_plan,
+        ),
+        args.file,
+    )
+
+
+async def _preset_export(args: argparse.Namespace, factory: TransportFactory) -> str:
+    async with choice.pedal_session(args, factory) as pedal:
+        exported = await pedal.export_preset(args.index)
+    document = exported.to_document()
+    files.write_json_atomic(args.output, document, force=args.force)
+    if args.json:
+        return render.dumps({"command": "preset export", "saved_to": str(args.output), **document})
+    return f"Exported {position(args.index)}: {document['raw']}\nSaved {args.output}"
+
+
 async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
     if args.action == "backup":
         return await _preset_backup(args, factory)
@@ -814,6 +950,14 @@ async def _preset(args: argparse.Namespace, factory: TransportFactory) -> str:
         return await _preset_save(args, factory)
     if args.action == "restore":
         return await _preset_restore(args, factory)
+    if args.action == "copy":
+        return await _preset_copy(args, factory)
+    if args.action == "swap":
+        return await _preset_swap(args, factory)
+    if args.action == "import":
+        return await _preset_import(args, factory)
+    if args.action == "export":
+        return await _preset_export(args, factory)
     return await _preset_dump(args, factory)
 
 
@@ -858,13 +1002,55 @@ def _prepare_sequence(args: argparse.Namespace) -> None:
         args.create_backup_dir = False
         if not args.backup_dir.is_dir():
             raise UsageError(f"--backup-dir {args.backup_dir} is not a directory")
-    text = args.to if args.action == "save" else args.slot
     try:
+        if args.action == "copy":
+            args.source_index = parse_position(args.source)
+            args.target_index = parse_position(args.target)
+            if args.source_index == args.target_index:
+                raise UsageError("source and target are the same slot")
+            return
+        if args.action == "swap":
+            args.first_index = parse_position(args.first)
+            args.second_index = parse_position(args.second)
+            if args.first_index == args.second_index:
+                raise UsageError("cannot swap a slot with itself")
+            return
+        text = args.to if args.action in ("save", "import") else args.slot
         args.index = None if text is None else parse_position(text)
     except ValueError as err:
         raise UsageError(str(err)) from None
     if args.action == "restore":
         args.backup = load_restore_file(Path(args.file))
+    if args.action == "import":
+        args.preset = load_preset_file(Path(args.file))
+
+
+def load_preset_file(path: Path) -> PresetFile:
+    """The preset file in ``path`` for ``preset import``; :class:`UsageError` when unusable."""
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as err:
+        raise UsageError(f"cannot read {path}: {err.strerror or err}") from None
+    except (UnicodeDecodeError, json.JSONDecodeError) as err:
+        raise UsageError(f"{path} is not a JSON preset file ({err})") from None
+    try:
+        return PresetFile.from_document(document)
+    except ValueError as err:
+        raise UsageError(f"{path} cannot be imported: {err}") from None
+
+
+def _prepare_export(args: argparse.Namespace) -> None:
+    """Position and output file of ``preset export`` before any pedal I/O."""
+    try:
+        args.index = parse_position(args.position)
+    except ValueError as err:
+        raise UsageError(str(err)) from None
+    if args.output is None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        args.output = Path(f"tankg-preset-{position(args.index)}-{stamp}.json")
+    else:
+        args.output = Path(args.output)
+    files.check_target(args.output, force=args.force)
 
 
 def load_restore_file(path: Path) -> Backup:
@@ -1062,10 +1248,16 @@ def main(
         except UsageError as err:
             print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
-    if args.command == "preset" and args.action in ("save", "restore"):
+    if args.command == "preset" and args.action in ("save", "restore", "copy", "swap", "import"):
         try:
             _prepare_sequence(args)
         except UsageError as err:
+            print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
+            return EXIT_USAGE
+    if args.command == "preset" and args.action == "export":
+        try:
+            _prepare_export(args)
+        except (UsageError, files.TargetExistsError) as err:
             print(f"openvave {_command_name(args)}: error: {err}", file=sys.stderr)
             return EXIT_USAGE
     if args.command in PEDAL_COMMANDS:
