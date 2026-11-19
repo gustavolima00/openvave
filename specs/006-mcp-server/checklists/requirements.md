@@ -33,5 +33,5 @@
 
 - MCP, stdio and tool annotations are named because they are the feature itself (the protocol the
   assistant speaks), not an implementation choice; the SDK choice is left to the plan.
-- Three defaults are marked "to confirm in clarify" (default write level, hidden gated tools, idle
-  release timeout); they have reasonable defaults, so no [NEEDS CLARIFICATION] marker.
+- Clarify session 2026-11-19 settled opt-ins (per call, CLI parity), idle release, elicitation for
+  save/restore and the backup folder; checklist re-validated, 16/16 still passing.

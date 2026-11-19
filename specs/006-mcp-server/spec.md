@@ -30,6 +30,25 @@ several fields per connection, typed knobs, reload, select, bypass, loopback, sa
 message** and adds no new write target: every tool calls a library operation that already exists,
 with the same refusals, opt-ins, checks and backups as the matching CLI command.
 
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: What should the server's default write level be? → A: Everything the CLI can do. Every tool
+  is available by default; the opt-ins stay **per call**, as in the CLI (`experimental`, `unsafe`
+  and `discard_edits` arguments, mirroring `--experimental`, `--unsafe`, `--discard-edits`), not
+  server flags. A `--read-only` server option exists only for owners who want to restrict it.
+- Q: Should an idle server release the pedal by itself? → A: Yes, after 5 minutes without a pedal
+  tool call (`--idle-release SECONDS`, default 300, `0` never); the next pedal tool reconnects.
+- Q: Should save/restore also ask the owner directly through the client? → A: Only when the client
+  supports MCP elicitation: the server asks the owner (yes/no, naming the target positions and the
+  automatic backup) before the first write; a "no", a dismissed or failed prompt sends nothing.
+  Clients without elicitation proceed with `unsafe: true` and the automatic backup (CLI parity).
+- Q: Where do backups go, and what can restore read? → A: One fixed per-user backup folder
+  (`$XDG_DATA_HOME/openvave/backups`, else `~/.local/share/openvave/backups`; `%LOCALAPPDATA%` on
+  Windows; `--backup-dir` changes it), created on first use. Manual and automatic backups are
+  written there; restore reads only files in that folder (by file name); a tool lists them.
+
 ## Starting point (0.5.0, 2026-11-19)
 
 - Everything the owner can do with the pedal is reachable from the library and the CLI: identify,
@@ -115,9 +134,10 @@ nothing is sent.
 2. **Given** the same, **When** the assistant calls the set tool in preview mode, **Then** the
    result lists every frame that would be sent and every field change, and nothing is sent.
 3. **Given** a field that needs the experimental opt-in (block switch, LED colour), **When** the
-   server was started without allowing experimental writes, **Then** the call is refused before
-   anything is sent, the error names the reason and says how the owner can enable it (a server
-   option in the assistant's configuration), and no other field of the batch is sent.
+   call does not pass `experimental: true`, **Then** the call is refused before anything is sent,
+   the error names the reason (`experimental_required`) and the argument that allows it, and no
+   other field of the batch is sent; with `experimental: true` it is applied as with
+   `openvave set … --experimental`.
 4. **Given** the pedal is in tuner mode or bypassed, **When** a set is requested, **Then** it is
    refused with the library's reason (`tuner_mode`, `bypassed`).
 5. **Given** unsaved edits, **When** the assistant asks to reload or select another preset,
@@ -199,40 +219,43 @@ and check the configuration file's default changed.
 
 ---
 
-### User Story 5 - Back up, save and restore, only when the owner allowed it (Priority: P2)
+### User Story 5 - Back up, save and restore, with the CLI's opt-in (Priority: P2)
 
-The owner asks the assistant to back up the presets (always allowed, read-only, written to a file),
-and, only if they started the server with the persistent-writes option, to save the current sound
-to a position or restore presets from a backup. Every save/restore takes the automatic verified
-backup first, exactly as the CLI does, and the assistant can preview what would change.
+The owner asks the assistant to back up the presets (read-only, written to a file), to save the
+current sound to a position, or to restore presets from a backup. Save and restore need the
+`unsafe` argument in the call, as the CLI needs `--unsafe`; every save/restore takes the automatic
+verified backup first, exactly as the CLI does, and the assistant can preview what would change.
 
 **Why this priority**: backups are valuable and safe; save/restore are the only writes that can
 lose the owner's presets, so they come last and behind the strongest gate.
 
 **Independent Test**: on the fake transport, call backup and check the file and its verification;
-start the server without the persistent option and check save/restore are refused (or absent) and
-nothing is sent; start it with the option and check preview sends nothing, the real call writes
-the automatic backup before the first write and returns the sequence result.
+call save/restore without `unsafe` and check they are refused and nothing is sent; call them with
+`unsafe` and check preview sends nothing, the real call writes the automatic backup before the
+first write and returns the sequence result; start the server with `--read-only` and check
+save/restore are not offered.
 
 **Acceptance Scenarios**:
 
 1. **Given** any server options, **When** the assistant calls backup, **Then** all 36 presets are
    read, verified and written to a new file in the backup folder (never overwriting), and the
    result gives the path and a summary (preset count, firmware, warnings).
-2. **Given** the server started **without** persistent writes allowed, **When** the assistant asks
-   to save or restore, **Then** nothing is sent and the error says this server does not allow
-   changing stored presets and how the owner can enable it.
-3. **Given** persistent writes allowed, **When** the assistant previews a save to 2A, **Then** it
+2. **Given** a save or restore call **without** `unsafe: true`, **When** it runs, **Then** nothing
+   is sent and the error (`unsafe_required`) says the call changes stored presets and needs
+   `unsafe: true`.
+3. **Given** `unsafe: true`, **When** the assistant previews a save to 2A, **Then** it
    gets the planned steps and frames and whether 2A already holds this sound, and nothing is sent.
-4. **Given** persistent writes allowed, **When** the assistant saves to 2A, **Then** the server
+4. **Given** `unsafe: true`, **When** the assistant saves to 2A, **Then** the server
    writes the automatic backup first (path reported), runs the library's save sequence, and returns
    every step's outcome; if the backup fails nothing is written.
-5. **Given** persistent writes allowed, **When** the assistant restores one slot or all presets
+5. **Given** `unsafe: true`, **When** the assistant restores one slot or all presets
    from a backup file, **Then** the file is checked before connecting, the slots that differ are
    listed, the automatic backup is taken, and the result reports every step; a file from another
    firmware also needs the experimental opt-in.
-6. **Given** a restore file path outside the backup folder, **When** restore is called, **Then**
-   it is refused unless the server allows other folders.
+6. **Given** a restore file path outside the backup folder (absolute path, `..`, a link leading out),
+   **When** restore is called, **Then** it is refused before connecting and nothing is read.
+7. **Given** backups in the folder, **When** the assistant lists them, **Then** each file is listed
+   with name, time, firmware and whether it passes the restore checks, without a pedal.
 
 ---
 
@@ -274,7 +297,7 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 1. **Given** the server, **When** the assistant lists resources, **Then** it sees the writable
    fields, effect types, byte map and safety notes, each readable without a pedal connection.
 2. **Given** the assistant reads the writable fields, **Then** every field the set tool accepts is
-   listed with its value syntax and range, and which ones need the experimental opt-in.
+   listed with its value syntax and range, and which ones need `experimental`.
 
 ---
 
@@ -298,8 +321,8 @@ library's tables (writable fields, effect types, byte map) and the safety summar
   sees the pedal's actual state on its own read.
 - **Firmware other than 96**: every write needs the experimental opt-in (library rule); reads work
   with a warning.
-- **Untrusted input in tool arguments**: file paths for backup/restore are confined to the backup
-  folder unless the owner allowed more; nicknames and identifiers are validated by the existing
+- **Untrusted input in tool arguments**: backup/restore files are named inside the backup folder
+  only (no absolute paths, `..` or links leading out); nicknames and identifiers are validated by the existing
   rules.
 - **Server stopped by the client** (assistant closed) while connected: the connection is closed on
   shutdown so the pedal advertises again.
@@ -321,33 +344,37 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 - **FR-004**: The server MUST write nothing but protocol messages to stdout; logs, warnings and
   traces go to stderr. `--trace` (hex trace of frames, as in the CLI) MUST be available.
 - **FR-005**: Server options MUST be set at start (command-line flags, usable in the client's
-  configuration file) and MUST be reported by the status tool: allowed write levels, chosen pedal
-  option, backup folder, idle release timeout.
+  configuration file) and MUST be reported by the status tool: read-only or not, pedal option,
+  backup folder, idle release timeout, trace.
 
-**Write levels and gating**
+**Opt-ins (parity with the CLI)**
 
-- **FR-006**: The server MUST have write levels set at start, from least to most powerful:
-  (a) **read-only** — no tool that changes the pedal; (b) **volatile** — changes to the current
-  sound, preset select/reload and bypass using `confirmed` messages (default);
-  (c) **experimental** — also messages not yet `confirmed` (block switches, LED colour, loopback)
-  and writes on untested firmware, as the CLI's `--experimental`;
-  (d) **persistent** — also save and restore of stored presets, as the CLI's `--unsafe`.
-  Experimental and persistent MUST be independent opt-ins (persistent does not imply experimental,
-  as in the library).
-- **FR-007**: Tools whose level is not enabled MUST NOT be listed to the client; a call to one by
-  name MUST return a tool error naming the server option that enables it. Within an enabled tool,
-  a field or argument needing a higher level (e.g. an experimental field in a set batch) MUST be
-  refused with the library's reason and the option that enables it, before anything is sent.
+- **FR-006**: Every CLI capability MUST be available from the server by default, with the CLI's
+  opt-ins as **per-call arguments** passed to the library unchanged: `experimental` (as
+  `--experimental`: messages not yet `confirmed` such as block switches, LED colour, loopback, and
+  any write on untested firmware or from a backup of another firmware), `unsafe` (as `--unsafe`:
+  save and restore, the only writes that change stored presets) and `discard_edits` (as
+  `--discard-edits`). `experimental` MUST NOT imply `unsafe`, as in the library. Arguments default
+  to false.
+- **FR-007**: A call missing an opt-in MUST be refused before anything is sent, with the library's
+  refusal reason (`experimental_required`, `unsafe_required`, `unsaved_edits`, …) and the argument
+  that allows it. A server started with `--read-only` MUST NOT list any tool that writes to the
+  pedal, and a call to one by name MUST return a tool error naming that option.
 - **FR-008**: Every tool MUST carry MCP annotations that match what it does: read-only tools
   `readOnlyHint=true`; volatile write tools `readOnlyHint=false, destructiveHint=false`; save and
   restore `destructiveHint=true`; `idempotentHint` true only where calling twice equals once (set
   to the same values, select the same preset, bypass on, disconnect, select pedal);
-  `openWorldHint=false` for all (they act only on the local pedal and files).
-- **FR-009**: Every write tool MUST accept a preview flag (dry-run) that runs the library's plan —
-  reads only — and returns the exact frames and the planned changes or steps without sending.
-- **FR-010**: Save and restore MUST also require an explicit confirmation argument in the call
-  (in addition to the server's persistent level); a call without it returns the preview and says
-  what to add to run it.
+  `openWorldHint=false` for all (they act only on the local pedal and files). Tool descriptions MUST
+  state which opt-in each needs, so the assistant can ask the owner before passing it.
+- **FR-009**: Every write tool MUST accept a `dry_run` argument (the CLI's `--dry-run`) that runs
+  the library's plan — reads only — and returns the exact frames and the planned changes or steps
+  without sending.
+- **FR-010**: Save and restore with `unsafe: true` MUST behave exactly as the CLI's `--unsafe`: the
+  automatic verified backup before the first write (path reported, nothing written if it fails),
+  the library's sequence and its per-step result. When the client supports elicitation, the server
+  MUST first ask the owner to confirm (what will be overwritten, which positions, that a backup is
+  taken first) and send nothing unless the owner accepts; declined, cancelled or failed prompts
+  return a tool error (`declined_by_owner`). `dry_run` never prompts.
 
 **Connection**
 
@@ -358,8 +385,9 @@ library's tables (writable fields, effect types, byte map) and the safety summar
   flight when the link was lost (the library's partial result is returned for that call).
 - **FR-013**: A disconnect tool MUST close the connection (idempotent) so the phone app or the CLI
   can use the pedal; the next pedal tool reconnects.
-- **FR-014**: The server MUST close an idle connection after a release timeout (default
-  `5 minutes`, configurable, `0` disables) and on shutdown.
+- **FR-014**: The server MUST close an idle connection after a release timeout (5 minutes
+  after the last pedal tool call finished; `--idle-release SECONDS`, default 300, `0` never) and on
+  shutdown. Status, scan of the configuration and resource reads do not count as pedal use.
 - **FR-015**: A status tool MUST report, without sending anything to the pedal: connected or not,
   the pedal (nickname, identifier, how it was chosen, signal strength at connection), firmware and
   untested flag, connected since, last error, and the server options of FR-005.
@@ -390,11 +418,13 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 - **FR-021**: Preset tools: select by position (`1A`–`9D`) or index; reload (discard edits); both
   refuse to lose unsaved edits unless the call says to discard them.
 - **FR-022**: Bypass on and bypass off (to a position; default the position bypass on reported in
-  this session). Loopback on/off at the experimental level.
-- **FR-023**: Backup tool (read-only level and above): reads and verifies all 36 presets and writes
-  a new file in the backup folder (never overwriting); returns the path and summary. Save tool
-  (persistent level): store the current sound in the loaded or a given position. Restore tool
-  (persistent level): one slot or all from a backup file in the backup folder. Both take the
+  this session). Loopback on/off (`experimental`, as the CLI).
+- **FR-023**: Backup tool (read-only, available even with `--read-only`): reads and verifies all 36 presets and writes
+  a new file in the backup folder (never overwriting); returns the path and summary. Backups list tool
+  (read-only): files in the backup folder with time, firmware and restore-check result. Save tool
+  (`unsafe`): store the current sound in the loaded or a given position. Restore tool
+  (`unsafe`): one slot or all from a backup file named inside the backup folder (anything leading
+  outside it is refused before connecting). Both take the
   automatic verified backup first and return the library's sequence result.
 - **FR-024**: The changes tool MUST compare the pedal's current reads with the server's previous
   read (or poll for up to a wait time capped at `30 s`) and return changed fields by name with old
@@ -408,17 +438,17 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 **Resources and prompts**
 
 - **FR-027**: The server MUST expose read-only resources that need no pedal: writable fields (value
-  syntax, range, level needed), effect types of the typed knobs, the byte map, and a safety
-  summary (volatile vs persistent, write levels, what openvave never sends).
+  syntax, range, opt-in needed), effect types of the typed knobs, the byte map, and a safety
+  summary (volatile vs persistent, the opt-ins, what openvave never sends).
 - **FR-028**: Prompts are out of scope for this feature (see Assumptions).
 
 **Documentation and tests**
 
 - **FR-029**: Documentation MUST explain installing the extra, configuring Claude Desktop and
-  Claude Code (copy-paste snippets, including the options for experimental and persistent levels),
+  Claude Code (copy-paste snippets, including `--read-only` and `--device`),
   the connection behaviour (one connection, phone app, disconnect, idle release), the tool list
-  with levels and annotations, and safety.
-- **FR-030**: The hardware-free test suite MUST cover every tool, resource, write level,
+  with their opt-ins and annotations, and safety.
+- **FR-030**: The hardware-free test suite MUST cover every tool, resource, opt-in, `--read-only`,
   annotation, preview, the connection lifecycle (lazy, reuse, disconnect, idle release, lost link,
   shutdown) and error mapping, using the fake transport and an in-process MCP client. A hardware
   gate, run by the owner in their own terminal and assistant, MUST check the reads, one volatile
@@ -426,12 +456,12 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 
 ### Key Entities
 
-- **Server options**: write levels enabled, pedal option, backup folder, allowed restore folders,
+- **Server options**: read-only or not, pedal option, backup folder,
   idle release timeout, trace flag. Fixed for the life of the server.
 - **Server session**: the chosen pedal for this session (and why), the held connection (or none),
   connected since, last read baseline (for changes), the position to return to after bypass, last
   error.
-- **Tool**: name, write level, annotations, input arguments, structured result.
+- **Tool**: name, kind (read / volatile write / persistent write), opt-ins it accepts, annotations, input arguments, structured result.
 - **Resource**: read-only reference document (writable fields, effect types, byte map, safety).
 
 ## Success Criteria *(mandatory)*
@@ -443,10 +473,10 @@ library's tables (writable fields, effect types, byte map) and the safety summar
   configuration file.
 - **SC-002**: After the first call, read tools answer without a new scan or handshake: at least 10
   consecutive calls in a conversation use one connection.
-- **SC-003**: With the default options, no tool call — whatever its arguments — can change a stored
-  preset or send a message that is not `confirmed`; verified by tests that try every tool with
-  every gated argument.
-- **SC-004**: 100 % of the tools carry annotations consistent with their level (tested), and every
+- **SC-003**: No tool call can change a stored preset without `unsafe: true`, or send a message
+  that is not `confirmed` without `experimental: true`, and none can send anything the CLI could not;
+  verified by tests that try every tool with and without each opt-in.
+- **SC-004**: 100 % of the tools carry annotations consistent with what they do (tested), and every
   write tool has a preview that sends nothing (tested).
 - **SC-005**: After a lost link, the next call recovers (reconnects or reports "not found") within
   the scan timeout, and the server process never exits because of a pedal error.
@@ -457,19 +487,11 @@ library's tables (writable fields, effect types, byte map) and the safety summar
 
 ## Assumptions
 
-- **Default write level is volatile** (confirmed messages only, never stored presets), because
-  changing the current sound is the main reason to have the server and is undone by reload or a
-  power cycle; owners who want a read-only assistant start it with the read-only option.
-  *(To confirm in clarify.)*
-- **Gated tools are hidden** from the tool list when their level is off, so the assistant cannot
-  even try them; a direct call still returns an explanatory error. *(To confirm in clarify.)*
-- **Idle release timeout of 5 minutes** balances fewer reconnects against letting the phone app
-  take the pedal. *(To confirm in clarify.)*
+- **Per-call opt-ins rely on the assistant asking the owner**: the client's own tool-approval
+  prompt, the tool descriptions, `destructiveHint` and (where supported) the elicitation prompt are
+  the human checks before a save/restore; the automatic backup is the safety net, as in the CLI.
 - **Pedal selection from the assistant is per server session** unless `remember` is passed, so an
   assistant cannot silently change what the CLI uses.
-- **Backup folder** defaults to a per-user data folder (e.g. `~/.local/share/openvave/backups`,
-  platform equivalent), because the working directory of a server started by a desktop assistant
-  is not meaningful; configurable by option.
 - **Prompts are out of scope**: tools and resources cover the stories; prompt templates can come
   later if a concrete need appears (Constitution VII, YAGNI).
 - **stdio only**: network transports (HTTP/SSE) are out of scope; a networked pedal server would
