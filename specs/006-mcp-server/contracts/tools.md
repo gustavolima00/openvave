@@ -68,13 +68,29 @@ fields (resource `openvave://fields`).
   last_error, options: {read_only, device, backup_dir, idle_release, scan_timeout, timeout},
   bypass_return: position|null}`.
 - `pedal_disconnect`: `{was_connected, summary}`; free for the phone app.
-- `pedal_select`: the `device` document of `openvave select --json` when `remember`, else
-  `{session_choice: device, remembered: false}`.
+- `pedal_select`: the `device` document of `openvave select --json` + `remembered: true` when
+  `remember`, else `{session_choice: {identifier, nickname, name, rssi}, remembered: false}`
+  (`name` / `rssi` are `null` for a nickname, which needs no scan).
+- `pedal_scan`: the `scan --json` document; every row adds `connected` (bool); the held pedal,
+  which does not advertise, is appended with `connected: true` when the scan did not see it.
+  No pedal found is a result (summary says so), not an error.
+- `preset_read`: `region="current"` → the `preset dump --json` document + `pedal_state`;
+  `global` / `status` → the same envelope (`command: "preset read"`) + `pedal_state` +
+  `region` (the region object of `info --json`). Typed knobs in `fields[]` add `knob_type` and
+  `knob_position` (`null` between two types). In bypass the document is still the CLI's (the
+  zeroed buffer decoded); `pedal_state` and the summary say the fields do not apply. Sets the
+  `pedal_changes` baseline for that region.
 - `preset_backup`: the `preset backup --json` document + `path`.
 - `backups_list`: `{folder, backups: [{file, created_at, firmware, presets, restorable,
   problems: [...]}]}` newest first.
 - `pedal_changes`: `{baseline: bool, changed: bool, waited: seconds, state_before, state_after,
-  changes: [{region, offset, name, before, after, display_before, display_after}]}`.
+  changes: [{region, offset, name, before, after, display_before, display_after}]}`; `region` is
+  `global`, `current_preset` or `status` (as `watch --json`), `name` is `null` for an unknown or
+  flag byte, `display_*` is `5 (room 6)` for a typed knob and hex for an unknown byte.
+  `baseline: true` when no earlier read existed (then, with a wait, it polls against this
+  call's first read). `wait_seconds` outside 0–30 → `invalid_value`.
+- `backups_list`: `created_at` / `firmware` / `presets` are `null` when the file does not
+  carry them; only `*.json` regular files are listed; a missing folder is an empty list.
 - Write tools: `set --json` / `preset select --json` / … documents (`set-fields-result`,
   `write-result`, `sequence-result` schemas), so `dry_run` results carry the frames and no reply.
 - Every write result adds `reminder`: `"not saved; discard with preset_reload"` for volatile

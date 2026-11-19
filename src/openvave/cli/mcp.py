@@ -70,8 +70,9 @@ def add_parser(sub: Any, common: argparse.ArgumentParser) -> None:
     )
 
 
-def run(args: argparse.Namespace, transport_factory: Any) -> int:
-    """Start the server; exit 2 without the ``mcp`` extra."""
+def run(args: argparse.Namespace, transport_factory: Any, scanner_factory: Any = None) -> int:
+    """Start the server; exit 2 without the ``mcp`` extra. ``scanner_factory`` replaces
+    ``BleakScanner`` (tests)."""
     try:
         import openvave.mcp_server as mcp_server
     except ImportError as err:
@@ -90,7 +91,7 @@ def run(args: argparse.Namespace, transport_factory: Any) -> int:
         timeout=args.timeout,
         trace=args.trace,
     )
-    return asyncio.run(mcp_server.serve(options, transport_factory))
+    return asyncio.run(mcp_server.serve(options, transport_factory, scanner_factory))
 
 
 __all__ = ["INSTALL_HINT", "add_parser", "default_backup_dir", "run"]

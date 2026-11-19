@@ -41,7 +41,7 @@ def test_missing_extra_exits_2_with_the_hint(
 def test_options_reach_the_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     seen: list[object] = []
 
-    async def fake_serve(options, factory):  # type: ignore[no-untyped-def]
+    async def fake_serve(options, factory, scanner_factory=None):  # type: ignore[no-untyped-def]
         seen.append(options)
         return 0
 
@@ -90,7 +90,8 @@ async def test_tool_calls_print_nothing_on_stdout(
 
 
 async def test_stdio_smoke(tmp_path: Path) -> None:
-    """The real command over stdio lists its tools and answers pedal_status (no pedal)."""
+    """The real command over stdio lists its tools and resources, answers pedal_status and
+    backups_list, and reads a resource (no pedal)."""
     env = {**os.environ, "OPENVAVE_CONFIG": str(tmp_path / "devices.json")}
     params = StdioServerParameters(
         command=sys.executable,
@@ -99,7 +100,29 @@ async def test_stdio_smoke(tmp_path: Path) -> None:
     )
     async with Client(params) as client:
         tools = {t.name for t in (await client.list_tools()).tools}
-        assert {"pedal_status", "pedal_info", "pedal_disconnect"} <= tools
+        assert {
+            "pedal_status",
+            "pedal_disconnect",
+            "pedal_scan",
+            "pedal_select",
+            "pedal_info",
+            "preset_read",
+            "pedal_changes",
+            "preset_backup",
+            "backups_list",
+        } <= tools
         result = await client.call_tool("pedal_status", {})
         assert not result.is_error
         assert result.structured_content["connected"] is False
+        listed = await client.call_tool("backups_list", {})
+        assert not listed.is_error
+        assert listed.structured_content["backups"] == []
+        uris = {str(r.uri) for r in (await client.list_resources()).resources}
+        assert uris == {
+            "openvave://fields",
+            "openvave://effect-types",
+            "openvave://byte-map",
+            "openvave://safety",
+        }
+        fields = await client.read_resource("openvave://fields")
+        assert "reverb_decay" in getattr(fields.contents[0], "text", "")

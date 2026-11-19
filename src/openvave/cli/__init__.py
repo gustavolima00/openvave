@@ -1064,7 +1064,9 @@ def main(
         return _run_pedal_command(args, scanner_factory, transport_factory)
     if args.command == "mcp":
         with _logging(args.trace):
-            return mcp_command.run(args, transport_factory or _ble_factory(scanner_factory))
+            return mcp_command.run(
+                args, transport_factory or _ble_factory(scanner_factory), scanner_factory
+            )
     factory = transport_factory or _ble_factory(scanner_factory)
     debug = os.environ.get("OPENVAVE_DEBUG") == "1"
     with _logging(args.trace):

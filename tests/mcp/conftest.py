@@ -92,7 +92,7 @@ def options(tmp_path: Path, **overrides: Any) -> ServerOptions:
 class Harness:
     server: MCPServer
     holder: PedalHolder
-    factory: CountingFactory
+    factory: Any
     sleep: ManualSleep
     client: Client
 
@@ -113,6 +113,12 @@ class Harness:
         assert result.is_error, result.text
         prefix = f"Error executing tool {name}: "
         return result.text[len(prefix) :] if result.text.startswith(prefix) else result.text
+
+    async def resource(self, uri: str) -> tuple[str | None, str]:
+        """``(mime type, text)`` of a resource."""
+        result = await self.client.read_resource(uri)
+        content = result.contents[0]
+        return content.mime_type, getattr(content, "text", "")
 
 
 @dataclass
@@ -146,14 +152,19 @@ class open_harness:  # noqa: N801 - used like a function
     def __init__(
         self,
         server_options: ServerOptions,
-        factory: CountingFactory,
+        factory: Any,
         sleep: ManualSleep | None = None,
         *,
         mode: str = "legacy",
+        scanner_factory: Any = None,
+        poll_sleep: Any = None,
         **client_kwargs: Any,
     ) -> None:
         self.sleep = sleep or ManualSleep()
-        self.server, self.holder = create(server_options, factory, sleep=self.sleep)
+        extra: dict[str, Any] = {"scanner_factory": scanner_factory}
+        if poll_sleep is not None:
+            extra["poll_sleep"] = poll_sleep
+        self.server, self.holder = create(server_options, factory, sleep=self.sleep, **extra)
         self.factory = factory
         self.client = Client(self.server, mode=mode, **client_kwargs)
 

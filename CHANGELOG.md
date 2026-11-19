@@ -26,6 +26,30 @@ All notable changes to this project are documented here. The format follows
 - Command line: `openvave.cli.error_text()` / `report_lines()` hold the `error:` text and the
   hint lines the CLI prints, shared with the server; CLI output is unchanged.
 
+### Added (spec 006 milestone 1): reads, pedal choice, backups and resources in `openvave mcp`
+
+- `preset_read` (`region`: `current`, `global` or `status`): the current sound is the
+  `preset dump --json` document plus a `summary`; typed knobs (MOD FX, DLY MIX, RVB DECAY) also
+  carry `knob_type` and `knob_position`. In bypass or tuner mode the summary says the fields do
+  not apply. `global` / `status` return the decoded region as in `info --json`.
+- `pedal_changes` (`wait_seconds` 0–30): what changed since the last read (field name, value
+  before / after, state before / after); the first call takes the baseline, a wait polls every
+  0.5 s until something changes.
+- `pedal_scan` (the `scan --json` document; the pedal the server holds does not advertise and is
+  listed with `connected: true`) and `pedal_select` (nickname, identifier or prefix of ≥ 4 hex
+  digits, as `openvave select`): the choice lasts for the server session and wins over
+  `--device`; `remember: true` (with an optional `nickname`) also saves it as the default.
+  Selecting another pedal closes the held connection.
+- `preset_backup` writes a verified backup of the 36 stored presets to a new file in the backup
+  folder (`--backup-dir`, default `$XDG_DATA_HOME/openvave/backups` or
+  `~/.local/share/openvave/backups`, created with mode 0700; never overwrites), and
+  `backups_list` lists the folder newest first with the restore checks, without a pedal.
+- Resources, readable without a pedal: `openvave://fields` (every writable field, its value
+  syntax, range, types and whether it needs `experimental`), `openvave://effect-types`,
+  `openvave://byte-map` and `openvave://safety`.
+- Command line: `openvave.cli.pedals.resolve_selection()` holds the target matching of
+  `openvave select`, shared with `pedal_select`; CLI output is unchanged.
+
 ## [0.5.0]
 
 Finding and choosing a pedal. `openvave scan` lists every Tank-G in range without connecting,

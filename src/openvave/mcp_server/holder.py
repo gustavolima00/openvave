@@ -73,6 +73,11 @@ class PedalHolder:
     options: ServerOptions
     factory: TransportFactory
     sleep: Sleep = asyncio.sleep
+    """Waits out the idle release (injectable for tests)."""
+    poll_sleep: Sleep = asyncio.sleep
+    """Waits between ``pedal_changes`` polls (injectable for tests)."""
+    scanner_factory: Any = None
+    """Replaces ``BleakScanner`` for ``pedal_scan`` / ``pedal_select`` (tests); ``None``: real."""
     session_target: Target | None = None
     pedal: TankG | None = None
     device: DeviceInfo | None = None

@@ -196,10 +196,59 @@ def _hex_digits(text: str) -> str:
     return re.sub(r"[:-]", "", text).casefold()
 
 
-async def select(args: argparse.Namespace, scanner_factory: ScannerFactory) -> tuple[str, int]:
-    """``openvave select [TARGET] [--name NICKNAME] [--offline]`` (research R4)."""
+async def resolve_selection(
+    target: str | None,
+    known: KnownDevices | None,
+    scan_timeout: float,
+    scanner_factory: ScannerFactory,
+    *,
+    offline: bool = False,
+) -> tuple[str, str | None, int | None]:
+    """``(identifier, advertised name, rssi)`` of the pedal ``target`` names (research R4):
+    a known nickname (no scan), a full identifier (checked by a scan unless ``offline``), an
+    identifier prefix of at least :data:`MIN_PREFIX_HEX` hex digits matching one pedal in range,
+    or ``None`` for the only pedal in range. Shared by ``openvave select`` and the MCP server's
+    ``pedal_select``; ``known`` may be ``None`` (invalid file) when ``target`` is an identifier."""
     from openvave.transport import ble
 
+    chosen = (
+        _nickname_match(known, target)
+        if known is not None and target is not None and not is_identifier(target)
+        else None
+    )
+    if chosen is not None:
+        return chosen.identifier, chosen.last_name, None
+    if target is not None and is_identifier(target):
+        if offline:
+            return target, None, None
+        seen = await ble.seek(target, scan_timeout, scanner_factory=scanner_factory)
+        device = next((d for d in seen if d.identifier.casefold() == target.casefold()), None)
+        if device is None:
+            raise NoDeviceFoundError(f"device {target} not found")
+        return device.identifier, device.name, device.rssi
+    if target is not None:
+        if not _PREFIX.match(target) or len(_hex_digits(target)) < MIN_PREFIX_HEX:
+            nicknames = ", ".join(known.nicknames) if known is not None else ""
+            raise ConfigError(
+                f"{target!r} is not a known nickname, an identifier or a prefix of at least "
+                f"{MIN_PREFIX_HEX} hex digits; known nicknames: {nicknames or 'none'}",
+                reason="unknown_nickname",
+            )
+        entries = await ble.scan(scan_timeout, known=known, scanner_factory=scanner_factory)
+        prefix = _hex_digits(target)
+        matches = [e.device for e in entries if _hex_digits(e.device.identifier).startswith(prefix)]
+        if not matches:
+            raise NoDeviceFoundError(f"no Tank-G whose identifier starts with {target}")
+        if len(matches) > 1:
+            raise MultipleDevicesError(matches)
+        return matches[0].identifier, matches[0].name, matches[0].rssi
+    seen = await ble.seek(None, scan_timeout, scanner_factory=scanner_factory)
+    device = ble.select_device(ble.strongest_first(seen), None)
+    return device.identifier, device.name, device.rssi
+
+
+async def select(args: argparse.Namespace, scanner_factory: ScannerFactory) -> tuple[str, int]:
+    """``openvave select [TARGET] [--name NICKNAME] [--offline]`` (research R4)."""
     target, offline = args.target, args.offline
     if args.name is not None:
         check_nickname(args.name)
@@ -208,40 +257,9 @@ async def select(args: argparse.Namespace, scanner_factory: ScannerFactory) -> t
             "--offline takes a full identifier (MAC or UUID), not a nickname or prefix"
         )
     known = _load()
-    name: str | None = None
-    rssi: int | None = None
-    if target is not None and not is_identifier(target) and _nickname_match(known, target):
-        chosen = _nickname_match(known, target)
-        assert chosen is not None
-        identifier, name = chosen.identifier, chosen.last_name
-    elif target is not None and is_identifier(target):
-        identifier = target
-        if not offline:
-            seen = await ble.seek(target, args.scan_timeout, scanner_factory=scanner_factory)
-            device = next((d for d in seen if d.identifier.casefold() == target.casefold()), None)
-            if device is None:
-                raise NoDeviceFoundError(f"device {target} not found")
-            identifier, name, rssi = device.identifier, device.name, device.rssi
-    elif target is not None:
-        if not _PREFIX.match(target) or len(_hex_digits(target)) < MIN_PREFIX_HEX:
-            nicknames = ", ".join(known.nicknames) or "none"
-            raise ConfigError(
-                f"{target!r} is not a known nickname, an identifier or a prefix of at least "
-                f"{MIN_PREFIX_HEX} hex digits; known nicknames: {nicknames}",
-                reason="unknown_nickname",
-            )
-        entries = await ble.scan(args.scan_timeout, known=known, scanner_factory=scanner_factory)
-        prefix = _hex_digits(target)
-        matches = [e.device for e in entries if _hex_digits(e.device.identifier).startswith(prefix)]
-        if not matches:
-            raise NoDeviceFoundError(f"no Tank-G whose identifier starts with {target}")
-        if len(matches) > 1:
-            raise MultipleDevicesError(matches)
-        identifier, name, rssi = matches[0].identifier, matches[0].name, matches[0].rssi
-    else:
-        seen = await ble.seek(None, args.scan_timeout, scanner_factory=scanner_factory)
-        device = ble.select_device(ble.strongest_first(seen), None)
-        identifier, name, rssi = device.identifier, device.name, device.rssi
+    identifier, name, rssi = await resolve_selection(
+        target, known, args.scan_timeout, scanner_factory, offline=offline
+    )
     previous = known.default
     updated = known.select(identifier, args.name, name=name)
     updated.save()
@@ -355,4 +373,13 @@ def _forget_all(args: argparse.Namespace, path: Path) -> tuple[str, int]:
     return render.human_forget_all(len(removed), moved), 0
 
 
-__all__ = ["UsageError", "add_parsers", "device", "forget", "rename", "scan", "select"]
+__all__ = [
+    "UsageError",
+    "add_parsers",
+    "device",
+    "forget",
+    "rename",
+    "resolve_selection",
+    "scan",
+    "select",
+]

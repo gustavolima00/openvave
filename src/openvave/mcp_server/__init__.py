@@ -9,6 +9,7 @@ it. The server is a thin front end over the public library, like the command lin
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
@@ -21,15 +22,22 @@ def create(
     factory: TransportFactory,
     *,
     sleep: Sleep = asyncio.sleep,
+    poll_sleep: Sleep = asyncio.sleep,
+    scanner_factory: Any = None,
 ) -> tuple[MCPServer, PedalHolder]:
-    """A server and its holder (in-process use and tests)."""
-    holder = PedalHolder(options, factory, sleep=sleep)
+    """A server and its holder (in-process use and tests). ``scanner_factory`` replaces
+    ``BleakScanner`` for the scan and select tools; the sleeps are injectable for tests."""
+    holder = PedalHolder(
+        options, factory, sleep=sleep, poll_sleep=poll_sleep, scanner_factory=scanner_factory
+    )
     return build_server(holder), holder
 
 
-async def serve(options: ServerOptions, factory: TransportFactory) -> int:
+async def serve(
+    options: ServerOptions, factory: TransportFactory, scanner_factory: Any = None
+) -> int:
     """Run over stdio until the client closes stdin; the pedal is released on exit."""
-    server, holder = create(options, factory)
+    server, holder = create(options, factory, scanner_factory=scanner_factory)
     try:
         await server.run_stdio_async()
     finally:

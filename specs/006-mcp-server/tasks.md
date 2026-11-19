@@ -184,54 +184,64 @@ Projected PR count: **5** (≤ 8). Milestone N+1 starts only after Milestone N's
 
 ### Tests first (must fail)
 
-- [ ] T017 [P] [US1] `tests/mcp/test_read_tools.py`: `preset_read` for each region and state vs
+- [X] T017 [P] [US1] `tests/mcp/test_read_tools.py`: `preset_read` for each region and state vs
   `render.preset_json` / `region_json`; unknown region → `invalid_value`
-- [ ] T018 [P] [US4] `tests/mcp/test_pedal_choice.py`: the matrix above with the existing
+- [X] T018 [P] [US4] `tests/mcp/test_pedal_choice.py`: the matrix above with the existing
   scanner/transport fakes from `tests/integration/test_choice_matrix.py`; prefix ≥ 4 hex digits,
   ambiguous prefix, unknown nickname, invalid config file (identifier still works)
-- [ ] T019 [P] [US6] `tests/mcp/test_changes.py`: scripted fake whose current-preset read changes
+- [X] T019 [P] [US6] `tests/mcp/test_changes.py`: scripted fake whose current-preset read changes
   between calls; state change (bypass) reported; poll with injected sleep; cap
-- [ ] T020 [P] [US5] `tests/mcp/test_backups.py`: default folder from `XDG_DATA_HOME` / HOME /
+- [X] T020 [P] [US5] `tests/mcp/test_backups.py`: default folder from `XDG_DATA_HOME` / HOME /
   `LOCALAPPDATA` (monkeypatched), `--backup-dir`, created 0700; backup result = `backup_json` +
   `path`; second backup in the same second gets a new name; `backups_list` newest first with
   `restore_problems`
-- [ ] T021 [P] [US7] `tests/mcp/test_resources.py`: `openvave://fields` has every
+- [X] T021 [P] [US7] `tests/mcp/test_resources.py`: `openvave://fields` has every
   `WRITABLE_FIELDS` name with syntax, range, types and `experimental` for observed targets;
   `effect-types` equals the three type tables; `byte-map` equals `BYTE_MAP`; `safety` markdown
   names `unsafe` and `experimental`
 
 ### Implementation
 
-- [ ] T022 [US1] `preset_read` tool in `server.py` (reads + `decode_region` + `state()`; sets
+- [X] T022 [US1] `preset_read` tool in `server.py` (reads + `decode_region` + `state()`; sets
   `holder.baseline`)
-- [ ] T023 [US6] `pedal_changes` tool: reads global / current / status, `diff` per region, decode
+- [X] T023 [US6] `pedal_changes` tool: reads global / current / status, `diff` per region, decode
   names; polling loop with injectable sleep, 0.5 s step, cap 30 s; updates baseline
-- [ ] T024 [US4] `pedal_scan` tool: `openvave.scan(timeout=options.scan_timeout)` + known
+- [X] T024 [US4] `pedal_scan` tool: `openvave.scan(timeout=options.scan_timeout)` + known
   nicknames + default marker; under the holder lock; held pedal appended `connected: true`
-- [ ] T025 [US4] `pedal_select` tool: nickname / full identifier / prefix resolution (reuse
+- [X] T025 [US4] `pedal_select` tool: nickname / full identifier / prefix resolution (reuse
   `openvave.cli.pedals` helpers where pure, else move the pure matcher into
-  `openvave.devices` only if `cli.pedals` uses it too); sets `holder.session_target`
+  `openvave.devices` only if `cli.pedals` uses it too; landed as
+  `openvave.cli.pedals.resolve_selection`, used by `openvave select` too); sets `holder.session_target`
   (`chosen_by="device_option"`); closes a held connection to another pedal and clears baseline /
   bypass_return; `remember` → `KnownDevices.select(...).save()` and the `select --json` document
-- [ ] T026 [US5] `src/openvave/mcp_server/backups.py`: `default_backup_dir()`, `ensure_dir()`,
+- [X] T026 [US5] `src/openvave/mcp_server/backups.py`: `default_backup_dir()` (re-exported from
+  `openvave.cli.mcp`, M0), `ensure_dir()`,
   `manual_backup_path(dir, when)` (no overwrite, `-1`, `-2` …), `resolve_backup_file(dir, name)`
   (confinement rules of research R10, raising a `ValueError` subclass mapped to `invalid_file`),
   `list_backups(dir)`
-- [ ] T027 [US5] `preset_backup` tool (`TankG.backup()` → `openvave.cli.files.write_json_atomic`
+- [X] T027 [US5] `preset_backup` tool (`TankG.backup()` → `openvave.cli.files.write_json_atomic`
   with the CLI's backup document) and `backups_list` tool
-- [ ] T028 [US7] `src/openvave/mcp_server/resources.py` and registration in `server.py`
+- [X] T028 [US7] `src/openvave/mcp_server/resources.py` and registration in `server.py`
   (`openvave://fields`, `effect-types`, `byte-map`, `safety`)
-- [ ] T029 [US1] Annotations for the M1 tools in the `TOOLS` registry (contract table)
-- [ ] T030 `CHANGELOG.md` [Unreleased]: milestone 1 entries
+- [X] T029 [US1] Annotations for the M1 tools in the `TOOLS` registry (contract table)
+- [X] T030 `CHANGELOG.md` [Unreleased]: milestone 1 entries
 
 ### Live verification (milestone gate)
 
-- [ ] T031 Suite, ruff, mypy green
-- [ ] T032 Quickstart §2 with the Inspector (or the stdio smoke test): tools and resources listed,
+- [X] T031 Suite, ruff, mypy green
+- [X] T032 Quickstart §2 with the Inspector (or the stdio smoke test): tools and resources listed,
   resources readable without a pedal
-- [ ] T033 Report to the owner (tools so far, what the assistant can now do)
+- [X] T033 Report to the owner (tools so far, what the assistant can now do)
+  - Evidence (2026-11-19): `uv run pytest -q` → 2704 passed, 6 skipped (hardware);
+    `tests/mcp/` 102 passed (read tools vs `preset dump` / `info` JSON, choice matrix incl.
+    session > `--device` > env > default > only one, changes with injected poll sleep, backup
+    folder and confinement, resources vs library tables); `test_stdio_smoke` spawns
+    `python -m openvave mcp`, lists the 9 tools and 4 resources, calls `backups_list` and reads
+    `openvave://fields` without a pedal. ruff check / format, mypy (36 files) clean. Nothing in
+    `src/openvave/protocol/` or `specs/protocol/` changed. Inspector not run (the stdio smoke
+    test covers it). No pedal involved.
 
-**Checkpoint**: Milestone 1 DONE
+**Checkpoint**: Milestone 1 DONE ✅
 
 ---
 
