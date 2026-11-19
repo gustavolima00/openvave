@@ -265,35 +265,48 @@ loopback with the CLI's opt-ins.
 
 ### Tests first (must fail)
 
-- [ ] T034 [P] [US2] `tests/mcp/test_write_tools.py`: parity, refusals, dry_run, partial result,
+- [X] T034 [P] [US2] `tests/mcp/test_write_tools.py`: parity, refusals, dry_run, partial result,
   reminder text, bypass return position, loopback
-- [ ] T035 [P] [US2] `tests/mcp/test_annotations.py`: parse the tool table of
+- [X] T035 [P] [US2] `tests/mcp/test_annotations.py`: parse the tool table of
   `specs/006-mcp-server/contracts/tools.md` and compare with `tools/list` (names, RO/D/I,
   `openWorldHint=false`, hidden under `--read-only`)
-- [ ] T036 [P] [US2] `tests/mcp/test_gates.py` (SC-003): for every write tool × {no opt-in,
+- [X] T036 [P] [US2] `tests/mcp/test_gates.py` (SC-003): for every write tool × {no opt-in,
   `experimental`, `discard_edits`} the fake never receives a persistent write or a non-confirmed
   message without `experimental`
 
 ### Implementation
 
-- [ ] T037 [US2] Value conversion for `pedal_set.changes` in `server.py`: JSON numbers / booleans →
+- [X] T037 [US2] Value conversion for `pedal_set.changes` (landed in the new `src/openvave/mcp_server/writes.py` with the six write tools, registered from `server.py`): JSON numbers / booleans →
   CLI text; `openvave.cli.parse_assignments` for syntax; errors → `invalid_value` /
   `unknown_field`
-- [ ] T038 [US2] `pedal_set` tool (`plan_set_fields` for `dry_run`, else `set_fields`; result =
+- [X] T038 [US2] `pedal_set` tool (`plan_set_fields` for `dry_run`, else `set_fields`; result =
   `render.edit_json` + reminder)
-- [ ] T039 [US2] `preset_select` (`parse_position` for `1A`–`9D` or index) and `preset_reload`
+- [X] T039 [US2] `preset_select` (`parse_position` for `1A`–`9D` or index) and `preset_reload`
   tools (`render.write_json`)
-- [ ] T040 [US2] `bypass_on` (stores `holder.bypass_return`) and `bypass_off` tools
-- [ ] T041 [US2] `loopback` tool
-- [ ] T042 [US2] `--read-only`: remove `TOOLS` entries with `writes=True` after registration
-- [ ] T043 `CHANGELOG.md` [Unreleased]: milestone 2 entries
+- [X] T040 [US2] `bypass_on` (stores `holder.bypass_return`) and `bypass_off` tools
+- [X] T041 [US2] `loopback` tool
+- [X] T042 [US2] `--read-only`: remove `TOOLS` entries with `writes=True` after registration
+- [X] T043 `CHANGELOG.md` [Unreleased]: milestone 2 entries
 
 ### Live verification (milestone gate)
 
-- [ ] T044 Suite, ruff, mypy green; frame audit unchanged
-- [ ] T045 Report to the owner
+- [X] T044 Suite, ruff, mypy green; frame audit unchanged
+- [X] T045 Report to the owner
+  - Evidence (2026-11-19): `uv run pytest -q` → 2817 passed, 18 skipped (6 hardware, 12
+    gate-matrix cells for tools without `discard_edits`); session frame audit (SC-004) and
+    persistent-write audit pass unchanged. `tests/mcp/test_write_tools.py`: for 10 tool calls
+    the frames and the document equal `openvave … --json` on an identical fake, with and
+    without `dry_run` (nothing sent); refusals (`experimental_required`, `tuner_mode`,
+    `bypassed`, `edits_would_be_discarded`, `not_bypassed`, `unknown_field`, `invalid_value`)
+    send no frame, and argument errors open no connection; a mid-batch NAK carries the CLI's
+    `edit_json` as `partial:`; `bypass_off` returns to the position from `bypass_on`.
+    `test_gates.py` (SC-003): 7 calls × 3 opt-ins × 3 states, no persistent write and nothing
+    unconfirmed without `experimental`. `test_annotations.py` (SC-004): annotations equal the
+    contract table; `--read-only` hides and blocks the 6 write tools (also over stdio in
+    `test_command.py`). ruff check / format, mypy (37 files) clean. Nothing in
+    `src/openvave/protocol/` or `specs/protocol/` changed. No pedal involved.
 
-**Checkpoint**: Milestone 2 DONE
+**Checkpoint**: Milestone 2 DONE ✅
 
 ---
 

@@ -93,8 +93,16 @@ fields (resource `openvave://fields`).
   carry them; only `*.json` regular files are listed; a missing folder is an empty list.
 - Write tools: `set --json` / `preset select --json` / … documents (`set-fields-result`,
   `write-result`, `sequence-result` schemas), so `dry_run` results carry the frames and no reply.
-- Every write result adds `reminder`: `"not saved; discard with preset_reload"` for volatile
-  edits, the bypass return position for `bypass_on`, the automatic backup path for save/restore.
+- Every write result adds `reminder`: `"dry run: nothing sent"` with `dry_run`; after
+  `pedal_set` `"not saved; discard with preset_reload"` (edit mode: `"… and discard_edits:
+  true"`; nothing to change: `"nothing changed"`); after `bypass_on` `"bypassed; bypass_off
+  returns to 1B"` (the position it reported); after `preset_select` / `preset_reload` /
+  `bypass_off` `"nothing saved; the stored presets are unchanged"`; after `loopback` `"a volatile
+  setting; nothing saved to the presets"`; the automatic backup path for save/restore.
+- `pedal_set` and every single-frame write tool return their document even when the plan is
+  refused under `dry_run` (the plan shows `refusal`, as `--dry-run` does); without `dry_run` a
+  refusal is an error. `bypass_return` is set by a real `bypass_on` and cleared by a real
+  `bypass_off` or `preset_select`.
 
 ## Elicitation (save, restore)
 

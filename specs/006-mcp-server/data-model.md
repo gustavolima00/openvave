@@ -27,7 +27,7 @@ memory for the life of one `openvave mcp` process.
 | `connected_since` | datetime \| None | UTC, set after a successful `open()` |
 | `last_error` | str \| None | `kind: message` of the last failed pedal call |
 | `baseline` | dict[Region, RegionRead] \| None | last reads for `pedal_changes` |
-| `bypass_return` | int \| None | index reported by the last `bypass_on` in this process |
+| `bypass_return` | int \| None | index reported by the last `bypass_on` in this process; cleared by a real `bypass_off` or `preset_select` |
 | `lock` | asyncio.Lock | one pedal operation at a time |
 | `idle_task` | asyncio.Task \| None | the pending idle release |
 

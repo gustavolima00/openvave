@@ -50,6 +50,23 @@ All notable changes to this project are documented here. The format follows
 - Command line: `openvave.cli.pedals.resolve_selection()` holds the target matching of
   `openvave select`, shared with `pedal_select`; CLI output is unchanged.
 
+### Added (spec 006 milestone 2): volatile writes in `openvave mcp`
+
+- `pedal_set` (`changes`: field → value, e.g. `{"gain": 90, "delay_on": "on",
+  "reverb_decay": "room:18"}`; JSON numbers and booleans are accepted), `preset_select`
+  (`position` `1A`–`9D` or `0`–`35`), `preset_reload`, `bypass_on`, `bypass_off` and `loopback`
+  (`on`). Each sends the same frames as the matching command and returns its `--json` document
+  plus `summary` and `reminder` (`not saved; discard with preset_reload` after an edit).
+- The command line's opt-ins are arguments, passed to the library unchanged: `dry_run` (plan and
+  frames, nothing sent), `experimental` (messages not yet confirmed: block switches, LED colour,
+  loopback; untested firmware), `discard_edits` (select, reload, bypass on). Unknown fields and
+  bad values are refused before connecting; a batch that stops midway is an error carrying the
+  `set --json` document so far as `partial:`.
+- `bypass_off` without `position` returns to the preset `bypass_on` reported in the same server
+  session; with neither, the error names the bank the pedal reports.
+- `--read-only` leaves the six write tools out of the tool list (calling one fails); every tool's
+  annotations (read-only, destructive, idempotent) follow the contract's table.
+
 ## [0.5.0]
 
 Finding and choosing a pedal. `openvave scan` lists every Tank-G in range without connecting,

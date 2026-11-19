@@ -7,6 +7,7 @@ plus a ``summary``; library errors become tool errors (:mod:`openvave.mcp_server
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from openvave import __version__
@@ -25,6 +27,7 @@ from openvave.mcp_server import backups, resources
 from openvave.mcp_server.errors import InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
 from openvave.mcp_server.results import add_knob_types, change_json, change_label, with_summary
+from openvave.mcp_server.writes import register_writes
 from openvave.models import ByteChange, DeviceInfo, PedalState, Region, RegionRead
 from openvave.protocol import classify, diff
 from openvave.session import TankG
@@ -72,6 +75,12 @@ TOOLS: dict[str, ToolSpec] = {
     "pedal_changes": ToolSpec(writes=False, read_only=True, destructive=False, idempotent=False),
     "preset_backup": ToolSpec(writes=False, read_only=False, destructive=False, idempotent=False),
     "backups_list": ToolSpec(writes=False, read_only=True, destructive=False, idempotent=True),
+    "pedal_set": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "preset_select": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "preset_reload": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "bypass_on": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "bypass_off": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
+    "loopback": ToolSpec(writes=True, read_only=False, destructive=False, idempotent=True),
 }
 """Every tool, its annotations and whether ``--read-only`` hides it (contracts/tools.md)."""
 
@@ -300,6 +309,13 @@ def build_server(holder: PedalHolder) -> MCPServer:
         summary = f"{count} in {folder}" + (f" ({restorable} restorable)" if rows else "")
         return {"summary": summary, "folder": str(folder), "backups": rows}
 
+    register_writes(server, holder, lambda name: TOOLS[name].annotations(), record)
+    if holder.options.read_only:
+        # --read-only: the write tools are neither listed nor callable (FR-010)
+        for name, spec in TOOLS.items():
+            if spec.writes:
+                with contextlib.suppress(ToolError):
+                    server.remove_tool(name)
     _resources(server)
     return server
 

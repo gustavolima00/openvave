@@ -110,6 +110,12 @@ async def test_stdio_smoke(tmp_path: Path) -> None:
             "pedal_changes",
             "preset_backup",
             "backups_list",
+            "pedal_set",
+            "preset_select",
+            "preset_reload",
+            "bypass_on",
+            "bypass_off",
+            "loopback",
         } <= tools
         result = await client.call_tool("pedal_status", {})
         assert not result.is_error
@@ -126,3 +132,24 @@ async def test_stdio_smoke(tmp_path: Path) -> None:
         }
         fields = await client.read_resource("openvave://fields")
         assert "reverb_decay" in getattr(fields.contents[0], "text", "")
+
+
+async def test_stdio_read_only_lists_no_write_tool(tmp_path: Path) -> None:
+    """``openvave mcp --read-only`` over stdio: the write tools are not listed (FR-010)."""
+    env = {**os.environ, "OPENVAVE_CONFIG": str(tmp_path / "devices.json")}
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "openvave", "mcp", "--read-only", "--backup-dir", str(tmp_path)],
+        env=env,
+    )
+    async with Client(params) as client:
+        tools = {t.name for t in (await client.list_tools()).tools}
+    assert "preset_read" in tools
+    assert not tools & {
+        "pedal_set",
+        "preset_select",
+        "preset_reload",
+        "bypass_on",
+        "bypass_off",
+        "loopback",
+    }

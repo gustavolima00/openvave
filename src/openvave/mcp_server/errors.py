@@ -55,6 +55,12 @@ class InvalidValue(ValueError):
     kind = "invalid_value"
 
 
+class UnknownField(ValueError):
+    """A ``pedal_set`` field that is not writable (``unknown_field``); nothing was sent."""
+
+    kind = "unknown_field"
+
+
 class InvalidFile(ValueError):
     """A backup file name that cannot be used (``invalid_file``); nothing was read."""
 
@@ -71,7 +77,7 @@ def kind_of(err: BaseException) -> str:
     """The stable ``kind`` of an error (contracts/tools.md §Errors)."""
     if isinstance(err, WriteRefusedError):
         return err.reason
-    if isinstance(err, InvalidValue | InvalidFile | Declined):
+    if isinstance(err, InvalidValue | UnknownField | InvalidFile | Declined):
         return err.kind
     for cls, kind in _KINDS:
         if isinstance(err, cls):
@@ -122,6 +128,7 @@ __all__ = [
     "Declined",
     "InvalidFile",
     "InvalidValue",
+    "UnknownField",
     "error_message",
     "kind_of",
     "tool_errors",
