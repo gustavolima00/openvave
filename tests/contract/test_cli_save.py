@@ -330,7 +330,8 @@ def test_default_backup_dir_follows_the_platform(
     assert files.default_backup_dir() == tmp_path / "data" / "openvave" / "backups"
     monkeypatch.setenv("XDG_DATA_HOME", "")
     monkeypatch.setattr("sys.platform", "darwin")
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Path.home() reads USERPROFILE on Windows, not HOME: pin it on every platform.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     assert files.default_backup_dir() == tmp_path / ".local" / "share" / "openvave" / "backups"
     monkeypatch.setenv("OPENVAVE_BACKUP_DIR", str(tmp_path / "mine"))
     assert files.default_backup_dir() == tmp_path / "mine"

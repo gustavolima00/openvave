@@ -103,16 +103,21 @@ async def test_wanted_device_stops_at_once() -> None:
     assert elapsed < 0.25  # no grace period with --device
 
 
+# asyncio fires a timer up to one clock tick early (BaseEventLoop._clock_resolution), and a
+# tick is about 15.6 ms on Windows: "the whole timeout" means within one tick of it.
+TICK = time.get_clock_info("monotonic").resolution
+
+
 async def test_no_pedal_scans_the_whole_timeout() -> None:
     found, elapsed = await scan([(0.05, SPEAKER)], timeout=0.4)
     assert found == [SPEAKER[0]]
-    assert elapsed >= 0.4
+    assert elapsed >= 0.4 - TICK
 
 
 async def test_without_stop_early_the_whole_timeout_is_used() -> None:
     found, elapsed = await scan([(0.05, PEDAL_A)], timeout=0.4, stop_early=False)
     assert found == [PEDAL_A[0]]
-    assert elapsed >= 0.4
+    assert elapsed >= 0.4 - TICK
 
 
 async def test_open_ble_uses_the_early_stop(monkeypatch: pytest.MonkeyPatch) -> None:

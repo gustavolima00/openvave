@@ -12,13 +12,14 @@ UUID = "8F3A21C4-0000-4000-8000-000000000001"
 
 
 def test_config_error() -> None:
-    err = ConfigError("not valid JSON", reason="invalid_file", path=Path("/tmp/x/devices.json"))
+    path = Path("/tmp/x/devices.json")
+    err = ConfigError("not valid JSON", reason="invalid_file", path=path)
     assert isinstance(err, OpenvaveError)
     assert ConfigError.exit_code == 2
     assert err.reason == "invalid_file"
-    assert err.path == Path("/tmp/x/devices.json")
+    assert err.path == path
     assert err.problem == "not valid JSON"
-    assert str(err) == "/tmp/x/devices.json: not valid JSON"
+    assert str(err) == f"{path}: not valid JSON"  # the platform's separator
 
 
 def test_config_error_without_path() -> None:
