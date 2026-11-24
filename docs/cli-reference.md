@@ -4,8 +4,9 @@
 [0.1.0](../specs/001-readonly-ble-connection/contracts/cli.md),
 [0.2.0](../specs/002-preset-byte-map/contracts/cli.md),
 [0.3.0](../specs/003-preset-backup-edit-writes/contracts/cli.md),
-[0.4.0](../specs/004-remote-edit-save-restore/contracts/cli.md) and
-[0.5.0](../specs/005-device-selection/contracts/cli.md) additions.
+[0.4.0](../specs/004-remote-edit-save-restore/contracts/cli.md),
+[0.5.0](../specs/005-device-selection/contracts/cli.md) and
+[0.6.0](../specs/006-mcp-server/contracts/tools.md) (`openvave mcp`) additions.
 
 ## Commands
 
@@ -30,6 +31,7 @@
 | [`preset copy`](#preset-copy) | **persistent** | copy one stored preset to another slot (`--unsafe`) |
 | [`preset swap`](#preset-swap) | **persistent** | exchange two stored presets (`--unsafe`) |
 | [`preset import`](#preset-import) | **persistent** | write a preset file into a slot (`--unsafe`) |
+| [`mcp`](#mcp) | per tool | run an MCP server for AI assistants (needs the `mcp` extra) |
 
 `openvave --version` prints the version.
 
@@ -280,6 +282,32 @@ openvave preset import FILE --to POSITION --unsafe [--discard-edits] [--backup-d
 Writes a preset file's 21 bytes into `POSITION` with the save sequence and selects it. The file is
 checked before connecting (a full backup file is refused with a hint to use `preset restore`); a
 file from another firmware needs `--experimental`. Automatic backup first (`…-before-import.json`).
+
+## mcp
+
+```text
+openvave mcp [--device ID|NICKNAME] [--read-only] [--backup-dir DIR]
+             [--idle-release SECONDS] [--scan-timeout S] [--timeout S] [--trace]
+```
+
+Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin/stdout for an AI
+assistant (Claude Code, Claude Desktop …), which starts it; you do not run it by hand. Needs the
+optional extra: `pip install 'openvave[mcp] @ git+https://github.com/gustavolima00/openvave'`.
+Every command above is a tool, with `--dry-run`, `--experimental`, `--discard-edits` and
+`--unsafe` as per-call arguments. Setup, tools and troubleshooting: [MCP guide](mcp.md).
+
+| Option | Default | |
+|---|---|---|
+| `--read-only` | off | list no tool that writes to the pedal |
+| `--backup-dir DIR` | as `preset save` | the folder for backups and exports, and the only one restore and import read from |
+| `--idle-release SECONDS` | 300 | release the pedal after this many seconds without a pedal tool; `0` never |
+
+It connects on the first pedal tool, keeps that one connection between tools, and releases it
+after `--idle-release`, on the `pedal_disconnect` tool or at exit, so the phone app can connect.
+stdout carries only MCP messages; warnings and `--trace` go to stderr. Exit codes: 0 when the
+assistant closes it, 2 on a usage error or without the `mcp` extra (`error: the MCP server needs
+the 'mcp' extra: pip install 'openvave[mcp]'`). Pedal errors never stop it: each is the failing
+tool's error.
 
 ## Exit codes
 

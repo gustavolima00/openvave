@@ -388,14 +388,14 @@ folder, and the owner's confirmation through elicitation where supported.
 - Quickstart §3 passes on fw 96 (reads, one volatile write + reload, refusal without
   `experimental`, disconnect → phone app connects, lost link, idle release, backup).
 
-- [ ] T056 [P] `docs/mcp.md`: install (`pip install 'openvave[mcp]'`, `uv tool install
+- [X] T056 [P] `docs/mcp.md`: install (`pip install 'openvave[mcp]'`, `uv tool install
   'openvave[mcp] @ git+…'`), Claude Code (`claude mcp add openvave -- …`) and Claude Desktop
   (`claude_desktop_config.json` snippet, macOS Bluetooth permission for the app that launches it),
   options, connection behaviour (one connection, phone app, `pedal_disconnect`, idle release),
   tool table with opt-ins and annotations, elicitation, backup folder, troubleshooting
-- [ ] T057 [P] `docs/README.md` index, `docs/safety.md` (MCP row: same opt-ins per call,
+- [X] T057 [P] `docs/README.md` index, `docs/safety.md` (MCP row: same opt-ins per call,
   `--read-only`, elicitation), `docs/cli-reference.md` (`openvave mcp`)
-- [ ] T058 Rebase on `origin/main`; `README.md`: short "AI assistants (MCP)" section linking
+- [X] T058 Merge `origin/main` (no rebase: a merge, so the open PR's history stays intact); `README.md`: short "AI assistants (MCP)" section linking
   `docs/mcp.md`
 - [ ] T059 `CHANGELOG.md` [0.6.0] from the milestone entries; version 0.6.0 in `pyproject.toml`
   and `src/openvave/__init__.py`; `tests/contract/test_changelog_060.py`

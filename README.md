@@ -45,6 +45,7 @@ write on them needs `--experimental`.
 - [Effect types](docs/effect-types.md): chorus/phaser/tremolo, analog/tape/dual and
   room/spring/cloud on the MOD FX, DLY MIX and RVB DECAY knobs.
 - [Recipes](docs/recipes.md): dial in a sound, switch presets, bypass, back up, save, restore.
+- [AI assistants (MCP)](docs/mcp.md): use the pedal from Claude Code or Claude Desktop.
 - [Safety](docs/safety.md) · [Library guide](docs/library.md) ·
   [CLI reference](docs/cli-reference.md) · [Examples](docs/examples/)
 
@@ -130,6 +131,21 @@ Every write command takes `--dry-run` (print the frame, send nothing). Messages 
 `confirmed` need `--experimental`; anything that overwrites stored presets needs `--unsafe`. Add
 `--json` to any command for machine-readable output. Details: [Recipes](docs/recipes.md),
 [CLI reference](docs/cli-reference.md).
+
+## AI assistants (MCP)
+
+`openvave mcp` lets an AI assistant such as Claude Code or Claude Desktop read and control the
+pedal for you ("what preset is loaded?", "more gain", "back up my presets"), with the same
+opt-ins, dry runs and automatic backups as the command line, and an optional `--read-only` mode.
+It needs the `mcp` extra:
+
+```bash
+uv tool install 'openvave[mcp] @ git+https://github.com/gustavolima00/openvave'
+claude mcp add --scope user openvave -- openvave mcp
+```
+
+Setup for Claude Desktop, the macOS Bluetooth permission, the tools and troubleshooting:
+[docs/mcp.md](docs/mcp.md).
 
 ## Library
 

@@ -56,7 +56,8 @@ def add_parser(sub: Any, common: argparse.ArgumentParser) -> None:
         type=Path,
         default=None,
         help="folder for backups and the files restore may read (default "
-        "$XDG_DATA_HOME/openvave/backups or ~/.local/share/openvave/backups)",
+        "$OPENVAVE_BACKUP_DIR, else $XDG_DATA_HOME/openvave/backups, "
+        "%%LOCALAPPDATA%%\\openvave\\backups on Windows, or ~/.local/share/openvave/backups)",
     )
     parser.add_argument(
         "--idle-release",
