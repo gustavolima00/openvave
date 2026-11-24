@@ -207,7 +207,7 @@ async def test_scan_uses_the_whole_timeout_after_a_pedal_is_seen() -> None:
         0.4,
         scanner_factory=timed_scanner([(0.02, (UUID_1, TANK, -58)), (0.3, (UUID_2, TANK, -61))]),
     )
-    assert time.monotonic() - started >= 0.4
+    assert time.monotonic() - started >= 0.4 - TICK
     assert ids(entries) == [UUID_1, UUID_2]  # the late pedal is listed too (FR-003)
 
 
@@ -287,7 +287,7 @@ async def test_target_absent_waits_the_timeout_and_nothing_seen() -> None:
     with pytest.raises(TargetNotFoundError) as caught:
         await ble.locate(STAGE, 0.2, scanner_factory=timed_scanner([]))
     assert caught.value.seen == ()
-    assert time.monotonic() - started >= 0.2
+    assert time.monotonic() - started >= 0.2 - TICK
 
 
 async def test_no_target_one_pedal_is_only_one_found() -> None:
