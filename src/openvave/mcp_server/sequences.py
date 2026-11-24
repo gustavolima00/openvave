@@ -12,11 +12,14 @@ is not asked (CLI parity).
 # the tool parameters with ``typing.get_type_hints``, which cannot see the closure resolvers
 # below in string annotations.
 
+import hashlib
 import json
+import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Generic, TypeVar
 
 from mcp.server.mcpserver import (
     AcceptedElicitation,
@@ -37,6 +40,9 @@ from openvave.mcp_server.writes import DRY_RUN_REMINDER, parse_preset_position
 from openvave.models import IMAGE_ACTIONS, Backup, PresetFile, SequencePlan, SequenceResult
 from openvave.protocol.storage import position as position_of
 from openvave.session import OnBackup, TankG
+
+PIN_SECONDS = 600.0
+"""How long a restore / import file read stays pinned for a call whose client never retries."""
 
 DECLINED = "the owner did not confirm; nothing was read from or sent to the pedal"
 
@@ -73,33 +79,89 @@ def proceeds(outcome: ElicitationResult[Confirm]) -> bool:
     return data is NOT_ASKED or (isinstance(data, Confirm) and data.confirm)
 
 
-def load_named_backup(folder: Path, name: str) -> Backup:
-    """The backup file ``name`` in ``folder``, checked as the CLI checks a restore file;
-    :class:`InvalidFile` otherwise (nothing connected yet)."""
-    from openvave.cli import UsageError, load_restore_file
+T = TypeVar("T")
 
+
+@dataclass(frozen=True)
+class Snapshot(Generic[T]):
+    """A file of the backup folder read once for one tool call (contracts/tools.md
+    §Elicitation): the owner is asked about these bytes (``fingerprint``) and the pedal is
+    written from them, so a file replaced while the question is open is never written under
+    the owner's answer. ``error`` holds the refusal (:class:`InvalidFile`) for the tool body."""
+
+    name: str
+    value: T | None = None
+    fingerprint: str = ""
+    error: Exception | None = None
+
+    def get(self) -> T:
+        if self.error is not None:
+            raise self.error
+        assert self.value is not None
+        return self.value
+
+
+def _read_named(folder: Path, name: str) -> tuple[bytes, str]:
+    """The bytes of ``name`` in ``folder`` and their fingerprint (first 12 hex digits of the
+    SHA-256); :class:`InvalidFile` for a name outside the folder or an unreadable file."""
     path = backups.resolve_backup_file(folder, name)
     try:
-        return load_restore_file(path)
-    except UsageError as err:
-        raise InvalidFile(str(err).replace(str(path), name)) from None
-
-
-def load_named_preset(folder: Path, name: str) -> PresetFile:
-    """The exported preset file ``name`` in ``folder``; :class:`InvalidFile` otherwise (a full
-    backup points to ``preset_restore``)."""
-    path = backups.resolve_backup_file(folder, name)
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        data = path.read_bytes()
     except OSError as err:
         raise InvalidFile(f"cannot read {name}: {err.strerror or err}") from None
+    return data, hashlib.sha256(data).hexdigest()[:12]
+
+
+def _json(data: bytes, name: str, kind: str) -> Any:
+    try:
+        return json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as err:
-        raise InvalidFile(f"{name} is not a JSON preset file ({err})") from None
+        raise InvalidFile(f"{name} is not a JSON {kind} file ({err})") from None
+
+
+def _parse_backup(data: bytes, name: str) -> Backup:
+    """The backup in ``data``, checked as the CLI checks a restore file (``restore_problems``,
+    then :meth:`Backup.from_document`); :class:`InvalidFile` naming every problem."""
+    from openvave.backup import restore_problems
+
+    document = _json(data, name, "backup")
+    problems = restore_problems(document)
+    if problems:
+        raise InvalidFile(f"{name} cannot be restored: " + "; ".join(problems))
+    try:
+        return Backup.from_document(document)
+    except (ValueError, OpenvaveError) as err:
+        raise InvalidFile(f"{name} cannot be restored: {err}") from None
+
+
+def _parse_preset(data: bytes, name: str) -> PresetFile:
+    """The exported preset in ``data``; :class:`InvalidFile` otherwise (a full backup points
+    to ``preset_restore``)."""
+    document = _json(data, name, "preset")
     try:
         return PresetFile.from_document(document)
     except ValueError as err:
         text = str(err).replace("preset restore FILE --slot POS", "preset_restore with slot")
         raise InvalidFile(f"{name} cannot be imported: {text}") from None
+
+
+def _snapshot(folder: Path, name: str, parse: Callable[[bytes, str], T]) -> Snapshot[T]:
+    try:
+        data, fingerprint = _read_named(folder, name)
+        return Snapshot(name, parse(data, name), fingerprint)
+    except Exception as err:  # noqa: BLE001 - raised again in the tool body, under tool_errors
+        return Snapshot(name, error=err)
+
+
+def load_named_backup(folder: Path, name: str) -> Backup:
+    """The backup file ``name`` in ``folder``, checked as the CLI checks a restore file;
+    :class:`InvalidFile` otherwise (nothing connected yet)."""
+    return _snapshot(folder, name, _parse_backup).get()
+
+
+def load_named_preset(folder: Path, name: str) -> PresetFile:
+    """The exported preset file ``name`` in ``folder``; :class:`InvalidFile` otherwise."""
+    return _snapshot(folder, name, _parse_preset).get()
 
 
 def two_slots(first: str | int, second: str | int, names: tuple[str, str]) -> tuple[int, int]:
@@ -164,24 +226,68 @@ def register_sequences(
             Confirm,
         )
 
+    # A read of a restore / import file, pinned until the call that read it ends. In the
+    # modern protocol the client answers the question in a retry of the tool call, and the
+    # resolvers run again: reusing the pinned read keeps the question identical, so the
+    # recorded answer (accept, decline or cancel) applies to the bytes it was given for, and a
+    # file replaced meanwhile is neither written nor asked about again. The tool body unpins;
+    # a call the client abandons expires after PIN_SECONDS.
+    pinned: dict[tuple[Any, ...], tuple[float, Snapshot[Any]]] = {}
+
+    def pin(key: tuple[Any, ...], read: Callable[[], Snapshot[T]]) -> Snapshot[T]:
+        now = time.monotonic()
+        for stale in [k for k, (at, _) in pinned.items() if now - at > PIN_SECONDS]:
+            pinned.pop(stale, None)
+        hit = pinned.get(key)
+        if hit is not None:
+            return hit[1]
+        snapshot = read()
+        if snapshot.error is None:
+            pinned[key] = (now, snapshot)
+        return snapshot
+
+    def backup_snapshot(
+        file: str,
+        slot: str | int | None,
+        all: bool,  # noqa: A002 - the tool argument's name
+    ) -> Snapshot[Backup]:
+        try:
+            restore_target(slot, all)
+        except ValueError as err:
+            return Snapshot(file, error=err)  # refused from the arguments: the file is not read
+        return pin(
+            ("restore", file, str(slot), all),
+            lambda: _snapshot(holder.options.backup_dir, file, _parse_backup),
+        )
+
+    def preset_snapshot(file: str, to: str | int) -> Snapshot[PresetFile]:
+        try:
+            parse_preset_position(to, "to")
+        except ValueError as err:
+            return Snapshot(file, error=err)  # refused from the arguments: the file is not read
+        return pin(
+            ("import", file, str(to)),
+            lambda: _snapshot(holder.options.backup_dir, file, _parse_preset),
+        )
+
     def ask_restore(
         ctx: Context,
-        file: str,
+        snapshot: Annotated[Snapshot[Backup], Resolve(backup_snapshot)],
         slot: str | int | None,
         all: bool,  # noqa: A002 - the tool argument's name
         unsafe: bool,
         dry_run: bool,
     ) -> Elicit[Confirm] | _NotAsked:
-        if not unsafe or dry_run or not can_elicit(ctx):
-            return NOT_ASKED
+        if not unsafe or dry_run or not can_elicit(ctx) or snapshot.error is not None:
+            return NOT_ASKED  # an invalid file: the tool body refuses it
         try:
             index = restore_target(slot, all)
-            load_named_backup(holder.options.backup_dir, file)
         except ValueError:
             return NOT_ASKED  # the tool body refuses it
         what = "all 36 stored presets" if index is None else f"stored preset {position_of(index)}"
         return Elicit(
-            f"Overwrite {what} with the backup file {file}? "
+            f"Overwrite {what} with the backup file {snapshot.name} "
+            f"(fingerprint {snapshot.fingerprint})? "
             f"A full backup is written to {folder_text} first.",
             Confirm,
         )
@@ -296,6 +402,7 @@ def register_sequences(
     @server.tool(annotations=annotations("preset_restore"))
     async def preset_restore(
         confirmation: Annotated[ElicitationResult[Confirm], Resolve(ask_restore)],
+        snapshot: Annotated[Snapshot[Backup], Resolve(backup_snapshot)],
         file: str,
         slot: str | int | None = None,
         all: bool = False,  # noqa: A002 - the contract's argument name
@@ -311,9 +418,10 @@ def register_sequences(
         directly). A full backup is written to the backup folder first. Unsaved edits to the
         current sound need discard_edits (the final select discards them); a file from another
         firmware needs experimental. dry_run: plan only, nothing sent."""
+        pinned.pop(("restore", file, str(slot), all), None)  # this call ends here or runs
         with tool_errors(record):
             index = restore_target(slot, all)
-            backup = load_named_backup(holder.options.backup_dir, file)
+            backup = snapshot.get()  # the bytes the owner was asked about, read once
             if not proceeds(confirmation):
                 raise Declined(DECLINED)
         everything = all
@@ -371,17 +479,21 @@ def register_sequences(
         )
 
     def ask_import(
-        ctx: Context, file: str, to: str | int, unsafe: bool, dry_run: bool
+        ctx: Context,
+        snapshot: Annotated[Snapshot[PresetFile], Resolve(preset_snapshot)],
+        to: str | int,
+        unsafe: bool,
+        dry_run: bool,
     ) -> Elicit[Confirm] | _NotAsked:
-        if not unsafe or dry_run or not can_elicit(ctx):
+        if not unsafe or dry_run or not can_elicit(ctx) or snapshot.error is not None:
             return NOT_ASKED
         try:
             index = parse_preset_position(to, "to")
-            load_named_preset(holder.options.backup_dir, file)
         except ValueError:
             return NOT_ASKED
         return Elicit(
-            f"Overwrite stored preset {position_of(index)} with the preset file {file}? "
+            f"Overwrite stored preset {position_of(index)} with the preset file {snapshot.name} "
+            f"(fingerprint {snapshot.fingerprint})? "
             f"A full backup is written to {folder_text} first.",
             Confirm,
         )
@@ -461,6 +573,7 @@ def register_sequences(
     @server.tool(annotations=annotations("preset_import"))
     async def preset_import(
         confirmation: Annotated[ElicitationResult[Confirm], Resolve(ask_import)],
+        snapshot: Annotated[Snapshot[PresetFile], Resolve(preset_snapshot)],
         file: str,
         to: str | int,
         dry_run: bool = False,
@@ -473,9 +586,10 @@ def register_sequences(
         on it. PERSISTENT: overwrites that stored preset. Needs unsafe: true (ask the owner
         first). A full backup is written to the backup folder first. A file from another
         firmware needs experimental; unsaved edits need discard_edits. dry_run: plan only."""
+        pinned.pop(("import", file, str(to)), None)  # this call ends here or runs
         with tool_errors(record):
             index = parse_preset_position(to, "to")
-            preset = load_named_preset(holder.options.backup_dir, file)
+            preset = snapshot.get()  # the bytes the owner was asked about, read once
             if not proceeds(confirmation):
                 raise Declined(DECLINED)
         return await sequence(
@@ -499,6 +613,7 @@ def register_sequences(
 __all__ = [
     "NOT_ASKED",
     "Confirm",
+    "Snapshot",
     "can_elicit",
     "load_named_backup",
     "load_named_preset",

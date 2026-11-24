@@ -58,7 +58,9 @@ Phone app closed, pedal on. In a conversation:
 3. Three more reads in a row → no new scan (stderr log of the server shows one connection).
 4. "Aumenta o gain para 80" with `dry_run` first, then for real → `pedal_set` applied; hear it.
    Then `preset_reload` → the stored sound is back.
-5. "Liga o delay" without `experimental` → refused `experimental_required`, nothing sent.
+5. `preset_save` to 1C without `unsafe` → refused `unsafe_required`, nothing sent, no backup.
+   (Before spec 007 this step turned the delay on without `experimental`; since spec 007 every
+   fw 96 write is confirmed, so that no longer refuses.)
 6. `pedal_disconnect` → open the phone app: it connects. Close it; ask for the info again → the
    server reconnects.
 7. Switch the pedal off between two calls → the next call returns `no_device_found` (or reconnects

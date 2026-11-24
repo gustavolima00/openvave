@@ -87,6 +87,23 @@ These cannot be encoded at all, by any command or library call:
 Only the handshake query, region reads and writes to a closed list of targets can be built; any
 other request raises `UnsafeCommandError`.
 
+## From an AI assistant (MCP)
+
+[`openvave mcp`](mcp.md) gives an assistant the same operations, under the same rules:
+
+| | Command line | MCP server |
+|---|---|---|
+| Opt-ins | `--dry-run`, `--experimental`, `--discard-edits`, `--unsafe` | the same, as arguments of each tool call (`dry_run`, `experimental`, `discard_edits`, `unsafe`); nothing is remembered between calls |
+| Stored presets | `save`, `restore`, `copy`, `swap`, `import` with `--unsafe` | `preset_save`, `preset_restore`, `preset_copy`, `preset_swap`, `preset_import` with `unsafe: true`, marked destructive |
+| Automatic backup | before the first persistent write; failure stops | the same, into the backup folder |
+| Confirmation | none (the flag is the confirmation) | with `unsafe`, assistants that support MCP elicitation ask you first; *no* sends nothing |
+| Restore source | any file | only files in the backup folder, by name |
+| No writes at all | — | `openvave mcp --read-only` lists no write tool |
+
+The server tells the assistant to ask you before passing `unsafe` or `discard_edits`. It sends
+nothing the command line cannot send, never resends after a lost connection, and never saves on
+its own after a `pedal_set`.
+
 ## Your part
 
 - Take a backup (`openvave preset backup`) before writing, and keep it.

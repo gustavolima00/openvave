@@ -2,23 +2,19 @@
 
 0.5.0 finds, chooses and keeps a connection to Tank-G pedals. Its section must name the new
 commands, the two environment variables, the new library names, the "no fallback" rule and the
-unchanged JSON ``schema_version``; the version printed by ``openvave --version`` must match it.
+unchanged JSON ``schema_version``. The package version moved on with 0.6.0
+(``test_changelog_060.py``).
 """
 
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
 
-import openvave
-from openvave.cli import main
-
 ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = ROOT / "CHANGELOG.md"
-PYPROJECT = ROOT / "pyproject.toml"
 
 VERSION = "0.5.0"
 
@@ -94,14 +90,3 @@ def test_release_is_not_left_under_unreleased() -> None:
     unreleased = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", text, re.S | re.M)
     assert unreleased is not None
     assert "openvave scan" not in unreleased.group(1), "0.5.0 left unreleased"
-
-
-def test_versions_agree() -> None:
-    assert openvave.__version__ == VERSION
-    with PYPROJECT.open("rb") as fh:
-        assert tomllib.load(fh)["project"]["version"] == VERSION
-
-
-def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["--version"]) == 0
-    assert VERSION in capsys.readouterr().out
