@@ -400,18 +400,64 @@ folder, and the owner's confirmation through elicitation where supported.
 - [X] T059 `CHANGELOG.md` [0.6.0] from the milestone entries; version 0.6.0 in `pyproject.toml`
   and `src/openvave/__init__.py`; `tests/contract/test_changelog_060.py`
 - [X] T060 Suite, ruff, mypy green
-- [ ] T061 Owner: quickstart §3 steps 1–9 in their own assistant and terminal (fw 96)
-- [ ] T062 Owner (optional): step 10 (no-op save; elicitation decline)
-- [ ] T063 Record the results under "Hardware check" below (client and version, firmware, macOS)
-- [ ] T064 Fix regressions found by the gate (each with a test)
-- [ ] T065 Review SC-001…SC-007 against the results
-- [ ] T066 Report to the owner; no push to `main` or release unless asked
+- [X] T061 Owner: quickstart §3 steps 1–9 in their own assistant and terminal (fw 96)
+- [ ] T062 Owner (optional): step 10 (no-op save; elicitation decline) — not run in this gate;
+  the owner checked saving in a separate test of their own (see Hardware check)
+- [X] T063 Record the results under "Hardware check" below (client and version, firmware, macOS)
+- [X] T064 Fix regressions found by the gate (each with a test): the gate found none. Fixed
+  before it, each with a test: Codex's review of 0475c9e ([P1] restore writes the confirmed
+  snapshot, also for import; [P2] backups published without replacing) and the PR #6 Codex
+  rounds 1–3 (CLI backup retry, no-link folders, dangling names, slot checks before reading,
+  the owner's answer final across the modern-protocol retry, link errors keep their reason)
+- [X] T065 Review SC-001…SC-007 against the results (below)
+- [X] T066 Report to the owner (PR #6, through the orchestrator); no push to `main`, no tag or
+  release
 
-**Checkpoint**: Milestone 4 DONE
+**Checkpoint**: Milestone 4 DONE ✅
 
 ### Hardware check
 
-(to be filled in at T063)
+Owner's run of quickstart §3, 2026-11-24, code of PR #6 at b45c0eb / 6c449b8 (server started
+from the branch with `claude mcp add openvave-m4 -- uv run --directory <worktree> --extra mcp
+openvave mcp --backup-dir captures/private`). Client **Claude Code 2.1.331**, started from
+Terminal; **macOS 26.5.2**; pedal firmware **96**.
+
+| Step | What | Result |
+|---|---|---|
+| 1 | `pedal_info` (fw 96, state, loaded preset), then `pedal_status` `connected: true` | pass |
+| 2 | `preset_read` vs `openvave preset dump --json` after `pedal_disconnect` | pass |
+| 3 | three more reads on one connection (`pedal_status.since` unchanged) | pass |
+| 4 | `pedal_set gain=80` with `dry_run`, then for real (heard), then `preset_reload` | pass |
+| 5 | `preset_save` without `unsafe` → `unsafe_required`, nothing sent (replaces the old "delay without `experimental`" check: since spec 007 no fw 96 write needs `experimental`) | pass |
+| 6 | `pedal_disconnect` → the phone app connects; after closing it, the server reconnects | pass |
+| 7 | pedal off between calls → error, server still answering; on again → next call works | pass |
+| 8 | `--idle-release 30` → the phone app connects without closing the assistant | pass |
+| 9 | `preset_backup` into `captures/private`; `backups_list` shows it `restorable` | pass |
+| 10 | optional no-op save and elicitation decline | **not run** in this gate; the owner checked saving through the server in a separate test of their own; an elicitation dialog was not observed |
+
+The owner's summary: "rodei o teste manual, e funcionou". No regression found (T064). Nothing in
+this gate wrote stored presets.
+
+**SC review (T065)**:
+
+- SC-001 (docs to "what preset is loaded?" in < 10 min): partly evidenced. The owner configured
+  Claude Code with one `claude mcp add` line (the form `docs/mcp.md` gives) and step 1 passed; the
+  time and a fresh install from the docs alone were not measured. Claude Desktop not tried.
+- SC-002 (reads reuse one connection): pass. Steps 1–3 on hardware; `test_holder.py` (N calls = 1
+  open + 1 handshake).
+- SC-003 (no stored change without `unsafe`, nothing unconfirmed without `experimental`): pass.
+  Step 5 on hardware; `test_gates.py` covers every write tool × opt-ins × states.
+- SC-004 (annotations, previews): pass. `test_annotations.py` against the contract table; every
+  write tool's `dry_run` sends nothing (`test_write_tools.py`, `test_save_restore.py`,
+  `test_preset_ops.py`); step 4's dry run on hardware.
+- SC-005 (recovery after a lost link, server never exits on a pedal error): pass. Step 7 on
+  hardware; `test_holder.py`, `test_errors.py`.
+- SC-006 (phone app after disconnect or idle release, without restarting the assistant): pass.
+  Steps 6 and 8 on hardware.
+- SC-007 (server values equal the CLI's JSON): pass. Step 2 on hardware; parity tests in
+  `test_read_tools.py`, `test_write_tools.py`, `test_save_restore.py`, `test_preset_ops.py`.
+- Not covered by this gate: the elicitation dialog in a real client (tested in-process in both
+  protocol modes, `test_elicitation.py`), Claude Desktop, Linux / Windows hardware.
 
 ---
 

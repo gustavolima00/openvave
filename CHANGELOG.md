@@ -178,7 +178,14 @@ directory. No new pedal message; JSON only gains keys and `schema_version` stays
 - Hardware-free: `tests/mcp/` drives the server in-process (both protocol modes) against
   `FakeTransport` captures; every tool's frames and document equal the matching command's
   `--json` run on an identical fake, and a stdio smoke test spawns `python -m openvave mcp`.
-- Owner's gate on fw 96 (quickstart §3 of `specs/006-mcp-server/`): pending.
+- On the owner's pedal (fw 96, macOS 26.5.2, Claude Code 2.1.331, 2026-11-24): quickstart §3
+  of `specs/006-mcp-server/` steps 1–9 pass: info and status, `preset_read` equal to
+  `preset dump --json`, several reads on one connection, `pedal_set` with and without `dry_run`
+  then `preset_reload`, `preset_save` refused without `unsafe`, `pedal_disconnect` and the idle
+  release letting the phone app connect, recovery after switching the pedal off, and
+  `preset_backup` / `backups_list`. Not run in that gate: the optional save and elicitation
+  step (the owner checked saving separately; no elicitation dialog observed). Details under
+  "Hardware check" in Milestone 4 of `specs/006-mcp-server/tasks.md`.
 
 ## [0.5.0]
 
