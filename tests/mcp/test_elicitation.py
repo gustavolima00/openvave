@@ -166,3 +166,90 @@ async def test_the_confirmation_is_not_a_tool_argument(tmp_path) -> None:
     restore = listed["preset_restore"].input_schema
     assert "confirmation" not in restore["properties"]
     assert restore.get("required") == ["file"]
+
+
+class ReplacingOwner(Owner):
+    """Accepts, but the first time it is asked the restore file is replaced by another valid
+    backup while the question is open (spec 006 T064, Codex review of 0475c9e [P1])."""
+
+    def __init__(self, path: Path, replacement: dict[str, Any]) -> None:
+        super().__init__("accept", True)
+        self.path = path
+        self.replacement = replacement
+
+    async def __call__(self, context: Any, params: types.ElicitRequestParams) -> types.ElicitResult:
+        if not self.messages:
+            self.path.write_text(json.dumps(self.replacement), encoding="utf-8")
+        return await super().__call__(context, params)
+
+
+def preset_document(data: bytes) -> dict[str, Any]:
+    from datetime import UTC, datetime
+
+    from openvave import PresetFile
+
+    return PresetFile(
+        identity=rf.identity(),
+        created_at=datetime(2026, 11, 19, 12, 0, tzinfo=UTC),
+        source_index=4,
+        data=data,
+    ).to_document()
+
+
+def fingerprint(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_restore_writes_the_backup_the_owner_was_asked_about(tmp_path, mode) -> None:
+    from openvave import Backup
+
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    first = rf.document()
+    source.write_text(json.dumps(first), encoding="utf-8")
+    first_bytes = source.read_bytes()
+    second = rf.document(rf.image_with(s5=GAIN_90))
+    owner = ReplacingOwner(source, second)
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        await h.ok("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+        after = await h.ok("preset_backup")
+    stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
+    assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
+    if len(owner.messages) == 1:
+        # Asked once (legacy: the question is sent mid-call): the snapshot that was asked about
+        # is written, not the file that replaced it.
+        assert stored.image == Backup.from_document(first).image
+    else:
+        # Asked again (modern mode re-reads the file on the retry): the new question names the
+        # new bytes, and only what the owner accepted last is written.
+        assert len(owner.messages) == 2
+        assert f"(fingerprint {fingerprint(source.read_bytes())})" in owner.messages[1]
+        assert stored.image == Backup.from_document(second).image
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_import_writes_the_preset_file_the_owner_was_asked_about(tmp_path, mode) -> None:
+    from openvave import Backup
+
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "tone.json"
+    first = preset_document(GAIN_90)
+    source.write_text(json.dumps(first), encoding="utf-8")
+    first_bytes = source.read_bytes()
+    other = P[:7] + bytes([33]) + P[8:]
+    second = preset_document(other)
+    owner = ReplacingOwner(source, second)
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        await h.ok("preset_import", {"file": "tone.json", "to": "2C", "unsafe": True})
+        after = await h.ok("preset_backup")
+    stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
+    slot = stored.image[2 + 21 * 6 : 23 + 21 * 6]
+    assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
+    assert slot == (GAIN_90 if len(owner.messages) == 1 else other)

@@ -320,8 +320,13 @@ def build_server(holder: PedalHolder) -> MCPServer:
                 exported = await pedal.export_preset(index)
             document = exported.to_document()
             where = position_of(index)
-            path = backups.preset_file_path(folder, where, datetime.now())
-            files.write_json_atomic(path, document, force=False)
+            while True:
+                path = backups.preset_file_path(folder, where, datetime.now())
+                try:
+                    files.write_json_atomic(path, document, force=False)
+                except files.TargetExistsError:
+                    continue  # taken between the check and the write: next name
+                break
         return {
             "summary": f"exported {where}: {document['raw']}; saved {path.name}",
             "path": str(path),

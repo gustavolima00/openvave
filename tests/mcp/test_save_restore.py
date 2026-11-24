@@ -348,3 +348,39 @@ async def test_failure_mid_sequence_carries_the_partial_document_and_the_backup(
     assert document["command"] == "preset save"
     assert document["backup_saved_to"] == str(saved)
     assert [s["status"] for s in document["result"]["steps"]][:3] == ["acked", "waited", "nak"]
+
+
+async def test_automatic_backup_never_replaces_a_file_published_after_the_check(
+    tmp_path, monkeypatch
+) -> None:
+    """Two servers sharing the folder in the same second (spec 006 T064, Codex review of
+    0475c9e [P2]): the name chosen here is published by the other server before this one writes
+    it, so this backup goes to the next name and the other recovery snapshot stays intact."""
+    from openvave.cli import files
+
+    folder = backup_folder(tmp_path)
+    folder.mkdir()
+    taken = folder / "tankg-backup-20261124-120000-before-save.json"
+    real_path, real_check = files.automatic_backup_path, files.check_target
+    names = iter([taken])
+
+    def racing_path(directory: Path, action: str, when: Any) -> Path:
+        return next(names, None) or real_path(directory, action, when)
+
+    def racing_check(path: Path, *, force: bool) -> None:
+        if path == taken:
+            # Every check finds nothing; the other server publishes the name right after.
+            if not taken.exists():
+                taken.write_text("the other server's backup", encoding="utf-8")
+            return
+        real_check(path, force=force)
+
+    monkeypatch.setattr(files, "automatic_backup_path", racing_path)
+    monkeypatch.setattr(files, "check_target", racing_check)
+    factory = CountingFactory(make=edited_fake)
+    async with open_harness(options(tmp_path), factory) as h:
+        result = await h.ok("preset_save", {"to": "1C", "unsafe": True})
+    assert taken.read_text(encoding="utf-8") == "the other server's backup"
+    assert result["backup_saved_to"] != str(taken)
+    assert Path(result["backup_saved_to"]).parent == folder
+    assert len(writes(factory.fake)) == 3

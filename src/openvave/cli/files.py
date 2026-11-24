@@ -23,10 +23,13 @@ def check_target(path: Path, *, force: bool) -> None:
 
 
 def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> None:
-    """Write ``document`` to ``path`` via a temp file in the same directory and ``os.replace``.
+    """Write ``document`` to ``path`` via a temp file in the same directory.
 
-    An interrupted write leaves neither a partial ``path`` nor the temp file; an existing file is
-    only replaced once the new content is complete.
+    An interrupted write leaves neither a partial ``path`` nor the temp file. With ``force`` an
+    existing file is only replaced (``os.replace``) once the new content is complete. Without it
+    the complete file is published with a hard link, which fails if ``path`` exists by then, so
+    two writers racing for one name never replace each other's file: the loser gets
+    :class:`TargetExistsError` (and may pick another name).
     """
     check_target(path, force=force)
     directory = path.parent if str(path.parent) else Path(".")
@@ -37,11 +40,44 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
             fh.write("\n")
             fh.flush()
             os.fsync(fh.fileno())
-        check_target(path, force=force)
-        os.replace(temp, path)
+        if force:
+            os.replace(temp, path)
+        else:
+            _publish_new(temp, path)
     except BaseException:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp)
+        raise
+
+
+def _publish_new(temp: str, path: Path) -> None:
+    """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist (atomic).
+
+    A hard link is the atomic no-replace rename on POSIX and NTFS; where links are not
+    supported (FAT, some network shares) the file is created exclusively and written in place,
+    which still never replaces another file."""
+    try:
+        os.link(temp, path)
+    except FileExistsError:
+        raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
+    except OSError:
+        _write_exclusive(path, Path(temp).read_text(encoding="utf-8"))
+    os.unlink(temp)
+
+
+def _write_exclusive(path: Path, text: str) -> None:
+    try:
+        fh = open(path, "x", encoding="utf-8")  # noqa: SIM115 - removed below on failure
+    except FileExistsError:
+        raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
+    try:
+        with fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
         raise
 
 

@@ -130,6 +130,18 @@ All notable changes to this project are documented here. The format follows
   `--backup-dir DIR` is unchanged. `openvave mcp` uses the same folder (and honours
   `OPENVAVE_BACKUP_DIR` too).
 
+### Fixed
+
+- `preset_restore` and `preset_import` in `openvave mcp` read the file once per call and write
+  exactly what the owner was asked about: the confirmation names the file's fingerprint (the
+  first 12 hex digits of its SHA-256), and a file replaced while the question is open is not
+  written under that answer (a client that asks again sees the new fingerprint).
+- Backup and export files are published without replacing an existing file even when two
+  writers pick the same name at the same moment (two servers sharing one backup folder): the
+  second one takes the next name (`-1`, `-2` …) instead of replacing the first recovery
+  snapshot. The command line's `preset backup --output` without `--force` gains the same
+  guarantee.
+
 ### Documentation
 
 - The manual's PRESET and LIVE modes are openvave's `normal` and `edit`.
