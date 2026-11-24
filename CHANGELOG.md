@@ -155,8 +155,8 @@ directory. No new pedal message; JSON only gains keys and `schema_version` stays
 - Backup and export files are published without replacing an existing file even when two
   writers pick the same name at the same moment (two servers sharing one backup folder): the
   second one takes the next name (`-1`, `-2` …) instead of replacing the first recovery
-  snapshot. The command line's `preset backup --output` without `--force` gains the same
-  guarantee.
+  snapshot. The command line's automatic backups do the same, and `preset backup --output`
+  without `--force` refuses a name taken in that moment instead of replacing it.
 
 ### Documentation
 

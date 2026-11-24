@@ -351,3 +351,33 @@ def test_backup_without_backup_dir_goes_to_the_data_dir(
     [saved] = backups(target)
     assert f"Backup saved: {saved}" in out
     assert list(tmp_path.glob("tankg-backup-*")) == []
+
+
+def test_automatic_backup_name_taken_after_the_check_moves_to_the_next_name(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another process publishes the generated name between the check and the write (spec 006
+    T064, Codex round 1): the backup takes the next name and the save goes ahead."""
+    taken = tmp_path / "tankg-backup-20261124-120000-before-save.json"
+    real_path, real_check = files.automatic_backup_path, files.check_target
+    names = iter([taken])
+
+    def racing_path(directory: Path, action: str, when: datetime) -> Path:
+        return next(names, None) or real_path(directory, action, when)
+
+    def racing_check(path: Path, *, force: bool) -> None:
+        if path == taken:
+            if not taken.exists():
+                taken.write_text("another process's backup", encoding="utf-8")
+            return
+        real_check(path, force=force)
+
+    monkeypatch.setattr(files, "automatic_backup_path", racing_path)
+    monkeypatch.setattr(files, "check_target", racing_check)
+    fake = edited_fake()
+    code, out, err = run(capsys, ["--to", "1C", *UNSAFE_OPTS], fake, tmp_path)
+    assert code == 0, err
+    assert taken.read_text(encoding="utf-8") == "another process's backup"
+    others = [p for p in backups(tmp_path) if p != taken]
+    assert len(others) == 1 and f"Backup saved: {others[0]}" in out
+    assert [f.hex(" ") for f in writes(fake)] == [SLOT_1C, COMMIT, SELECT_1C]

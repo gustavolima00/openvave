@@ -51,34 +51,27 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
 
 
 def _publish_new(temp: str, path: Path) -> None:
-    """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist (atomic).
+    """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist.
 
-    A hard link is the atomic no-replace rename on POSIX and NTFS; where links are not
-    supported (FAT, some network shares) the file is created exclusively and written in place,
-    which still never replaces another file."""
+    A hard link is the atomic no-replace rename on POSIX and NTFS. Where links are not
+    supported (FAT, some network shares), Windows' ``os.rename`` still refuses an existing
+    name atomically; elsewhere the last check and ``os.replace`` are used, as before, so only
+    complete files ever appear under ``path``."""
     try:
         os.link(temp, path)
     except FileExistsError:
         raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
     except OSError:
-        _write_exclusive(path, Path(temp).read_text(encoding="utf-8"))
+        if sys.platform == "win32":
+            try:
+                os.rename(temp, path)
+            except FileExistsError:
+                raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
+            return
+        check_target(path, force=False)
+        os.replace(temp, path)
+        return
     os.unlink(temp)
-
-
-def _write_exclusive(path: Path, text: str) -> None:
-    try:
-        fh = open(path, "x", encoding="utf-8")  # noqa: SIM115 - removed below on failure
-    except FileExistsError:
-        raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
-    try:
-        with fh:
-            fh.write(text)
-            fh.flush()
-            os.fsync(fh.fileno())
-    except BaseException:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(path)
-        raise
 
 
 def default_backup_dir() -> Path:
