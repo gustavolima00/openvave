@@ -126,7 +126,9 @@ everything every story needs.
 - [X] Allowlist: all 256 command bytes tested; only `0x11`/`0x23` encode, the rest raise
   `UnsafeCommandError`. SC-004 audit verified to fail the session on a `0x22` write
   (temporary test, removed).
-- [ ] CI green on all 6 matrix jobs — pending: branch not pushed yet.
+- [X] CI green on all 6 matrix jobs — pending: branch not pushed yet.
+  - Closed 2026-11-24: the first pushed run, PR #1 (Actions run 43971347862, 2026-11-16), passed
+    all 6 jobs (Linux, macOS, Windows × Python 3.11, 3.13) on a tree that contains this milestone.
 - [ ] Reviewer confirms the R7 sanitization decision (no MAC match → bytes unchanged) in
   `captures/README.md` — pending review.
 
@@ -182,7 +184,8 @@ Run on macOS with a fw-96 pedal, phone app disconnected:
   / exit 7 (`test_two_drops_then_success`, `test_three_drops_handshake_error`,
   `test_handshake_error_exit_7`); `info --json` has `schema_version: 1` + identity, and on
   failure stdout is empty with the contract exit code (`test_injected_errors`).
-- [ ] T035/T036 on hardware — **blocked in the agent session**: launched from the Claude
+- [X] T035/T036 on hardware — **blocked in the agent session** (superseded: run from the
+  owner's shell the same day, results in the hardware items below): launched from the Claude
   desktop app, `uv run openvave --trace info` is killed by macOS TCC (SIGABRT, exit 134,
   "attempted to access privacy-sensitive data without a usage description …
   NSBluetoothAlwaysUsageDescription") because the responsible app has no Bluetooth usage string.

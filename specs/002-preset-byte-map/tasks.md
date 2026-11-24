@@ -102,8 +102,9 @@ and `info` render decoded fields from it, with additive JSON.
   - Evidence (2026-11-16): pytest 539 passed, 3 skipped (hardware); ruff check clean; 67 files formatted; mypy strict: no issues in 18 source files. Tests T001–T005 were run first and failed (3 collection errors + 19 failures) before T006–T013
 - [X] T015 Run quickstart §2 (offline decode) and paste the output in the PR
   - Evidence: `[('knob_unknown', '60', 'observed'), ('reverb_decay', '5', 'observed'), ('reverb_mix', '4', 'hypothesis'), ('ir_cab', '#7', 'hypothesis')]`
-- [ ] T016 Owner, hardware (optional for this gate): `uv run openvave preset dump` shows the decoded lines with the same values as the hex; record in the PR
+- [X] T016 Owner, hardware (optional for this gate): `uv run openvave preset dump` shows the decoded lines with the same values as the hex; record in the PR
   - Not run: needs the pedal owner's terminal (Bluetooth permission). The same render path is covered over the fw96 capture by `tests/contract/test_cli_preset_dump.py::test_human_block`
+  - Closed 2026-11-24 with later evidence: spec 003 T050 (2026-11-17, fw 96, owner's terminal) ran `preset dump` on hardware and it showed gain 60 (hex `3c`) with the buffer equal to the public 1B bytes; spec 004 T022 (2026-11-17) read MOD FX and DLY MIX positions with `preset dump` (`captures/fw96/20261117-knob-types-app.jsonl`)
 
 **Checkpoint**: Milestone 0 DONE ✅ (2026-11-16; optional hardware check T016 left to the owner)
 
@@ -264,8 +265,9 @@ promoted to `confirmed`.
 
 - [X] T055 [US2] Run the full suite, ruff, format and mypy. Check SC-002 (26 rows, none missing) and SC-008 (≥ 5 presets compared, differing bytes covered); list them in the PR
   - Evidence: 26 rows, none missing (SC-002, test-enforced); 10 presets compared, every differing byte named or noted (SC-008, test-enforced)
-- [ ] T056 [US4] Owner: `uv run openvave info` on two different presets shows the decoded status value matching the selected preset (if mapped); record in the PR
+- [X] T056 [US4] Owner: `uv run openvave info` on two different presets shows the decoded status value matching the selected preset (if mapped); record in the PR
   - Not applicable as written: the status byte does not follow the selected preset. `info` shows bank and slot instead (global 1–2)
+  - Superseded (2026-11-24): the status byte is the loopback flag (spec 004 T074, named `loopback` in spec 007 Milestone 2), so there is nothing per preset to check
 
 **Checkpoint**: Milestone 3 DONE ✅ (2026-11-16; T056 not applicable: the status byte does not follow the preset)
 
@@ -307,6 +309,7 @@ promoted to `confirmed`.
   - Evidence (2026-11-16): §1 pytest 741 passed, 4 skipped (hardware); ruff check clean; 79 files formatted; mypy strict: no issues in 19 source files. §2: 18 fields, all `confirmed`, `gain 60`, `reverb_decay 5`, `reverb_mix 4`, `ir_cab #7` (quickstart expectation updated). §3/§4 over the fw96 capture through the real CLI (fake transport): `preset dump --json` and `info --json` have `schema_version` 2 and `gain`/`mode` (`mode` displays `normal`); `watch --json --duration 1 --no-record < /dev/null` → `start`, `stop` reason `duration`, exit 0; `openvave --version` → 0.2.0; README library snippet runs. §5/§6 are enforced by the fixture-pair, bytemap and doc tests (SC-001–SC-004, SC-008). §3/§4 on hardware: not run in this session (owner)
 - [ ] T065 [US3] Owner: SC-005. Set every `observed`/`confirmed` continuous knob to min, then max, in edit mode; `uv run openvave preset dump` shows the range ends. Record in the PR
   - Not run in this session: needs the owner at the pedal. Prior evidence: session 19:17 (T046) swept all 12 continuous knobs alone to `0` and `127`, decoded by the same `decode_region` path `preset dump` uses, and the fixture-pair test asserts those exact extremes
+  - Still open (2026-11-24): later hardware sessions ran `preset dump` at range ends only for MOD FX and DLY MIX (raw 0 and 127, spec 004 T022); the other ten knobs were not dumped at both ends
 - [X] T066 [US3] SC-007 review: someone who did not write the decoder decodes `01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43` using only `specs/protocol/command-layer.md`, and the result matches `preset dump` on the fw96 capture; record in the PR
   - Evidence (2026-11-16): a separate agent that never opened `src/` or `tests/` decoded the preset buffer from `command-layer.md` alone. All 21 preset bytes matched `preset dump` on the fw96 capture: 18 named values (`amp_on` on … `ir_cab` 7) and 18–20 unknown. Global: bank, browsed bank and mode matched. It misread slot as `0`; the doc says `fw96: 0x01`, as `info` shows. Gap it found: the doc gave no display rules, so selectors appeared as `4`/`7` instead of `#4`/`#7`. Fixed by adding a "Decoding a byte" list (display per encoding, out of range, unknown) under the column legend
 
