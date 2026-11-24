@@ -397,7 +397,7 @@ folder, and the owner's confirmation through elicitation where supported.
   `--read-only`, elicitation), `docs/cli-reference.md` (`openvave mcp`)
 - [X] T058 Merge `origin/main` (no rebase: a merge, so the open PR's history stays intact); `README.md`: short "AI assistants (MCP)" section linking
   `docs/mcp.md`
-- [ ] T059 `CHANGELOG.md` [0.6.0] from the milestone entries; version 0.6.0 in `pyproject.toml`
+- [X] T059 `CHANGELOG.md` [0.6.0] from the milestone entries; version 0.6.0 in `pyproject.toml`
   and `src/openvave/__init__.py`; `tests/contract/test_changelog_060.py`
 - [ ] T060 Suite, ruff, mypy green
 - [ ] T061 Owner: quickstart §3 steps 1–9 in their own assistant and terminal (fw 96)

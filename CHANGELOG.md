@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0]
+
+AI assistants and preset management. `openvave mcp` runs a Model Context Protocol server, so an
+assistant such as Claude Code or Claude Desktop can do everything the command line does with a
+Tank-G: read the pedal, change the current sound, select, bypass, back up, and (with
+`unsafe: true`, an automatic backup first and, where the client supports elicitation, the
+owner's confirmation) save, restore, copy, swap and import presets. It holds one connection
+between tool calls and releases it after `--idle-release` seconds or on `pedal_disconnect`, so
+the phone app can connect; `--read-only` offers no write tool. It needs the optional extra
+`openvave[mcp]`; `pip install openvave` is unchanged. Spec 007 adds `preset copy`, `swap`,
+`export` and `import` to the command line and the library, names every byte of the preset and
+status regions on firmware 96, and confirms every write openvave can send on fw 96. The
+automatic backups of the persistent commands now go to a per-user folder instead of the current
+directory. No new pedal message; JSON only gains keys and `schema_version` stays 2. Guide:
+[docs/mcp.md](docs/mcp.md).
+
 ### Added (spec 006 milestone 0): `openvave mcp`, an MCP server for AI assistants
 
 - `openvave mcp [--device ID|NICKNAME] [--read-only] [--backup-dir DIR] [--idle-release SECONDS]`
@@ -86,15 +102,22 @@ All notable changes to this project are documented here. The format follows
   without elicitation are not asked, as the command line is not.
 - `--read-only` also hides `preset_save` and `preset_restore`; their annotations mark them
   destructive and not idempotent.
-### Changed
+
+### Changed (spec 007): every write confirmed on fw 96; the backup folder
 
 - **Block switches, LED colour and loopback are `confirmed`** on firmware 96 (spec 007 gate
   session C, 2026-11-19, a second independent session after spec 003/004 session A):
   `set amp_on|mod_on|delay_on|reverb_on`, `set led_colour` and `loopback on|off` no longer need
   `--experimental`. Every write openvave can send is now `confirmed` on fw 96; other firmware still
   needs `--experimental`. New evidence: `captures/fw96/20261119-gate-*_c.jsonl`.
+- `preset save` and `preset restore` without `--backup-dir` now write their automatic backup to
+  `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
+  on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current
+  directory, which was often a git working tree. The `Backup saved:` line gives the path as before;
+  `--backup-dir DIR` is unchanged. `openvave mcp` uses the same folder (and honours
+  `OPENVAVE_BACKUP_DIR` too).
 
-### Added
+### Added (spec 007): every byte named, preset management
 
 - **Every byte is named on firmware 96** (spec 007): preset bytes 18–20 are `led_red`,
   `led_green`, `led_blue` (0–255, the preset's footswitch LED colour; `preset dump` and `info` add
@@ -123,13 +146,6 @@ All notable changes to this project are documented here. The format follows
 - Documented: the MASTER knob is not reported over Bluetooth (no byte moved while it was turned,
   observed).
 
-- `preset save` and `preset restore` without `--backup-dir` now write their automatic backup to
-  `$OPENVAVE_BACKUP_DIR`, else `$XDG_DATA_HOME/openvave/backups`, `%LOCALAPPDATA%\openvave\backups`
-  on Windows, or `~/.local/share/openvave/backups` (created if missing), instead of the current
-  directory, which was often a git working tree. The `Backup saved:` line gives the path as before;
-  `--backup-dir DIR` is unchanged. `openvave mcp` uses the same folder (and honours
-  `OPENVAVE_BACKUP_DIR` too).
-
 ### Fixed
 
 - `preset_restore` and `preset_import` in `openvave mcp` read the file once per call and write
@@ -147,6 +163,18 @@ All notable changes to this project are documented here. The format follows
 - The manual's PRESET and LIVE modes are openvave's `normal` and `edit`.
 - The app-feature inventory no longer calls the loopback and LED-colour meanings hypotheses (both
   observed in spec 004 gate session A), and gives the app's IR cab display correctly.
+- New [MCP guide](docs/mcp.md): install with the `mcp` extra, `claude mcp add` and the Claude
+  Desktop configuration, the macOS Bluetooth permission (it belongs to the app that starts the
+  server), the connection and the phone app, every tool with its opt-ins and annotations, the
+  confirmation, the backup folder and troubleshooting. `docs/safety.md` compares the command
+  line and the server; `docs/cli-reference.md` documents `openvave mcp`.
+
+### Tested
+
+- Hardware-free: `tests/mcp/` drives the server in-process (both protocol modes) against
+  `FakeTransport` captures; every tool's frames and document equal the matching command's
+  `--json` run on an identical fake, and a stdio smoke test spawns `python -m openvave mcp`.
+- Owner's gate on fw 96 (quickstart §3 of `specs/006-mcp-server/`): pending.
 
 ## [0.5.0]
 
