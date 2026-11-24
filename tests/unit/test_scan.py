@@ -103,16 +103,21 @@ async def test_wanted_device_stops_at_once() -> None:
     assert elapsed < 0.25  # no grace period with --device
 
 
+# asyncio fires a timer up to one clock tick early (BaseEventLoop._clock_resolution), and a
+# tick is about 15.6 ms on Windows: "the whole timeout" means within one tick of it.
+TICK = time.get_clock_info("monotonic").resolution
+
+
 async def test_no_pedal_scans_the_whole_timeout() -> None:
     found, elapsed = await scan([(0.05, SPEAKER)], timeout=0.4)
     assert found == [SPEAKER[0]]
-    assert elapsed >= 0.4
+    assert elapsed >= 0.4 - TICK
 
 
 async def test_without_stop_early_the_whole_timeout_is_used() -> None:
     found, elapsed = await scan([(0.05, PEDAL_A)], timeout=0.4, stop_early=False)
     assert found == [PEDAL_A[0]]
-    assert elapsed >= 0.4
+    assert elapsed >= 0.4 - TICK
 
 
 async def test_open_ble_uses_the_early_stop(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,7 +207,7 @@ async def test_scan_uses_the_whole_timeout_after_a_pedal_is_seen() -> None:
         0.4,
         scanner_factory=timed_scanner([(0.02, (UUID_1, TANK, -58)), (0.3, (UUID_2, TANK, -61))]),
     )
-    assert time.monotonic() - started >= 0.4
+    assert time.monotonic() - started >= 0.4 - TICK
     assert ids(entries) == [UUID_1, UUID_2]  # the late pedal is listed too (FR-003)
 
 
@@ -282,7 +287,7 @@ async def test_target_absent_waits_the_timeout_and_nothing_seen() -> None:
     with pytest.raises(TargetNotFoundError) as caught:
         await ble.locate(STAGE, 0.2, scanner_factory=timed_scanner([]))
     assert caught.value.seen == ()
-    assert time.monotonic() - started >= 0.2
+    assert time.monotonic() - started >= 0.2 - TICK
 
 
 async def test_no_target_one_pedal_is_only_one_found() -> None:

@@ -316,11 +316,34 @@ async def test_automatic_backup_is_the_pedal_before_the_save(tmp_path) -> None:
     [saved] = automatic(tmp_path, "save")
     backup = Backup.from_document(json.loads(saved.read_text(encoding="utf-8")))
     assert backup.image == image_1c_public()
-    assert (backup_folder(tmp_path).stat().st_mode & 0o777) == 0o700
+    if os.name == "posix":  # Windows reports no POSIX modes
+        assert (backup_folder(tmp_path).stat().st_mode & 0o777) == 0o700
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores folder permissions")
-async def test_backup_write_failure_sends_nothing(tmp_path) -> None:
+async def test_backup_write_failure_sends_nothing(tmp_path, monkeypatch) -> None:
+    """Any platform: the automatic backup's writer fails, so nothing reaches the pedal."""
+    from openvave.cli import files
+
+    def refuse(*_args: Any, **_kwargs: Any) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(files, "write_json_atomic", refuse)
+    factory = CountingFactory(make=edited_fake)
+    async with open_harness(options(tmp_path), factory) as h:
+        text = await h.error("preset_save", {"to": "1C", "unsafe": True})
+    assert text.startswith("invalid_file: ")
+    assert "Permission denied" in text
+    assert "nothing was written to the pedal" in text
+    assert writes(factory.fake) == []
+    assert automatic(tmp_path, "save") == []
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="needs POSIX folder permissions, which Windows and root do not enforce",
+)
+async def test_read_only_backup_folder_sends_nothing(tmp_path) -> None:
+    """The same failure from a real read-only folder (POSIX only)."""
     folder = backup_folder(tmp_path)
     folder.mkdir()
     folder.chmod(0o500)

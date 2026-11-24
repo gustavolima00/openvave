@@ -39,13 +39,16 @@ def test_default_folder_from_xdg(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 
 
 def test_default_folder_in_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPENVAVE_BACKUP_DIR", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Path.home() reads USERPROFILE on Windows, not HOME: pin it on every platform.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr(sys, "platform", "darwin")
     assert backups.default_backup_dir() == tmp_path / ".local" / "share" / "openvave" / "backups"
 
 
 def test_default_folder_on_windows(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPENVAVE_BACKUP_DIR", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     monkeypatch.setattr(sys, "platform", "win32")
@@ -56,7 +59,8 @@ def test_ensure_dir_creates_a_private_folder(tmp_path: Path) -> None:
     folder = tmp_path / "a" / "backups"
     assert backups.ensure_dir(folder) == folder
     assert folder.is_dir()
-    assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+    if os.name == "posix":  # Windows reports no POSIX modes (always 0o777)
+        assert stat.S_IMODE(folder.stat().st_mode) == 0o700
     backups.ensure_dir(folder)  # existing: fine
 
 
@@ -119,7 +123,8 @@ async def test_backup_writes_a_verified_file_in_the_folder(tmp_path: Path) -> No
     path = Path(result["path"])
     assert path.parent == folder
     assert path.name.startswith("tankg-backup-")
-    assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+    if os.name == "posix":  # Windows reports no POSIX modes (always 0o777)
+        assert stat.S_IMODE(folder.stat().st_mode) == 0o700
     assert json.loads(path.read_text(encoding="utf-8")) == result["backup"]
     assert result["saved_to"] == result["path"]
     assert result["command"] == "preset backup"
