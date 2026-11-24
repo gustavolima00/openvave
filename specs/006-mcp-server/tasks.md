@@ -399,7 +399,7 @@ folder, and the owner's confirmation through elicitation where supported.
   `docs/mcp.md`
 - [X] T059 `CHANGELOG.md` [0.6.0] from the milestone entries; version 0.6.0 in `pyproject.toml`
   and `src/openvave/__init__.py`; `tests/contract/test_changelog_060.py`
-- [ ] T060 Suite, ruff, mypy green
+- [X] T060 Suite, ruff, mypy green
 - [ ] T061 Owner: quickstart §3 steps 1–9 in their own assistant and terminal (fw 96)
 - [ ] T062 Owner (optional): step 10 (no-op save; elicitation decline)
 - [ ] T063 Record the results under "Hardware check" below (client and version, firmware, macOS)
