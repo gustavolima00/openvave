@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import os
 import sys
@@ -50,6 +51,14 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
         raise
 
 
+NO_LINKS = frozenset(
+    {errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS, errno.EXDEV}
+    | ({errno.EACCES, errno.EINVAL} if sys.platform == "win32" else set())
+)
+"""``os.link`` errors meaning the folder has no hard links (FAT: EPERM on Linux, ENOTSUP on
+macOS; some shares EXDEV / ENOSYS; Windows reports them as EACCES / EINVAL)."""
+
+
 def _publish_new(temp: str, path: Path) -> None:
     """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist, atomically.
 
@@ -63,6 +72,8 @@ def _publish_new(temp: str, path: Path) -> None:
     except FileExistsError:
         raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
     except OSError as err:
+        if err.errno not in NO_LINKS:
+            raise  # a full disk, a read-only folder …: the real reason
         if sys.platform != "win32":
             raise OSError(
                 err.errno,

@@ -233,9 +233,8 @@ like the matching commands (see [Safety](safety.md)):
 2. If your assistant supports **MCP elicitation**, the server asks you directly before it
    connects, for example *"Overwrite stored preset 2A with the current sound? A full backup is
    written to … first."* Restore and import name the file and its fingerprint (the start of
-   its SHA-256), and write exactly the file you were asked about (if the file changes
-   while the question is open, some assistants ask again about the new one). Answer **no**
-   (or close the question) and nothing is read or sent. Assistants without elicitation are not asked by the
+   its SHA-256), and write exactly the file you were asked about, even if it changes while
+   the question is open. Answer **no** (or close the question) and nothing is read or sent. Assistants without elicitation are not asked by the
    server, just as the command line does not ask: then the assistant itself should ask you in
    the chat before passing `unsafe`.
 3. Before the first write, a full backup of all 36 presets is written to the backup folder.

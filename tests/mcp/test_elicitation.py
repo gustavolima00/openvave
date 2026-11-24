@@ -219,17 +219,56 @@ async def test_restore_writes_the_backup_the_owner_was_asked_about(tmp_path, mod
         await h.ok("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
         after = await h.ok("preset_backup")
     stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
+    # Asked once in both modes (the modern retry reuses the pinned read): the bytes that were
+    # asked about are written, not the file that replaced them.
+    assert len(owner.messages) == 1
     assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
-    if len(owner.messages) == 1:
-        # Asked once (legacy: the question is sent mid-call): the snapshot that was asked about
-        # is written, not the file that replaced it.
-        assert stored.image == Backup.from_document(first).image
-    else:
-        # Asked again (modern mode re-reads the file on the retry): the new question names the
-        # new bytes, and only what the owner accepted last is written.
-        assert len(owner.messages) == 2
-        assert f"(fingerprint {fingerprint(source.read_bytes())})" in owner.messages[1]
-        assert stored.image == Backup.from_document(second).image
+    assert stored.image == Backup.from_document(first).image
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize(
+    ("action", "confirm"),
+    [("decline", None), ("cancel", None), ("accept", False)],
+    ids=["decline", "cancel", "confirm_false"],
+)
+async def test_a_refusal_stays_final_when_the_file_changes(tmp_path, mode, action, confirm) -> None:
+    """Codex round 3 [P2]: a replaced file must not turn the owner's *no* into a new question."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    source.write_text(json.dumps(rf.document()), encoding="utf-8")
+    owner = ReplacingOwner(source, rf.document(rf.image_with(s5=GAIN_90)))
+    owner.action, owner.confirm = action, confirm
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        text = await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+    assert text.startswith("declined_by_owner: ")
+    assert len(owner.messages) == 1
+    assert factory.calls == 0
+
+
+async def test_a_new_call_reads_the_file_again(tmp_path) -> None:
+    """The pin lasts one call: the next call asks about the file as it is now."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    source.write_text(json.dumps(rf.document()), encoding="utf-8")
+    first = fingerprint(source.read_bytes())
+    owner = Owner("decline")
+    async with open_harness(
+        options(tmp_path),
+        CountingFactory(make=changed_fake),
+        mode="auto",
+        elicitation_callback=owner,
+    ) as h:
+        await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+        source.write_text(json.dumps(rf.document(rf.image_with(s5=GAIN_90))), encoding="utf-8")
+        await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+    second = fingerprint(source.read_bytes())
+    assert first != second
+    assert f"(fingerprint {first})" in owner.messages[0]
+    assert f"(fingerprint {second})" in owner.messages[1]
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -251,8 +290,9 @@ async def test_import_writes_the_preset_file_the_owner_was_asked_about(tmp_path,
         after = await h.ok("preset_backup")
     stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
     slot = stored.image[2 + 21 * 6 : 23 + 21 * 6]
+    assert len(owner.messages) == 1
     assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
-    assert slot == (GAIN_90 if len(owner.messages) == 1 else other)
+    assert slot == GAIN_90 != other
 
 
 @pytest.mark.parametrize(

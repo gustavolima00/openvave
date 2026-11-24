@@ -93,3 +93,20 @@ def test_force_still_replaces(tmp_path: Path) -> None:
     files.write_json_atomic(target, {"a": 1}, force=True)
     assert json.loads(target.read_text(encoding="utf-8")) == {"a": 1}
     assert os.listdir(tmp_path) == ["b.json"]
+
+
+def test_other_link_errors_keep_their_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex round 3 [P3]: a full disk is reported as such, not as missing hard links."""
+    import errno
+
+    def full(src: object, dst: object) -> None:
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(files.os, "link", full)
+    with pytest.raises(OSError) as caught:
+        files.write_json_atomic(tmp_path / "b.json", {"a": 1}, force=False)
+    assert caught.value.errno == errno.ENOSPC
+    assert "hard links" not in str(caught.value)
+    assert os.listdir(tmp_path) == []

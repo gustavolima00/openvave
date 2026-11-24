@@ -14,6 +14,7 @@ is not asked (CLI parity).
 
 import hashlib
 import json
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -39,6 +40,9 @@ from openvave.mcp_server.writes import DRY_RUN_REMINDER, parse_preset_position
 from openvave.models import IMAGE_ACTIONS, Backup, PresetFile, SequencePlan, SequenceResult
 from openvave.protocol.storage import position as position_of
 from openvave.session import OnBackup, TankG
+
+PIN_SECONDS = 600.0
+"""How long a restore / import file read stays pinned for a call whose client never retries."""
 
 DECLINED = "the owner did not confirm; nothing was read from or sent to the pedal"
 
@@ -222,6 +226,26 @@ def register_sequences(
             Confirm,
         )
 
+    # A read of a restore / import file, pinned until the call that read it ends. In the
+    # modern protocol the client answers the question in a retry of the tool call, and the
+    # resolvers run again: reusing the pinned read keeps the question identical, so the
+    # recorded answer (accept, decline or cancel) applies to the bytes it was given for, and a
+    # file replaced meanwhile is neither written nor asked about again. The tool body unpins;
+    # a call the client abandons expires after PIN_SECONDS.
+    pinned: dict[tuple[Any, ...], tuple[float, Snapshot[Any]]] = {}
+
+    def pin(key: tuple[Any, ...], read: Callable[[], Snapshot[T]]) -> Snapshot[T]:
+        now = time.monotonic()
+        for stale in [k for k, (at, _) in pinned.items() if now - at > PIN_SECONDS]:
+            pinned.pop(stale, None)
+        hit = pinned.get(key)
+        if hit is not None:
+            return hit[1]
+        snapshot = read()
+        if snapshot.error is None:
+            pinned[key] = (now, snapshot)
+        return snapshot
+
     def backup_snapshot(
         file: str,
         slot: str | int | None,
@@ -231,14 +255,20 @@ def register_sequences(
             restore_target(slot, all)
         except ValueError as err:
             return Snapshot(file, error=err)  # refused from the arguments: the file is not read
-        return _snapshot(holder.options.backup_dir, file, _parse_backup)
+        return pin(
+            ("restore", file, str(slot), all),
+            lambda: _snapshot(holder.options.backup_dir, file, _parse_backup),
+        )
 
     def preset_snapshot(file: str, to: str | int) -> Snapshot[PresetFile]:
         try:
             parse_preset_position(to, "to")
         except ValueError as err:
             return Snapshot(file, error=err)  # refused from the arguments: the file is not read
-        return _snapshot(holder.options.backup_dir, file, _parse_preset)
+        return pin(
+            ("import", file, str(to)),
+            lambda: _snapshot(holder.options.backup_dir, file, _parse_preset),
+        )
 
     def ask_restore(
         ctx: Context,
@@ -388,6 +418,7 @@ def register_sequences(
         directly). A full backup is written to the backup folder first. Unsaved edits to the
         current sound need discard_edits (the final select discards them); a file from another
         firmware needs experimental. dry_run: plan only, nothing sent."""
+        pinned.pop(("restore", file, str(slot), all), None)  # this call ends here or runs
         with tool_errors(record):
             index = restore_target(slot, all)
             backup = snapshot.get()  # the bytes the owner was asked about, read once
@@ -555,6 +586,7 @@ def register_sequences(
         on it. PERSISTENT: overwrites that stored preset. Needs unsafe: true (ask the owner
         first). A full backup is written to the backup folder first. A file from another
         firmware needs experimental; unsaved edits need discard_edits. dry_run: plan only."""
+        pinned.pop(("import", file, str(to)), None)  # this call ends here or runs
         with tool_errors(record):
             index = parse_preset_position(to, "to")
             preset = snapshot.get()  # the bytes the owner was asked about, read once

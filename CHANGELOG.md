@@ -151,7 +151,8 @@ directory. No new pedal message; JSON only gains keys and `schema_version` stays
 - `preset_restore` and `preset_import` in `openvave mcp` read the file once per call and write
   exactly what the owner was asked about: the confirmation names the file's fingerprint (the
   first 12 hex digits of its SHA-256), and a file replaced while the question is open is not
-  written under that answer (a client that asks again sees the new fingerprint).
+  written under that answer. In the modern protocol, where the answer comes in a retry of the
+  call, the retry reuses the same read, so the answer (*no* included) is final.
 - Backup and export files are published without replacing an existing file even when two
   writers pick the same name at the same moment (two servers sharing one backup folder): the
   second one takes the next name (`-1`, `-2` …) instead of replacing the first recovery
