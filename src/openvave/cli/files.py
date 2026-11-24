@@ -18,7 +18,7 @@ class TargetExistsError(Exception):
 
 def check_target(path: Path, *, force: bool) -> None:
     """Refuse an existing ``path`` unless ``force`` (called before any pedal I/O)."""
-    if path.exists() and not force:
+    if os.path.lexists(path) and not force:
         raise TargetExistsError(f"{path} exists; use --force to overwrite it")
 
 
@@ -51,25 +51,28 @@ def write_json_atomic(path: Path, document: dict[str, Any], *, force: bool) -> N
 
 
 def _publish_new(temp: str, path: Path) -> None:
-    """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist.
+    """Give the complete ``temp`` the name ``path`` only if ``path`` does not exist, atomically.
 
-    A hard link is the atomic no-replace rename on POSIX and NTFS. Where links are not
-    supported (FAT, some network shares), Windows' ``os.rename`` still refuses an existing
-    name atomically; elsewhere the last check and ``os.replace`` are used, as before, so only
-    complete files ever appear under ``path``."""
+    A hard link is the atomic no-replace rename on POSIX and NTFS; on Windows ``os.rename``
+    also refuses an existing name atomically, so it covers volumes without links. A POSIX
+    folder without hard links (FAT, some network shares) offers no such step: the write is
+    refused with :class:`OSError` rather than risk replacing a file (for an automatic backup,
+    before anything is sent to the pedal)."""
     try:
         os.link(temp, path)
     except FileExistsError:
         raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
-    except OSError:
-        if sys.platform == "win32":
-            try:
-                os.rename(temp, path)
-            except FileExistsError:
-                raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
-            return
-        check_target(path, force=False)
-        os.replace(temp, path)
+    except OSError as err:
+        if sys.platform != "win32":
+            raise OSError(
+                err.errno,
+                f"{path.parent} does not support hard links, so a new file cannot be added "
+                "there without risking replacing another; use another folder",
+            ) from None
+        try:
+            os.rename(temp, path)
+        except FileExistsError:
+            raise TargetExistsError(f"{path} exists; use --force to overwrite it") from None
         return
     os.unlink(temp)
 
@@ -101,7 +104,7 @@ def automatic_backup_path(directory: Path, action: str, when: datetime) -> Path:
     stem = f"tankg-backup-{when.strftime('%Y%m%d-%H%M%S')}-before-{action}"
     path = directory / f"{stem}.json"
     n = 0
-    while path.exists():
+    while os.path.lexists(path):  # a dangling link counts as taken
         n += 1
         path = directory / f"{stem}-{n}.json"
     return path

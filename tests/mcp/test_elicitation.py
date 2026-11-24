@@ -253,3 +253,35 @@ async def test_import_writes_the_preset_file_the_owner_was_asked_about(tmp_path,
     slot = stored.image[2 + 21 * 6 : 23 + 21 * 6]
     assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
     assert slot == (GAIN_90 if len(owner.messages) == 1 else other)
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("preset_restore", {"file": "source.json", "slot": "10A"}),
+        ("preset_restore", {"file": "source.json", "slot": "1A", "all": True}),
+        ("preset_restore", {"file": "source.json"}),
+        ("preset_import", {"file": "source.json", "to": "10A"}),
+    ],
+    ids=["bad_slot", "slot_and_all", "neither", "bad_to"],
+)
+async def test_bad_destination_is_refused_without_reading_the_file(
+    tmp_path, monkeypatch, tool, args
+) -> None:
+    """Codex round 2 [P3]: a refusal that depends only on the arguments opens no file."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    (folder / "source.json").write_text(json.dumps(rf.document()), encoding="utf-8")
+    read: list[str] = []
+    real = Path.read_bytes
+
+    def counting(self: Path) -> bytes:
+        read.append(self.name)
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting)
+    owner = Owner("accept", True)
+    async with open_harness(options(tmp_path), CountingFactory(), elicitation_callback=owner) as h:
+        text = await h.error(tool, {**args, "unsafe": True})
+    assert text.startswith("invalid_value: ")
+    assert read == [] and owner.messages == []

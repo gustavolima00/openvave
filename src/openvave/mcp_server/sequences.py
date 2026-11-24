@@ -222,10 +222,22 @@ def register_sequences(
             Confirm,
         )
 
-    def backup_snapshot(file: str) -> Snapshot[Backup]:
+    def backup_snapshot(
+        file: str,
+        slot: str | int | None,
+        all: bool,  # noqa: A002 - the tool argument's name
+    ) -> Snapshot[Backup]:
+        try:
+            restore_target(slot, all)
+        except ValueError as err:
+            return Snapshot(file, error=err)  # refused from the arguments: the file is not read
         return _snapshot(holder.options.backup_dir, file, _parse_backup)
 
-    def preset_snapshot(file: str) -> Snapshot[PresetFile]:
+    def preset_snapshot(file: str, to: str | int) -> Snapshot[PresetFile]:
+        try:
+            parse_preset_position(to, "to")
+        except ValueError as err:
+            return Snapshot(file, error=err)  # refused from the arguments: the file is not read
         return _snapshot(holder.options.backup_dir, file, _parse_preset)
 
     def ask_restore(

@@ -156,7 +156,10 @@ directory. No new pedal message; JSON only gains keys and `schema_version` stays
   writers pick the same name at the same moment (two servers sharing one backup folder): the
   second one takes the next name (`-1`, `-2` …) instead of replacing the first recovery
   snapshot. The command line's automatic backups do the same, and `preset backup --output`
-  without `--force` refuses a name taken in that moment instead of replacing it.
+  without `--force` refuses a name taken in that moment instead of replacing it. A backup
+  folder without hard links (FAT, some network shares) is refused on macOS and Linux with that
+  reason (before anything is sent to the pedal), since no atomic no-replace step exists there;
+  choose another folder.
 
 ### Documentation
 
