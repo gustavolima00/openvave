@@ -348,7 +348,7 @@ removing, renaming or retyping a field bumps it.
 raw values in JSON.
 
 `amp_type` and `ir_cab` field items add `position_name` (`name`, `detail`, `text`, `factory`,
-`source`, `confidence`; `null` for IR cab 0 and out of range), and their changes in `watch --json`
+`source`, `confidence`, `firmware` (96); `null` for IR cab 0 and out of range), and their changes in `watch --json`
 and the write results add `position_name_old` / `position_name_new` (watch) or
 `position_name_before` / `position_name_after` (the same object, or `null`). `value` and `display`
 (`#4`) stay the raw position.

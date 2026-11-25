@@ -75,6 +75,7 @@ def test_json_adds_position_name_and_keeps_display_raw() -> None:
         "factory": True,
         "source": name.source,
         "confidence": "hypothesis",
+        "firmware": 96,
     }
 
 
@@ -100,3 +101,23 @@ def test_change_names_for_json_carry_confidence_and_factory_flag() -> None:
     assert names["position_name_before"] is None
     assert names["position_name_after"]["factory"] is True
     assert names["position_name_after"]["confidence"] == POSITION_NAMES["ir_cab"][7].confidence
+
+
+def test_names_are_not_shown_on_a_bypass_side() -> None:
+    """Codex round 2: in bypass the buffer is zeros, not a preset."""
+    from openvave.cli.render import change_names_json, names_shown, watch_change_lines
+    from openvave.models import PedalState, WatchChange
+
+    normal = PedalState("normal", 1, 1, False)
+    bypass = PedalState("bypass", None, None, False)
+    assert names_shown(normal, bypass) == (True, False)
+    assert names_shown(bypass, normal) == (False, True)
+    assert names_shown(None, None) == (True, True)
+    change = ByteChange(Region.CURRENT_PRESET, 5, 4, 0, ENTRIES["amp_type"], ())
+    names = change_names_json(change, "old", "new", (True, False))
+    assert names["position_name_old"] is not None
+    assert names["position_name_new"] is None
+    event = WatchChange(t=0.0, cycle=1, changes=(change,), regions={})
+    (line,) = watch_change_lines(event, 0.0, (True, False))
+    assert line.rstrip().endswith("→ #0")
+    assert f"#4 ({POSITION_NAMES['amp_type'][4].text}" in line

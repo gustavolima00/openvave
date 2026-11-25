@@ -390,13 +390,14 @@ class WatchRun:
                 }
             )
         state = self._state_from(event.regions)
+        named = render.names_shown(self.pedal_state, state or self.pedal_state)
         if self.json_mode:
             if state is not None:
                 self.pedal_state = state
-            document = render.watch_change_json(event, t, self.label, self.pedal_state)
+            document = render.watch_change_json(event, t, self.label, self.pedal_state, named)
             self._emit(render.json_line(document))
         else:
-            for line in render.watch_change_lines(event, t):
+            for line in render.watch_change_lines(event, t, named):
                 self._emit(line)
             self._report_state(state)
 

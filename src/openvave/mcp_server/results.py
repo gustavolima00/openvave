@@ -27,10 +27,11 @@ def add_knob_types(region: dict[str, Any]) -> dict[str, Any]:
     return region
 
 
-def change_json(change: ByteChange) -> dict[str, Any]:
+def change_json(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> dict[str, Any]:
     """One changed byte of ``pedal_changes``: name, raw before/after and their display form
     (``5 (room 6)`` for a typed knob, hex for an unknown or flag byte); amp type and IR cab add
-    ``position_name_before`` / ``position_name_after`` (their display stays ``#4``)."""
+    ``position_name_before`` / ``position_name_after`` (their display stays ``#4``), ``null`` on
+    a side where ``named`` is false (bypass)."""
     entry = change.field
     if entry is not None:
         before, after = (decode_field(entry, raw) for raw in (change.old, change.new))
@@ -51,17 +52,20 @@ def change_json(change: ByteChange) -> dict[str, Any]:
         "display_before": display[0],
         "display_after": display[1],
     }
-    document.update(change_names_json(change, "before", "after"))  # spec 007 US4
+    document.update(change_names_json(change, "before", "after", named))  # spec 007 US4
     return document
 
 
-def change_text(change: ByteChange) -> tuple[str, str]:
+def change_text(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> tuple[str, str]:
     """Before and after of a changed byte for the human ``summary``: the display form with the
     type reading or, for amp type / IR cab, the position's name (``#4 (Plexi 100 ?)``)."""
     entry = change.field
     if entry is None:
         return f"0x{change.old:02x}", f"0x{change.new:02x}"
-    before, after = (with_reading(decode_field(entry, raw)) for raw in (change.old, change.new))
+    before, after = (
+        with_reading(decode_field(entry, raw), named=shown)
+        for raw, shown in zip((change.old, change.new), named, strict=True)
+    )
     return before, after
 
 

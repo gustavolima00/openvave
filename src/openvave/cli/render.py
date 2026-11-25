@@ -399,9 +399,20 @@ def watch_label_line(text: str) -> str:
     return f"── label: {text} ──"
 
 
-def with_reading(field: DecodedField) -> str:
-    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#4 (Plexi 100 ?)``."""
-    reading = type_reading(field) or _short_name(field)
+NAMED_BOTH = (True, True)
+"""Show position names on both sides of a change (the default)."""
+
+
+def names_shown(before: PedalState | None, after: PedalState | None) -> tuple[bool, bool]:
+    """Whether each side of a change may carry position names: not in bypass, where the
+    buffer is a placeholder of zeros, not a preset (spec 004; spec 007 US4)."""
+    return (before is None or before.kind != "bypass", after is None or after.kind != "bypass")
+
+
+def with_reading(field: DecodedField, *, named: bool = True) -> str:
+    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#4 (Plexi 100 ?)``
+    (``named=False``: without the name, e.g. on the bypass side of a change)."""
+    reading = type_reading(field) or (_short_name(field) if named else None)
     return field.display if reading is None else f"{field.display} ({reading})"
 
 
@@ -417,34 +428,44 @@ def change_names(
     return old, new
 
 
-def change_names_json(change: ByteChange, old_key: str, new_key: str) -> dict[str, Any]:
+def change_names_json(
+    change: ByteChange, old_key: str, new_key: str, named: tuple[bool, bool] = NAMED_BOTH
+) -> dict[str, Any]:
     """``position_name_<old>`` / ``position_name_<new>`` for an amp type or IR cab change, each
     the ``position_name`` object (with its confidence and factory flag) or ``null`` (spec 007
-    US4, additive keys); empty for any other byte."""
+    US4, additive keys); empty for any other byte. A side with ``named`` false is ``null``."""
     names = change_names(change)
     if names is None:
         return {}
-    old, new = (None if n is None else position_name_json(n) for n in names)
+    old, new = (
+        None if n is None or not shown else position_name_json(n)
+        for n, shown in zip(names, named, strict=True)
+    )
     return {f"position_name_{old_key}": old, f"position_name_{new_key}": new}
 
 
-def _change_cells(change: ByteChange) -> tuple[str, str, str]:
+def _change_cells(
+    change: ByteChange, named: tuple[bool, bool] = NAMED_BOTH
+) -> tuple[str, str, str]:
     """(label, old, new) in the field's display form, or raw hex for unknown/flag bytes."""
     if change.field is not None:
         return (
             change.field.label,
-            with_reading(decode_field(change.field, change.old)),
-            with_reading(decode_field(change.field, change.new)),
+            with_reading(decode_field(change.field, change.old), named=named[0]),
+            with_reading(decode_field(change.field, change.new), named=named[1]),
         )
     name = " / ".join(e.label for e in change.fields) if change.fields else "unknown"
     return name, f"0x{change.old:02x}", f"0x{change.new:02x}"
 
 
-def watch_change_lines(event: WatchChange, t: float) -> list[str]:
-    """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked."""
+def watch_change_lines(
+    event: WatchChange, t: float, named: tuple[bool, bool] = NAMED_BOTH
+) -> list[str]:
+    """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked.
+    ``named``: whether the old / new side may show position names (not in bypass)."""
     lines = []
     count = len(event.changes)
-    cells = [_change_cells(change) for change in event.changes]
+    cells = [_change_cells(change, named) for change in event.changes]
     # Labels longer than the column widen it for this event, so values stay aligned.
     width = max([WATCH_NAME_WIDTH, *(len(name) + 1 for name, _, _ in cells)])
     # Same for old values carrying a type reading (``5 (room 6)``): arrows stay in one column.
@@ -505,7 +526,11 @@ def watch_label_json(text: str, t: float) -> dict[str, Any]:
 
 
 def watch_change_json(
-    event: WatchChange, t: float, label: str | None, state: PedalState | None = None
+    event: WatchChange,
+    t: float,
+    label: str | None,
+    state: PedalState | None = None,
+    named: tuple[bool, bool] = NAMED_BOTH,
 ) -> dict[str, Any]:
     extra = {} if state is None else {"pedal_state": state.label}
     return _watch_event(
@@ -520,7 +545,7 @@ def watch_change_json(
                 "old": c.old,
                 "new": c.new,
                 "field": c.field.name if c.field is not None else None,
-                **change_names_json(c, "old", "new"),
+                **change_names_json(c, "old", "new", named),
             }
             for c in event.changes
         ],

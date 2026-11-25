@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from openvave.models import DecodedField, DeviceIdentity
-from openvave.protocol.names import NAMED_FIELDS, PositionName, position_name
+from openvave.protocol.names import NAMED_FIELDS, NAMES_FIRMWARE, PositionName, position_name
 
 
 def hex_bytes(data: bytes) -> str:
@@ -51,7 +51,9 @@ def position_name_json(name: PositionName) -> dict[str, Any]:
     """The model an amp type or IR cab position is named after (spec 007 US4; additive key).
 
     ``confidence`` is the name's own (``hypothesis`` until matched on the pedal), not the
-    byte's; ``factory`` is true for IR cabs, whose slots a user can overwrite."""
+    byte's; ``factory`` is true for IR cabs, whose slots a user can overwrite; ``firmware`` is
+    the firmware the names are kept for (96), so a result from another firmware shows that the
+    names are the fw 96 fallback."""
     return {
         "name": name.name,
         "detail": name.detail,
@@ -59,4 +61,5 @@ def position_name_json(name: PositionName) -> dict[str, Any]:
         "factory": name.factory,
         "source": name.source,
         "confidence": name.confidence,
+        "firmware": NAMES_FIRMWARE,
     }

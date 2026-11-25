@@ -15,12 +15,15 @@ All notable changes to this project are documented here. The format follows
   matched on a firmware 96 pedal: a 2026 M-VAVE preset card names other models for the same
   positions. Sources and the numbering: `specs/007-mapping-gaps/evidence-amp-cab-names.md`.
 - JSON gains keys only (`schema_version` stays 2): `position_name` on the two field items
-  (`name`, `detail`, `text`, `factory`, `source`, `confidence`), `position_name_old` /
+  (`name`, `detail`, `text`, `factory`, `source`, `confidence`, `firmware` (96)), `position_name_old` /
   `position_name_new` on their `watch --json` changes, `position_name_before` /
   `position_name_after` on write-result changes and `pedal_changes` (each the same object, or
   `null`), and `position_names` on the two rows of `openvave://byte-map`. `value`, `display`
   (`#4`, also `pedal_changes`' `display_before` / `display_after`) and input (`set amp_type 4`)
   are unchanged.
+- No name on the bypass side of a change (the bypass buffer is zeros, not a preset), and every
+  name object carries `firmware: 96`, so results from an untested firmware show the names'
+  scope.
 - IR cab names describe the factory IRs: a slot overwritten by an imported IR keeps its number
   but not its name. The brand and model names are trademarks of their owners, used only to
   describe the sound character, as the vendor's manual does.

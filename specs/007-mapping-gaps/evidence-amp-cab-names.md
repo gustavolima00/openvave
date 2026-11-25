@@ -191,9 +191,36 @@ Procedure:
 6. Also record: whether an IR or amp model was ever imported, or a preset pack loaded with the
    vendor software, on this pedal.
 
-Passes when, at amp 4 and 8 and at cab 3, 5 and 6, each note fits one list's description (record
-it per position, with firmware and date). A position whose sound fits neither list stays unnamed.
-A match by ear gives the names `observed`; the IR cab names stay labelled factory names.
+**Passing rule, position by position.** A name is promoted to `observed` only where the two
+lists describe that position differently **and** the owner's note fits one description and not
+the other. Where both lists describe the same character, a match by ear cannot tell which model
+it is: that name stays a `hypothesis` (or is removed, if the owner prefers numbers only), even when
+the discriminating positions point to one list. A position whose sound fits neither list loses
+its name.
+
+| Raw | S1 | S3 | Distinguishable by ear? |
+|---|---|---|---|
+| amp 0 | AC30, clean | JC-120 (stereo chorus in the description), clean | only if a chorus-like shimmer is heard (JC-120) or not (AC30) |
+| amp 1 | Twin Reverb, clean | JCM900, clean | no |
+| amp 2 | Bogner Shiva, overdrive | M-VAVE TS, overdrive | no |
+| amp 3 | JTM45, overdrive | RAT, overdrive | no |
+| amp 4 | Plexi 100, overdrive | high-gain TS, distortion | yes: crunch vs heavy |
+| amp 5 | JCM800, distortion | MT1, distortion | no |
+| amp 6 | 5150 lead, distortion | Guv'nor Plus, distortion | no |
+| amp 7 | ENGL Powerball, distortion | JCM900, distortion | no |
+| amp 8 | Dual Rectifier, distortion | Bluesbreaker, light distortion | yes: the heaviest vs light |
+| cab 1 | 4x12 | 2x10 | yes: big vs small |
+| cab 2 | 4x12 | 4x12 | no |
+| cab 3 | 2x10 | 4x12 | yes |
+| cab 4 | 4x12 | 1x12 | yes |
+| cab 5 | 1x8 | 2x12 | yes: the smallest vs full |
+| cab 6 | 1x10 | 2x10 (hi-fi) | weak: small guitar cab vs hi-fi speaker |
+| cab 7 | 4x12 | 4x12 | no |
+| cab 8 | 4x12 | 1x12 | yes |
+
+The procedure above therefore records a note at **every** position (steps 3 and 4), and the record
+lists, per position: the note, the list it fits (S1, S3, neither, or both), and the resulting
+confidence. The IR cab names stay labelled factory names.
 
 ## What changes for each outcome
 
@@ -202,7 +229,7 @@ table and the docs' tables are built from or checked against it.
 
 | Outcome of the match | Change |
 |---|---|
-| S1 (manual) at every position | `NAME_CHOICE`: confidence `hypothesis` → `observed` for the matched positions; `NAME_STATUS` → "manual, matched by ear on fw 96 (date)"; regenerate the command-layer.md table; docs drop "not yet matched"; this record gets the session; T031 and T036 ticked |
-| S3 (card) at every position | `NAME_CHOICE`: source `manual-2024` → `preset-card-2026`, confidence `observed`; the same doc steps; the docs' tables list the card's names |
-| Mixed (some positions fit each list, or neither) | `NAME_CHOICE` per position: the matching source with `observed`, `None` (no name, shown `#n`) where neither fits; the same doc steps; the docs say the lists are mixed |
+| S1 (manual) at every distinguishable position | `NAME_CHOICE`: `observed` for the distinguishable positions that fit S1, the others stay `hypothesis` (or `None` if the owner prefers); `NAME_STATUS` → "manual, matched by ear on fw 96 (date)"; regenerate the command-layer.md table; docs drop "not yet matched"; this record gets the session; T031 and T036 ticked |
+| S3 (card) at every distinguishable position | `NAME_CHOICE`: source `manual-2024` → `preset-card-2026` everywhere; `observed` where distinguishable, `hypothesis` elsewhere; the same doc steps; the docs' tables list the card's names |
+| Mixed (some positions fit each list, or neither) | `NAME_CHOICE` per position: the matching source with `observed` where distinguishable, `None` (no name, shown `#n`) where neither fits or the evidence is split, and for the undistinguishable positions `None` (no list can be preferred); the same doc steps; the docs say the lists are mixed |
 | Inconclusive | nothing changes: the names stay a `hypothesis` and the PR stays a draft, or US4 is deferred again with the names removed (`NAME_CHOICE` all `None`) |

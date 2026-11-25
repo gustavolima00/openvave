@@ -28,6 +28,10 @@ NAMED_FIELDS: tuple[str, ...] = ("amp_type", "ir_cab")
 
 EVIDENCE = "specs/007-mapping-gaps/evidence-amp-cab-names.md"
 
+NAMES_FIRMWARE = 96
+"""Firmware the names are kept for; JSON carries it next to every name, so a result from an
+untested firmware (decoded with the fw 96 map) shows its scope."""
+
 
 @dataclass(frozen=True, slots=True)
 class NameSource:
@@ -188,6 +192,7 @@ def position_name(field: str | None, raw: int) -> PositionName | None:
 __all__ = [
     "EVIDENCE",
     "NAMED_FIELDS",
+    "NAMES_FIRMWARE",
     "NAME_CHOICE",
     "NAME_SOURCES",
     "NAME_STATUS",

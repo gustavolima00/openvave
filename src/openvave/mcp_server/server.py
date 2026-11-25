@@ -203,14 +203,15 @@ def build_server(holder: PedalHolder) -> MCPServer:
                     changes = _changes(base, reads)
             holder.baseline = reads
         before, after = _state_label(base), _state_label(reads)
+        named = render.names_shown(_state(base), _state(reads))
         return {
-            "summary": _changes_summary(previous is None, changes, before, after, waited),
+            "summary": _changes_summary(previous is None, changes, before, after, waited, named),
             "baseline": previous is None,
             "changed": bool(changes),
             "waited": round(waited, 3),
             "state_before": before,
             "state_after": after,
-            "changes": [change_json(c) for c in changes],
+            "changes": [change_json(c, named) for c in changes],
         }
 
     @server.tool(annotations=TOOLS["pedal_scan"].annotations())
@@ -393,7 +394,12 @@ def _state_label(reads: dict[Region, RegionRead]) -> str:
 
 
 def _changes_summary(
-    first: bool, changes: list[ByteChange], before: str, after: str, waited: float
+    first: bool,
+    changes: list[ByteChange],
+    before: str,
+    after: str,
+    waited: float,
+    named: tuple[bool, bool] = (True, True),
 ) -> str:
     if not changes:
         if first and waited == 0:
@@ -401,7 +407,7 @@ def _changes_summary(
         return "no change" + (f" within {waited:g} s" if waited else "") + f" (state: {after})"
     parts = [] if before == after else [f"state {before} → {after}"]
     for change in changes:
-        old, new = change_text(change)
+        old, new = change_text(change, named)
         parts.append(f"{change_label(change)} {old} → {new}")
     return "; ".join(parts)
 
