@@ -122,21 +122,56 @@ In the library the value is a tuple: `("spring", 10)`, or `(None, 10)` to keep t
 ## Amp types and IR cabs
 
 `amp_type` (byte 5) and `ir_cab` (byte 17) are stepped selectors with **9 positions each**, 0–8.
-They are not typed knobs (no sections, no off zones between types). Neither the pedal's protocol
-nor the phone app names them, so openvave shows `#0`–`#8` (`off` for IR cab 0).
+They are not typed knobs (no sections, no off zones between types). The pedal reports only the
+position; the phone app shows amp types as 1–9 and the IR cab as `OFF`, 1–8.
 
-- `amp_type`: 9 amp models. The phone app shows the raw value plus one (1–9).
-- `ir_cab`: **position 0 turns the cabinet simulation off**, positions 1–8 are 8 cabinet IRs. The
-  manual says so ("the first slot means the IR has been turned off"), the phone app shows `OFF`
-  for 0, and it sounded that way on the pedal (spec 007, 2026-11-19), so openvave prints `off` for
-  0 and `#1`–`#8` otherwise (input stays the number: `set ir_cab 0`). The 8 cabinets can be
-  replaced by importing IR files with the vendor software, so any names would only describe the
-  factory IRs.
+**Names.** openvave shows the model the Tank-G manual printed with firmware 96 pedals lists for each
+position, next to the number: `#3 (Friedman 100)` in changes, `name: Friedman 100, overdrive
+(manual-am3, documented)` in `preset dump`, `position_name` in JSON. `documented` means the names
+come from that manual (and the vendor's PDF of it), matched by document rather than on the pedal.
+M-VAVE has printed other lists too: an early 2024 manual (the "VOX AC30HW … Mesa Boogie Dual
+Rectifier" table seen in many videos) and a 2026 preset card for the firmware 97+ amp set; if your
+pedal was updated or you imported amp models, the names may not fit. The number stays the value and
+the input (`set amp_type 4`). Sources and how the numbers were matched to the printed slots:
+[the evidence record](../specs/007-mapping-gaps/evidence-amp-cab-names.md).
+
+| `amp_type` | Model (manual) | Type |
+|---|---|---|
+| 0 | UWE-Twins 335 | clean |
+| 1 | Archetype_C_W | clean |
+| 2 | TH-Mars VM410 | overdrive |
+| 3 | Friedman 100 | overdrive |
+| 4 | Brit Plex 50 | overdrive |
+| 5 | Mars FD Hundred | distortion |
+| 6 | Pea V 534 | distortion |
+| 7 | Diesel_Hagan_6 | distortion |
+| 8 | EVH 5150 III 100S EL34 | distortion |
+
+- `ir_cab`: **position 0 turns the cabinet simulation off** (the manual says so, the app shows
+  `OFF`, and it sounded that way on the pedal, spec 007, 2026-11-19), so openvave prints `off` for
+  0. Positions 1–8 are 8 cabinet IRs, which you can replace by importing IR files with the vendor
+  software: the names describe the **factory** IRs only, and openvave cannot tell when a slot holds
+  your own IR.
+
+| `ir_cab` | Cabinet (manual, factory IR) | Speakers |
+|---|---|---|
+| 1 | VHT Deliverance | 4x12 |
+| 2 | Sperimental | 4x12 |
+| 3 | Electrovoice | 2x10 |
+| 4 | Mesa Boogie | 4x12 |
+| 5 | Fender Champ | 1x8 |
+| 6 | Fender Pr Junior | 1x10 |
+| 7 | Marshall 1960V30 | 4x12 |
+| 8 | Diezel V30 | 4x12 |
+
+The brand and model names are trademarks of their respective owners, which are not associated
+with M-VAVE, the Tank-G or openvave. As in the vendor's manual, they are used only to describe the
+sound character, which may differ from the real equipment.
 
 ```bash
 openvave set amp_type 3
 openvave set ir_cab=0 amp_type=8
 ```
 
-If you know which amp or cabinet a position models, a pull request to the protocol docs with your
-evidence is welcome.
+If you can tell which list your pedal follows, or a position sounds unlike its name, a pull
+request with your evidence is welcome.

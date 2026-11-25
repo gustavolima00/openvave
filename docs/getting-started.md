@@ -135,7 +135,7 @@ state: normal, preset 1B
       [2]  delay on                     off    on/off     confirmed
       [3]  reverb on                     on    on/off     confirmed
       [4]  noise gate                    15    0–127      confirmed
-      [5]  amp type                      #4    selector   confirmed
+      [5]  amp type                      #4    selector   confirmed  name: Brit Plex 50, overdrive (manual-am3, documented)
       [6]  gain                          60    0–127      confirmed
       [7]  treble                        60    0–127      confirmed
       [8]  middle                        70    0–127      confirmed
@@ -147,14 +147,16 @@ state: normal, preset 1B
       [14] delay time                     0    0–127      confirmed
       [15] reverb decay                   5    0–127      confirmed  type: room 6
       [16] reverb mix                     4    0–127      confirmed
-      [17] IR cab                        #7    selector   confirmed
+      [17] IR cab                        #7    selector   confirmed  name: Marshall 1960V30 4x12, factory IR (manual-am3, documented)
       [18] LED red                       67    0–255      confirmed
       [19] LED green                     22    0–255      confirmed
       [20] LED blue                      67    0–255      confirmed  LED colour #431643
 ```
 
 Each line is `[byte]  field  value  range  confidence`. Knob values are the raw 0–127 numbers,
-with no unit. `#4` is a stepped selector position (0–8). `type: room 6` reads a typed knob as an
+with no unit. `#4` is a stepped selector position (0–8); for the amp type and IR cab, `name:` adds
+the model the manual printed with the pedal lists for it (`documented`; see
+[Effect types](effect-types.md#amp-types-and-ir-cabs)). `type: room 6` reads a typed knob as an
 effect type and a position (see [Effect types](effect-types.md)); IR cab `0` shows as `off`. Bytes
 18–20 are the preset's footswitch LED colour, also shown as `#rrggbb`. The 21 bytes are explained in
 [The Tank-G explained](tank-g.md).

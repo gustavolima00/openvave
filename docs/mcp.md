@@ -224,6 +224,12 @@ The assistant can also read four reference documents without a pedal: `openvave:
 (every control `pedal_set` accepts and its values), `openvave://effect-types`,
 `openvave://byte-map` and `openvave://safety`.
 
+Amp type and IR cab positions come with the model the Tank-G manual names for them
+(`position_name` in `preset_read`, `position_name_before` / `_after` and `#3 (Friedman 100)` in
+the summary of `pedal_changes`, whose `display_before` / `display_after` stay `#4`; `position_names` in
+`openvave://byte-map`). They come from the manual printed with firmware 96 pedals (`documented`),
+and IR cab names describe the factory IRs only; see [Effect types](effect-types.md#amp-types-and-ir-cabs).
+
 ## 7. Saving, restoring, and your confirmation
 
 `preset_save`, `preset_restore`, `preset_copy`, `preset_swap` and `preset_import` work exactly

@@ -175,7 +175,7 @@ openvave set FIELD=VALUE [FIELD=VALUE ...] [--dry-run] [--experimental]
 |---|---|---|
 | `noise_gate`, `gain`, `treble`, `middle`, `bass`, `volume`, `mod_speed`, `delay_time`, `reverb_mix` | 0–127 | |
 | `mod_fx`, `delay_mix`, `reverb_decay` | position 1–40 (keep type); with `--type TYPE`; or raw 0–127 with `--raw`. In `FIELD=VALUE` form: `POSITION`, `TYPE:POSITION`, `raw:N` | |
-| `amp_type`, `ir_cab` | 0–8 | |
+| `amp_type`, `ir_cab` | position 0–8 (the number; output adds the manual's model name, `documented`: [Effect types](effect-types.md#amp-types-and-ir-cabs)) | |
 | `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` | |
 | `led_colour` | `#rrggbb` or `r,g,b` | |
 
@@ -346,6 +346,14 @@ removing, renaming or retyping a field bumps it.
 `info`, `preset dump` and the `watch --json` start and change events carry a top-level
 `pedal_state` (`normal`, `edit`, `tuner`, `bypass`, `loading`, `unrecognised`). Typed knobs are
 raw values in JSON.
+
+`amp_type` and `ir_cab` field items add `position_name` (`name`, `detail`, `text`, `factory`,
+`source`, `confidence`, `firmware` (96); `null` for IR cab 0 and out of range), and their changes in `watch --json`
+and the write results add `position_name_old` / `position_name_new` (watch) or
+`position_name_before` / `position_name_after` (the same object, or `null`). `value` and `display`
+(`#4`) stay the raw position.
+The names come from the manual printed with firmware 96 pedals, `confidence` `documented`
+([Effect types](effect-types.md#amp-types-and-ir-cabs)).
 
 Abbreviated `openvave set gain 90 --json`:
 

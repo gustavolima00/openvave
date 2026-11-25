@@ -105,6 +105,20 @@ async def test_preset_read_typed_knobs_carry_type_and_position(tmp_path) -> None
     assert "knob_type" not in fields["gain"]
 
 
+async def test_preset_read_names_amp_type_and_ir_cab(tmp_path) -> None:
+    """Spec 007 US4: the CLI's ``position_name`` key reaches the MCP result."""
+    from openvave.protocol.names import position_name
+
+    async with open_harness(options(tmp_path), CountingFactory(make=normal_pedal)) as h:
+        result = await h.ok("preset_read")
+    fields = {f["name"]: f for f in result["preset"]["fields"]}
+    for name in ("amp_type", "ir_cab"):
+        expected = position_name(name, fields[name]["value"])
+        got = fields[name]["position_name"]
+        assert (got and got["text"]) == (expected and expected.text)
+    assert "position_name" not in fields["gain"]
+
+
 @pytest.mark.parametrize("region", ["global", "status"])
 async def test_preset_read_other_regions_equal_info_regions(
     tmp_path, capsys: pytest.CaptureFixture[str], region: str

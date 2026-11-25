@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from openvave._jsonform import field_json, hex_bytes, identity_json
+from openvave._jsonform import field_json, hex_bytes, identity_json, position_name_json
 from openvave.models import (
     IMAGE_ACTIONS,
     Backup,
@@ -36,6 +36,7 @@ from openvave.models import (
 )
 from openvave.protocol.bytemap import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field, decode_region
+from openvave.protocol.names import NAMED_FIELDS, PositionName, position_name
 from openvave.protocol.state import classify
 from openvave.protocol.storage import EXPECTED_HEADER, position
 from openvave.protocol.writes import WRITABLE_FIELDS, sendable_by_default
@@ -126,7 +127,32 @@ def type_reading(field: DecodedField) -> str | None:
     return "off" if type_name is None else f"{type_name} {position}"
 
 
-def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
+def _position_name(field: DecodedField) -> PositionName | None:
+    if field.out_of_range:
+        return None
+    return position_name(field.entry.name, field.value)
+
+
+def name_reading(field: DecodedField) -> str | None:
+    """The model an amp type or IR cab position is named after, with its source and confidence
+    (spec 007 US4): ``Friedman 100, overdrive (manual-am3, documented)``, or for a cab
+    ``Mesa Boogie 4x12, factory IR (manual-am3, documented)``. ``None`` without a name."""
+    name = _position_name(field)
+    if name is None:
+        return None
+    kind = "factory IR" if name.factory else name.detail
+    return f"{name.text}, {kind} ({name.source}, {name.confidence})"
+
+
+def _short_name(field: DecodedField) -> str | None:
+    """``Friedman 100``, or ``… ?`` while the name is a hypothesis,, or ``None``."""
+    name = _position_name(field)
+    if name is None:
+        return None
+    return name.text + (" ?" if name.confidence == "hypothesis" else "")
+
+
+def field_line(field: DecodedField, indent: str = FIELD_INDENT, *, named: bool = True) -> str:
     """``[15] reverb decay   5   0–127   observed`` (contracts/cli.md column layout)."""
     entry = field.entry
     line = (
@@ -141,6 +167,9 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     reading = type_reading(field)
     if reading is not None:
         line += f"  type: {reading}"
+    name = name_reading(field) if named else None
+    if name is not None:
+        line += f"  name: {name}"
     return line
 
 
@@ -159,8 +188,9 @@ def field_lines(decoded: DecodedRegion, indent: str = FIELD_INDENT) -> list[str]
     """One line per named field (the LED colour also as ``#rrggbb``), then ``unknown: …``
     listing the unknown offsets."""
     lines = []
+    named = not is_placeholder(decoded.read.data)  # the bypass buffer is not a preset
     for f in decoded.fields:
-        line = field_line(f, indent)
+        line = field_line(f, indent, named=named)
         if f.entry.name == LED_PARTS[-1]:
             colour = led_colour_text(decoded)
             if colour is not None:
@@ -265,7 +295,7 @@ def region_json(read: RegionRead, firmware: int) -> dict[str, Any]:
         "address": f"0x{region.address:08x}",
         "length": region.length,
         "data": hex_bytes(read.data),
-        "fields": [field_json(f) for f in decoded.fields],
+        "fields": [field_json(f, named=not is_placeholder(read.data)) for f in decoded.fields],
         "map_firmware": decoded.map_firmware,
         "unknown_offsets": list(decoded.unknown_offsets),
     }
@@ -370,29 +400,93 @@ def watch_label_line(text: str) -> str:
     return f"── label: {text} ──"
 
 
-def _with_reading(field: DecodedField) -> str:
-    """``5`` or, for a typed knob, ``5 (room 6)``."""
-    reading = type_reading(field)
+NAMED_BOTH = (True, True)
+"""Show position names on both sides of a change (the default)."""
+
+
+def is_placeholder(data: bytes | None) -> bool:
+    """The bypass edit buffer: 21 zero bytes, a placeholder rather than a preset (spec 004).
+    Amp type 0 / cab 0 there are not a selected amp or cab, so they carry no name."""
+    return data is not None and len(data) == Region.CURRENT_PRESET.length and not any(data)
+
+
+def names_for(before: bytes | None, after: bytes | None) -> tuple[bool, bool]:
+    """Whether each side of a change may carry position names, from the edit buffer on that
+    side (``None``: unknown, names allowed): not when it is the bypass placeholder."""
+    return (not is_placeholder(before), not is_placeholder(after))
+
+
+def names_for_event(event: WatchChange) -> tuple[bool, bool]:
+    """:func:`names_for` for a watch change: the buffer after it, and before it rebuilt from
+    the old values of the changed preset bytes."""
+    decoded = event.regions.get(Region.CURRENT_PRESET)
+    if decoded is None:
+        return NAMED_BOTH
+    after = decoded.read.data
+    before = bytearray(after)
+    for change in event.changes:
+        if change.region is Region.CURRENT_PRESET and change.offset < len(before):
+            before[change.offset] = change.old
+    return names_for(bytes(before), after)
+
+
+def with_reading(field: DecodedField, *, named: bool = True) -> str:
+    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#3 (Friedman 100)``
+    (``named=False``: without the name, e.g. on the bypass side of a change)."""
+    reading = type_reading(field) or (_short_name(field) if named else None)
     return field.display if reading is None else f"{field.display} ({reading})"
 
 
-def _change_cells(change: ByteChange) -> tuple[str, str, str]:
+def change_names(
+    change: ByteChange,
+) -> tuple[PositionName | None, PositionName | None] | None:
+    """Names of the old and new position of an amp type or IR cab change (``None`` for a
+    position without one); ``None`` for any other byte."""
+    entry = change.field
+    if entry is None or entry.name not in NAMED_FIELDS:
+        return None
+    old, new = (_position_name(decode_field(entry, raw)) for raw in (change.old, change.new))
+    return old, new
+
+
+def change_names_json(
+    change: ByteChange, old_key: str, new_key: str, named: tuple[bool, bool] = NAMED_BOTH
+) -> dict[str, Any]:
+    """``position_name_<old>`` / ``position_name_<new>`` for an amp type or IR cab change, each
+    the ``position_name`` object (with its confidence and factory flag) or ``null`` (spec 007
+    US4, additive keys); empty for any other byte. A side with ``named`` false is ``null``."""
+    names = change_names(change)
+    if names is None:
+        return {}
+    old, new = (
+        None if n is None or not shown else position_name_json(n)
+        for n, shown in zip(names, named, strict=True)
+    )
+    return {f"position_name_{old_key}": old, f"position_name_{new_key}": new}
+
+
+def _change_cells(
+    change: ByteChange, named: tuple[bool, bool] = NAMED_BOTH
+) -> tuple[str, str, str]:
     """(label, old, new) in the field's display form, or raw hex for unknown/flag bytes."""
     if change.field is not None:
         return (
             change.field.label,
-            _with_reading(decode_field(change.field, change.old)),
-            _with_reading(decode_field(change.field, change.new)),
+            with_reading(decode_field(change.field, change.old), named=named[0]),
+            with_reading(decode_field(change.field, change.new), named=named[1]),
         )
     name = " / ".join(e.label for e in change.fields) if change.fields else "unknown"
     return name, f"0x{change.old:02x}", f"0x{change.new:02x}"
 
 
-def watch_change_lines(event: WatchChange, t: float) -> list[str]:
-    """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked."""
+def watch_change_lines(
+    event: WatchChange, t: float, named: tuple[bool, bool] = NAMED_BOTH
+) -> list[str]:
+    """``+9.51s  preset[15]  reverb decay   5 → 64``; time printed once, co-moving marked.
+    ``named``: whether the old / new side may show position names (not in bypass)."""
     lines = []
     count = len(event.changes)
-    cells = [_change_cells(change) for change in event.changes]
+    cells = [_change_cells(change, named) for change in event.changes]
     # Labels longer than the column widen it for this event, so values stay aligned.
     width = max([WATCH_NAME_WIDTH, *(len(name) + 1 for name, _, _ in cells)])
     # Same for old values carrying a type reading (``5 (room 6)``): arrows stay in one column.
@@ -453,7 +547,11 @@ def watch_label_json(text: str, t: float) -> dict[str, Any]:
 
 
 def watch_change_json(
-    event: WatchChange, t: float, label: str | None, state: PedalState | None = None
+    event: WatchChange,
+    t: float,
+    label: str | None,
+    state: PedalState | None = None,
+    named: tuple[bool, bool] = NAMED_BOTH,
 ) -> dict[str, Any]:
     extra = {} if state is None else {"pedal_state": state.label}
     return _watch_event(
@@ -468,6 +566,7 @@ def watch_change_json(
                 "old": c.old,
                 "new": c.new,
                 "field": c.field.name if c.field is not None else None,
+                **change_names_json(c, "old", "new", named),
             }
             for c in event.changes
         ],
@@ -536,7 +635,7 @@ def _value_text(field: str, data: bytes) -> str:
     if spec.kind == "led_colour":
         return "#" + data[spec.offset : spec.offset + 3].hex()
     assert spec.entry is not None
-    return _with_reading(decode_field(spec.entry, data[spec.offset]))
+    return with_reading(decode_field(spec.entry, data[spec.offset]), named=not is_placeholder(data))
 
 
 def _requested(plan: WritePlan) -> bytes:
@@ -548,15 +647,14 @@ def _requested(plan: WritePlan) -> bytes:
     return bytes(buffer)
 
 
-def _change_text(change: ByteChange) -> str:
+def _change_text(change: ByteChange, named: bool = True) -> str:
     if change.region is Region.GLOBAL:
         where = f"global[{change.offset}]"
     else:
         where = f"[{change.offset}]"
     if change.field is not None:
-        return (
-            f"{where} {change.field.name} {_with_reading(decode_field(change.field, change.new))}"
-        )
+        reading = with_reading(decode_field(change.field, change.new), named=named)
+        return f"{where} {change.field.name} {reading}"
     return f"{where} {change.new}"
 
 
@@ -589,7 +687,8 @@ def human_set(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> 
         return "\n".join(lines)
     lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
     status = "applied" if result.applied else "not applied"
-    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    named = names_for(None, result.after.data)[1]
+    texts = [_change_text(c, named) for c in result.changes] or ["no change"]
     lines.append(f"  after  {texts[0]}   {status}")
     lines += [f"         {text}" for text in texts[1:]]
     lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
@@ -702,7 +801,9 @@ def _select_lines(
 _REGION_NAMES = {Region.GLOBAL: "global", Region.STATUS: "status"}
 
 
-def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
+def _changes_json(
+    changes: tuple[ByteChange, ...], named: tuple[bool, bool] = NAMED_BOTH
+) -> list[dict[str, Any]]:
     return [
         {
             "region": _REGION_NAMES.get(c.region, "preset"),
@@ -710,6 +811,7 @@ def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
             "before": c.old,
             "after": c.new,
             "name": c.field.name if c.field is not None else None,
+            **change_names_json(c, "before", "after", named),
         }
         for c in changes
     ]
@@ -754,7 +856,9 @@ def write_json(
             "ack": True,
             "after": hex_bytes(result.after.data),
             "global_after": hex_bytes(result.global_after.data),
-            "changes": _changes_json(result.changes),
+            "changes": _changes_json(
+                result.changes, names_for(plan.before.data, result.after.data)
+            ),
             "applied": result.applied,
         }
         if result.return_index is not None:
@@ -837,7 +941,8 @@ def human_edit(plan: EditPlan, result: EditResult | None) -> str:
     if result is None:
         lines.append("  dry run: nothing sent")
         return "\n".join(lines)
-    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    named = names_for(None, None if result.after is None else result.after.data)[1]
+    texts = [_change_text(c, named) for c in result.changes] or ["no change"]
     lines.append(f"  after  {texts[0]}")
     lines += [f"         {text}" for text in texts[1:]]
     lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
@@ -919,7 +1024,10 @@ def edit_json(
             "global_after": (
                 None if result.global_after is None else hex_bytes(result.global_after.data)
             ),
-            "changes": _changes_json(result.changes),
+            "changes": _changes_json(
+                result.changes,
+                names_for(plan.before.data, None if result.after is None else result.after.data),
+            ),
             "applied": result.applied,
         }
     return document
@@ -960,12 +1068,12 @@ def _sequence_refusal_line(
     return [f"  refused: {reason} ({detail})"]
 
 
-def _diff_line(change: ByteChange) -> str:
+def _diff_line(change: ByteChange, named: tuple[bool, bool] = NAMED_BOTH) -> str:
     entry = change.field
     if entry is None:
         return f"  [{change.offset}] {change.old} → {change.new}"
-    old = _with_reading(decode_field(entry, change.old))
-    new = _with_reading(decode_field(entry, change.new))
+    old = with_reading(decode_field(entry, change.old), named=named[0])
+    new = with_reading(decode_field(entry, change.new), named=named[1])
     return f"  [{change.offset}] {entry.name} {old} → {new}"
 
 
@@ -992,7 +1100,8 @@ def human_sequence_header(plan: SequencePlan, source: str | None) -> str:
     else:
         head = f"Restore {position(index)} from {source}"
     lines = [f"{head}   UNSAFE: overwrites a stored preset"]
-    lines += [_diff_line(c) for c in plan.diff]
+    named = names_for(plan.before, plan.after)  # the slot now, and what will be stored
+    lines += [_diff_line(c, named) for c in plan.diff]
     return "\n".join(lines)
 
 

@@ -67,12 +67,14 @@ Notes:
   (observed). It is an output level the pedal keeps to itself, outside the presets.
 - **Values are raw.** 0–127 is the knob's full sweep (every knob reached both ends on the pedal).
   There are no units: openvave does not know what gain 60 means in dB or delay time 40 in ms.
-- **Amp types and IR cabs have no names.** Each is a 9-position selector, 0–8 on the wire.
-  openvave prints `#0`–`#8` (the raw value). The phone app shows amp types as 1–9 and the IR cab
-  as `OFF` for 0 and 1–8 otherwise; the manual agrees that the first IR position turns the cab off,
-  and it sounded that way on the pedal (spec 007), so openvave prints `off` for 0 and `#1`–`#8`
-  for the cabinets. The manual's lists of models are images we have not transcribed, and
-  the app names neither, so these pages do not either.
+- **Amp types and IR cabs are numbered and named from the manual.** Each is a 9-position
+  selector, 0–8 on the wire, printed `#0`–`#8` (`off` for IR cab 0, which turns the cab off: the
+  manual says so and it sounded that way, spec 007). The phone app shows amp types as 1–9 and the
+  IR cab as `OFF`, 1–8. openvave adds the model the manual printed with firmware 96 pedals lists
+  for each position (`#3 (Friedman 100)`), marked `documented`: from the manual, not checked on
+  the pedal. Other M-VAVE lists exist (an early 2024 manual, a 2026 card for firmware 97+). IR cab
+  names describe the factory IRs, which you can replace. Tables, sources and the trademark note:
+  [Effect types](effect-types.md).
 - **Preset bytes 18–20** hold the colour of the preset LED, as red, green, blue. Writing
   `ff 00 00` turned the LED red (spec 004) and `00 ff 00` was written and read back in a second
   session (spec 007, LED turned green), so `set led_colour` needs no flag on firmware 96 and
@@ -174,7 +176,8 @@ recorded. The flag survives a power cycle. `openvave loopback on|off` switches i
 
 - The audio processing order (above).
 - The footswitches press by press.
-- Names for the 9 amp types and 9 IR cabs.
+- Whether the amp and cab names (from the manual) sound right on the pedal: documented, not
+  checked by ear.
 - Device-info bytes (the `Device info` block of `info`), apart from the firmware version.
 - Whether the "off" zones between effect types really silence the effect (the manual says so; not
   heard yet). See [Effect types](effect-types.md).

@@ -45,4 +45,8 @@ project's evidence rules:
 | `observed` | Seen once, with a committed capture as evidence. |
 | `hypothesis` | A reasoned guess, not yet tested on the pedal. |
 
+One more word applies only to the amp type and IR cab **names**: `documented`, taken from the
+vendor's printed manual rather than checked on the pedal (see
+[Effect types](effect-types.md#amp-types-and-ir-cabs)).
+
 Writes whose message is not `confirmed` need `--experimental`; see [Safety](safety.md).

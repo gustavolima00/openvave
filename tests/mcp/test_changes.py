@@ -160,3 +160,64 @@ async def test_wait_is_capped(tmp_path: Path, wait: float) -> None:
     assert text.startswith("invalid_value: ")
     assert "0" in text and "30" in text
     assert factory.calls == 0
+
+
+async def test_amp_type_change_shows_the_names(tmp_path: Path) -> None:
+    """Spec 007 US4: display stays the raw position; names go in new keys and the summary."""
+    from openvave._jsonform import position_name_json
+    from openvave.protocol.names import position_name
+
+    factory = CountingFactory(make=normal_pedal)
+    async with open_harness(options(tmp_path), factory) as h:
+        await h.ok("pedal_changes")
+        turn(factory.fake, 5, 8)  # amp type 4 -> 8
+        result = await h.ok("pedal_changes")
+    (change,) = result["changes"]
+    before, after = position_name("amp_type", 4), position_name("amp_type", 8)
+    assert before is not None and after is not None
+    mark = " ?" if after.confidence == "hypothesis" else ""
+    assert (change["before"], change["after"]) == (4, 8)
+    assert (change["display_before"], change["display_after"]) == ("#4", "#8")
+    assert change["position_name_before"] == position_name_json(before)
+    assert change["position_name_after"] == position_name_json(after)
+    assert f"amp type #4 ({before.text}{mark}) → #8 ({after.text}{mark})" in result["summary"]
+
+
+async def test_bypass_side_of_a_change_has_no_names(tmp_path: Path) -> None:
+    """Codex round 2: the all-zero bypass buffer is not a preset, so amp 0 / cab 0 there are
+    not named; the raw diff stays."""
+    factory = CountingFactory(make=normal_pedal)
+    async with open_harness(options(tmp_path), factory) as h:
+        await h.ok("pedal_changes")
+        factory.fake._memory[GLOBAL] = bytes([0, 0, 0xFF, 1])  # type: ignore[index]
+        factory.fake._memory[EDIT_BUFFER] = bytes(21)  # type: ignore[index]
+        result = await h.ok("pedal_changes")
+    assert result["state_after"] == "bypass"
+    amp = next(c for c in result["changes"] if c["name"] == "amp_type")
+    assert (amp["before"], amp["after"]) == (4, 0)
+    assert amp["position_name_before"] is not None  # the preset side keeps its name
+    assert amp["position_name_after"] is None
+    assert "amp type #4 (" in result["summary"]
+    assert "→ #0;" in result["summary"] or result["summary"].endswith("→ #0")
+
+
+async def test_baseline_taken_in_bypass_names_only_the_preset_side(tmp_path: Path) -> None:
+    """Codex round 3: a baseline read in bypass, then bypass left before ``pedal_changes``:
+    the old side is the zero placeholder, whatever the newer global bytes say."""
+    from tests.support import storage_fixture as sf
+
+    def bypassed() -> FakeTransport:
+        return make_fake(
+            NORMAL, buffer=bytes(21), glob=bytes([0, 0, 0xFF, NORMAL]), status=bytes([0])
+        )
+
+    factory = CountingFactory(make=bypassed)
+    async with open_harness(options(tmp_path), factory) as h:
+        await h.ok("preset_read")
+        factory.fake._memory[GLOBAL] = bytes([0, 0, 1, NORMAL])  # type: ignore[index]
+        factory.fake._memory[EDIT_BUFFER] = sf.PUBLIC_PRESET  # type: ignore[index]
+        result = await h.ok("pedal_changes")
+    amp = next(c for c in result["changes"] if c["name"] == "amp_type")
+    assert (amp["before"], amp["after"]) == (0, sf.PUBLIC_PRESET[5])
+    assert amp["position_name_before"] is None
+    assert amp["position_name_after"] is not None

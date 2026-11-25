@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from openvave.models import DecodedField, DeviceIdentity
+from openvave.protocol.names import NAMED_FIELDS, NAMES_FIRMWARE, PositionName, position_name
 
 
 def hex_bytes(data: bytes) -> str:
@@ -22,11 +23,13 @@ def identity_json(identity: DeviceIdentity) -> dict[str, Any]:
     }
 
 
-def field_json(field: DecodedField) -> dict[str, Any]:
-    """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema)."""
+def field_json(field: DecodedField, *, named: bool = True) -> dict[str, Any]:
+    """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema).
+
+    ``named=False`` (the bypass placeholder buffer) keeps ``position_name`` ``null``."""
     entry = field.entry
     ranged = entry.min is not None and entry.max is not None
-    return {
+    document = {
         "offset": entry.offset,
         "size": 1,
         "name": entry.name,
@@ -39,4 +42,27 @@ def field_json(field: DecodedField) -> dict[str, Any]:
         "display": field.display,
         "interpreted": field.interpreted,
         "out_of_range": field.out_of_range,
+    }
+    if entry.name in NAMED_FIELDS:
+        shown = named and not field.out_of_range
+        name = position_name(entry.name, field.value) if shown else None
+        document["position_name"] = None if name is None else position_name_json(name)
+    return document
+
+
+def position_name_json(name: PositionName) -> dict[str, Any]:
+    """The model an amp type or IR cab position is named after (spec 007 US4; additive key).
+
+    ``confidence`` is the name's own (``hypothesis`` until matched on the pedal), not the
+    byte's; ``factory`` is true for IR cabs, whose slots a user can overwrite; ``firmware`` is
+    the firmware the names are kept for (96), so a result from another firmware shows that the
+    names are the fw 96 fallback."""
+    return {
+        "name": name.name,
+        "detail": name.detail,
+        "text": name.text,
+        "factory": name.factory,
+        "source": name.source,
+        "confidence": name.confidence,
+        "firmware": NAMES_FIRMWARE,
     }

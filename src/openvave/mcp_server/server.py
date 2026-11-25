@@ -26,7 +26,13 @@ from openvave.errors import ConfigError
 from openvave.mcp_server import backups, resources
 from openvave.mcp_server.errors import InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
-from openvave.mcp_server.results import add_knob_types, change_json, change_label, with_summary
+from openvave.mcp_server.results import (
+    add_knob_types,
+    change_json,
+    change_label,
+    change_text,
+    with_summary,
+)
 from openvave.mcp_server.sequences import register_sequences
 from openvave.mcp_server.writes import parse_preset_position, register_writes
 from openvave.models import ByteChange, DeviceInfo, PedalState, Region, RegionRead
@@ -197,14 +203,16 @@ def build_server(holder: PedalHolder) -> MCPServer:
                     changes = _changes(base, reads)
             holder.baseline = reads
         before, after = _state_label(base), _state_label(reads)
+        preset = Region.CURRENT_PRESET
+        named = render.names_for(base[preset].data, reads[preset].data)
         return {
-            "summary": _changes_summary(previous is None, changes, before, after, waited),
+            "summary": _changes_summary(previous is None, changes, before, after, waited, named),
             "baseline": previous is None,
             "changed": bool(changes),
             "waited": round(waited, 3),
             "state_before": before,
             "state_after": after,
-            "changes": [change_json(c) for c in changes],
+            "changes": [change_json(c, named) for c in changes],
         }
 
     @server.tool(annotations=TOOLS["pedal_scan"].annotations())
@@ -387,7 +395,12 @@ def _state_label(reads: dict[Region, RegionRead]) -> str:
 
 
 def _changes_summary(
-    first: bool, changes: list[ByteChange], before: str, after: str, waited: float
+    first: bool,
+    changes: list[ByteChange],
+    before: str,
+    after: str,
+    waited: float,
+    named: tuple[bool, bool] = (True, True),
 ) -> str:
     if not changes:
         if first and waited == 0:
@@ -395,8 +408,8 @@ def _changes_summary(
         return "no change" + (f" within {waited:g} s" if waited else "") + f" (state: {after})"
     parts = [] if before == after else [f"state {before} → {after}"]
     for change in changes:
-        item = change_json(change)
-        parts.append(f"{change_label(change)} {item['display_before']} → {item['display_after']}")
+        old, new = change_text(change, named)
+        parts.append(f"{change_label(change)} {old} → {new}")
     return "; ".join(parts)
 
 

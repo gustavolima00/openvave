@@ -40,7 +40,51 @@
     import → 9D, restore all from D0, select 1B; every frame matched the independent encoding
     before it was sent; D1 = D0.
 
-## Deferred
+## Milestone 4: Amp and cab names (US4)
 
-- US4 amp / cab names: needs the owner's transcription of the manual's lists or the vendor
-  desktop software's display, matched position by position.
+### Research
+
+- [X] T030 Find the manual's amp and IR cab lists; evidence record
+  `evidence-amp-cab-names.md` (FR-011): S1, the 2024 manual (Manuals+ copy, archived) and S3, the
+  vendor's 2026 "NEW PRESET" card, name different models; position numbering derived
+  (amp slot *k* = raw *k* − 1, cab slot *k* = raw *k*); no images committed
+- [X] T031 Owner, hardware (read-only, nothing saved): match the positions on the pedal by ear,
+  as in the evidence record's "Position matching" procedure; record which list fits each
+  position, firmware and date in the evidence record
+  - 2026-11-25, owner decision: no by-ear session; settle from documents instead. Documentary
+    match in the evidence record: S3 = the AM4 factory set (vendor app file, by position), refuted
+    for this pedal; the never-imported fw 96 pedal holds the AM3 factory set (5 of 5 untouched
+    presets equal the vendor's AM3 image), which has no names; S1 predates AM3. Inconclusive for
+    S1: the owner chooses between S1 as a hypothesis and no names (still open)
+  - Closed 2026-11-25: matched against the shipped printed manual instead of by ear, owner
+    decision 2026-11-25. The manual revision printed with fw 96 pedals (S7 photo, two owners; S8
+    vendor PDF 2025-02-18; S9) gives the amp list and the same cab list as S1; `NAME_CHOICE` =
+    `manual-am3`, confidence `documented` (FR-011 amended)
+
+### Tests first (the owner asked on 2026-11-25 to build with the manual's names before T031)
+
+- [X] T032 `tests/unit/test_names.py`, `tests/unit/test_names_doc.py`,
+  `tests/unit/test_render_names.py`: one names table (`src/openvave/protocol/names.py`, both
+  vendor lists + a per-position choice), every chosen name a `hypothesis`, IR cab names factory
+  names, cab 0 keeps `off`, the doc table and the evidence record match the data; expected texts
+  built from the table, so switching lists is a data change
+- [X] T033 Contract tests: `preset dump` human and JSON (`position_name`), `watch` human and JSON
+  (`position_name_old` / `_new`), `set` human and JSON (`position_name_before` / `_after`, raw
+  input), MCP `preset_read`, `pedal_changes` and `openvave://byte-map`; schemas validate,
+  `schema_version` stays 2
+
+### Implementation
+
+- [X] T034 `src/openvave/protocol/names.py`; rendering (`render.py`, `_jsonform.py`), MCP results
+  and resources; `specs/protocol/command-layer.md` "Amp type and IR cab names" (byte-map rows 5
+  and 17 unchanged: the byte stays `confirmed`, the names carry their own confidence)
+- [X] T035 Docs (`docs/effect-types.md`, `docs/tank-g.md`, `docs/cli-reference.md`,
+  `docs/mcp.md`) with the trademark note; CHANGELOG [Unreleased]
+
+### Live verification
+
+- [ ] T036 Owner: `uv run openvave preset dump` on two presets shows the names next to `#n`
+
+**Checkpoint**: Milestone 4 done: T031 closed by the documentary match (owner decision
+2026-11-25), `NAME_CHOICE` = the manual printed with fw 96 pedals, `documented`. T036 (one real
+`preset dump` showing the names) is left for the owner after the merge.

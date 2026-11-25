@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from openvave.cli.render import type_reading
+from openvave.cli.render import change_names_json, type_reading, with_reading
 from openvave.models import ByteChange
 from openvave.protocol import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field
@@ -27,9 +27,11 @@ def add_knob_types(region: dict[str, Any]) -> dict[str, Any]:
     return region
 
 
-def change_json(change: ByteChange) -> dict[str, Any]:
+def change_json(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> dict[str, Any]:
     """One changed byte of ``pedal_changes``: name, raw before/after and their display form
-    (``5 (room 6)`` for a typed knob, hex for an unknown or flag byte)."""
+    (``5 (room 6)`` for a typed knob, hex for an unknown or flag byte); amp type and IR cab add
+    ``position_name_before`` / ``position_name_after`` (their display stays ``#4``), ``null`` on
+    a side where ``named`` is false (bypass)."""
     entry = change.field
     if entry is not None:
         before, after = (decode_field(entry, raw) for raw in (change.old, change.new))
@@ -41,7 +43,7 @@ def change_json(change: ByteChange) -> dict[str, Any]:
     else:
         display = (f"0x{change.old:02x}", f"0x{change.new:02x}")
         name = None
-    return {
+    document: dict[str, Any] = {
         "region": change.region.name.lower(),
         "offset": change.offset,
         "name": name,
@@ -50,6 +52,21 @@ def change_json(change: ByteChange) -> dict[str, Any]:
         "display_before": display[0],
         "display_after": display[1],
     }
+    document.update(change_names_json(change, "before", "after", named))  # spec 007 US4
+    return document
+
+
+def change_text(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> tuple[str, str]:
+    """Before and after of a changed byte for the human ``summary``: the display form with the
+    type reading or, for amp type / IR cab, the position's name (``#3 (Friedman 100)``)."""
+    entry = change.field
+    if entry is None:
+        return f"0x{change.old:02x}", f"0x{change.new:02x}"
+    before, after = (
+        with_reading(decode_field(entry, raw), named=shown)
+        for raw, shown in zip((change.old, change.new), named, strict=True)
+    )
+    return before, after
 
 
 def change_label(change: ByteChange) -> str:
@@ -59,4 +76,4 @@ def change_label(change: ByteChange) -> str:
     return " / ".join(e.label for e in change.fields) if change.fields else "unknown byte"
 
 
-__all__ = ["add_knob_types", "change_json", "change_label", "with_summary"]
+__all__ = ["add_knob_types", "change_json", "change_label", "change_text", "with_summary"]

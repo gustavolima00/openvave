@@ -251,6 +251,9 @@ hardware, one copy and one swap are verified and undone with `preset restore`.
 - **FR-011**: Amp type and IR cab names MUST come only from a committed evidence record naming the
   source (e.g. the printed manual or the vendor's desktop software), the date, and the position
   matching done on the pedal; without it the positions stay numbered.
+  *Amended 2026-11-25 (owner decision):* the positions were matched against the shipped printed
+  manual (the AM3 revision, corroborated by the vendor's PDF) instead of by ear on the pedal; such
+  names carry the confidence `documented`. See `evidence-amp-cab-names.md`.
 - **FR-012**: Named positions MUST keep the raw position visible and accepted as input; IR cab names
   MUST be documented as factory names.
 

@@ -134,8 +134,19 @@ def test_human_walkthrough(
     assert strip_time(body[4]) == "  preset[15]  reverb decay      5 (room 6) → 64 (spring 21)"
     assert strip_time(body[5]) == "  preset[15]  reverb decay      64 (spring 21) → 127 (cloud 40)"
     assert body[6] == "── label: reverb mix only ──"
-    assert strip_time(body[7]) == "  preset[16]  reverb mix           4 → 90     (co-moving: 2)"
-    assert body[8] == "         preset[17]  IR cab              #7 → #8"
+    # Named cab positions (spec 007 US4, from the names table) widen the value column.
+    from openvave.protocol.names import position_name
+
+    def cab(raw: int) -> str:
+        name = position_name("ir_cab", raw)
+        assert name is not None
+        return f"#{raw} ({name.text}{' ?' if name.confidence == 'hypothesis' else ''})"
+
+    width = max(4, len(cab(7)))
+    assert strip_time(body[7]) == (
+        f"  preset[16]  {'reverb mix':<18}{'4':>{width}} → 90     (co-moving: 2)"
+    )
+    assert body[8] == f"         preset[17]  {'IR cab':<18}{cab(7):>{width}} → {cab(8)}"
     assert len(body) == 9  # q is not a label; no heartbeat lines
     assert re.fullmatch(r"Stopped after \d+\.\d s: 5 changes in \d+ cycles\.", lines[-1])
     assert "Recording" not in run.out
@@ -208,6 +219,15 @@ def test_json_lines_validate(
         (16, "reverb_mix"),
         (17, "ir_cab"),
     ]
+    from openvave._jsonform import position_name_json
+    from openvave.protocol.names import position_name
+
+    cab = changes[3]["changes"][1]
+    names = [position_name("ir_cab", cab[k]) for k in ("old", "new")]
+    assert [cab["position_name_old"], cab["position_name_new"]] == [
+        None if n is None else position_name_json(n) for n in names
+    ]
+    assert "position_name_old" not in changes[3]["changes"][0]
     times = [e["t"] for e in events]
     assert times == sorted(times)
 

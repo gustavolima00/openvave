@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from openvave._jsonform import position_name_json
 from openvave.models import Region
 from openvave.protocol import (
     BYTE_MAP,
@@ -17,6 +18,7 @@ from openvave.protocol import (
     REVERB_SECTION_STEPS,
     TYPED_FIELDS,
 )
+from openvave.protocol.names import NAME_STATUS, NAMED_FIELDS, POSITION_NAMES
 from openvave.protocol.writes import WRITABLE_FIELDS, WritableField, sendable_by_default
 
 POSITIONS = {"min": 1, "max": REVERB_SECTION_STEPS}
@@ -119,6 +121,12 @@ def byte_map_document() -> dict[str, Any]:
             row["mask"] = entry.mask
         if entry.labels:
             row["labels"] = {str(k): v for k, v in entry.labels.items()}
+        if entry.name in NAMED_FIELDS:  # spec 007 US4: model names, with their status
+            row["position_names"] = {
+                str(raw): position_name_json(name)
+                for raw, name in POSITION_NAMES[entry.name].items()
+            }
+            row["names_status"] = NAME_STATUS
         regions.setdefault(_region_key(entry.region), []).append(row)
     return {"map_firmware": MAP_FIRMWARE, "regions": regions}
 

@@ -28,13 +28,27 @@ DECODED_FIELD_SCHEMA_PATH = (
 )
 ECHO_LEN = 8
 FW97_IDENTITY = b"TANK-Gv2_097".ljust(27, b"\x00")
+
+
+def _long(field: str, raw: int) -> str:
+    """The name reading built from the names table (spec 007 US4), not hard-coded."""
+    from openvave.protocol.names import position_name
+
+    name = position_name(field, raw)
+    assert name is not None
+    kind = "factory IR" if name.factory else name.detail
+    return f"{name.text}, {kind} ({name.source}, {name.confidence})"
+
+
+AMP4 = _long("amp_type", 4)
+CAB7 = _long("ir_cab", 7)
 DECODED_LINES = [
     "      [0]  amp on                        on    on/off     confirmed",
     "      [1]  mod on                       off    on/off     confirmed",
     "      [2]  delay on                     off    on/off     confirmed",
     "      [3]  reverb on                     on    on/off     confirmed",
     "      [4]  noise gate                    15    0–127      confirmed",
-    "      [5]  amp type                      #4    selector   confirmed",
+    "      [5]  amp type                      #4    selector   confirmed  name: " + AMP4,
     "      [6]  gain                          60    0–127      confirmed",
     "      [7]  treble                        60    0–127      confirmed",
     "      [8]  middle                        70    0–127      confirmed",
@@ -46,7 +60,7 @@ DECODED_LINES = [
     "      [14] delay time                     0    0–127      confirmed",
     "      [15] reverb decay                   5    0–127      confirmed  type: room 6",
     "      [16] reverb mix                     4    0–127      confirmed",
-    "      [17] IR cab                        #7    selector   confirmed",
+    "      [17] IR cab                        #7    selector   confirmed  name: " + CAB7,
     "      [18] LED red                       67    0–255      confirmed",
     "      [19] LED green                     22    0–255      confirmed",
     "      [20] LED blue                      67    0–255      confirmed  LED colour #431643",
@@ -201,6 +215,16 @@ def test_json_decoded_fields(capsys: pytest.CaptureFixture[str]) -> None:
     }
     cab = next(f for f in preset["fields"] if f["name"] == "ir_cab")
     assert (cab["encoding"], cab["display"], cab["interpreted"]) == ("selector", "#7", 7)
+    from openvave.protocol.names import position_name
+
+    for field, raw in (("amp_type", 4), ("ir_cab", 7)):
+        item = next(f for f in preset["fields"] if f["name"] == field)
+        name = position_name(field, raw)
+        assert name is not None
+        assert item["value"] == raw  # the raw position stays (FR-012)
+        assert item["position_name"]["text"] == name.text
+        assert item["position_name"]["confidence"] == name.confidence
+        assert item["position_name"]["factory"] is (field == "ir_cab")
 
 
 def test_json_fields_validate_decoded_field_schema(capsys: pytest.CaptureFixture[str]) -> None:
