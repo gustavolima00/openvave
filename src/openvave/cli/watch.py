@@ -390,7 +390,7 @@ class WatchRun:
                 }
             )
         state = self._state_from(event.regions)
-        named = render.names_shown(self.pedal_state, state or self.pedal_state)
+        named = render.names_for_event(event)
         if self.json_mode:
             if state is not None:
                 self.pedal_state = state

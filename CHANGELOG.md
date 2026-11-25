@@ -21,7 +21,8 @@ All notable changes to this project are documented here. The format follows
   `null`), and `position_names` on the two rows of `openvave://byte-map`. `value`, `display`
   (`#4`, also `pedal_changes`' `display_before` / `display_after`) and input (`set amp_type 4`)
   are unchanged.
-- No name on the bypass side of a change (the bypass buffer is zeros, not a preset), and every
+- No name for the bypass edit buffer (21 zero bytes, a placeholder, not a preset): not in reads,
+  previews or the bypass side of a change, in the CLI and the MCP tools. Every
   name object carries `firmware: 96`, so results from an untested firmware show the names'
   scope.
 - IR cab names describe the factory IRs: a slot overwritten by an imported IR keeps its number

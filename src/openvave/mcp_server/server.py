@@ -203,7 +203,8 @@ def build_server(holder: PedalHolder) -> MCPServer:
                     changes = _changes(base, reads)
             holder.baseline = reads
         before, after = _state_label(base), _state_label(reads)
-        named = render.names_shown(_state(base), _state(reads))
+        preset = Region.CURRENT_PRESET
+        named = render.names_for(base[preset].data, reads[preset].data)
         return {
             "summary": _changes_summary(previous is None, changes, before, after, waited, named),
             "baseline": previous is None,

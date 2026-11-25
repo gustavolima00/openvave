@@ -294,7 +294,7 @@ def region_json(read: RegionRead, firmware: int) -> dict[str, Any]:
         "address": f"0x{region.address:08x}",
         "length": region.length,
         "data": hex_bytes(read.data),
-        "fields": [field_json(f) for f in decoded.fields],
+        "fields": [field_json(f, named=not is_placeholder(read.data)) for f in decoded.fields],
         "map_firmware": decoded.map_firmware,
         "unknown_offsets": list(decoded.unknown_offsets),
     }
@@ -403,10 +403,30 @@ NAMED_BOTH = (True, True)
 """Show position names on both sides of a change (the default)."""
 
 
-def names_shown(before: PedalState | None, after: PedalState | None) -> tuple[bool, bool]:
-    """Whether each side of a change may carry position names: not in bypass, where the
-    buffer is a placeholder of zeros, not a preset (spec 004; spec 007 US4)."""
-    return (before is None or before.kind != "bypass", after is None or after.kind != "bypass")
+def is_placeholder(data: bytes | None) -> bool:
+    """The bypass edit buffer: 21 zero bytes, a placeholder rather than a preset (spec 004).
+    Amp type 0 / cab 0 there are not a selected amp or cab, so they carry no name."""
+    return data is not None and len(data) == Region.CURRENT_PRESET.length and not any(data)
+
+
+def names_for(before: bytes | None, after: bytes | None) -> tuple[bool, bool]:
+    """Whether each side of a change may carry position names, from the edit buffer on that
+    side (``None``: unknown, names allowed): not when it is the bypass placeholder."""
+    return (not is_placeholder(before), not is_placeholder(after))
+
+
+def names_for_event(event: WatchChange) -> tuple[bool, bool]:
+    """:func:`names_for` for a watch change: the buffer after it, and before it rebuilt from
+    the old values of the changed preset bytes."""
+    decoded = event.regions.get(Region.CURRENT_PRESET)
+    if decoded is None:
+        return NAMED_BOTH
+    after = decoded.read.data
+    before = bytearray(after)
+    for change in event.changes:
+        if change.region is Region.CURRENT_PRESET and change.offset < len(before):
+            before[change.offset] = change.old
+    return names_for(bytes(before), after)
 
 
 def with_reading(field: DecodedField, *, named: bool = True) -> str:
@@ -614,7 +634,7 @@ def _value_text(field: str, data: bytes) -> str:
     if spec.kind == "led_colour":
         return "#" + data[spec.offset : spec.offset + 3].hex()
     assert spec.entry is not None
-    return with_reading(decode_field(spec.entry, data[spec.offset]))
+    return with_reading(decode_field(spec.entry, data[spec.offset]), named=not is_placeholder(data))
 
 
 def _requested(plan: WritePlan) -> bytes:
@@ -626,13 +646,14 @@ def _requested(plan: WritePlan) -> bytes:
     return bytes(buffer)
 
 
-def _change_text(change: ByteChange) -> str:
+def _change_text(change: ByteChange, named: bool = True) -> str:
     if change.region is Region.GLOBAL:
         where = f"global[{change.offset}]"
     else:
         where = f"[{change.offset}]"
     if change.field is not None:
-        return f"{where} {change.field.name} {with_reading(decode_field(change.field, change.new))}"
+        reading = with_reading(decode_field(change.field, change.new), named=named)
+        return f"{where} {change.field.name} {reading}"
     return f"{where} {change.new}"
 
 
@@ -665,7 +686,8 @@ def human_set(plan: WritePlan, result: WriteResult | None, *, dry_run: bool) -> 
         return "\n".join(lines)
     lines.append(f"  reply  {hex_bytes(result.reply)}   ACK")
     status = "applied" if result.applied else "not applied"
-    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    named = names_for(None, result.after.data)[1]
+    texts = [_change_text(c, named) for c in result.changes] or ["no change"]
     lines.append(f"  after  {texts[0]}   {status}")
     lines += [f"         {text}" for text in texts[1:]]
     lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
@@ -778,7 +800,9 @@ def _select_lines(
 _REGION_NAMES = {Region.GLOBAL: "global", Region.STATUS: "status"}
 
 
-def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
+def _changes_json(
+    changes: tuple[ByteChange, ...], named: tuple[bool, bool] = NAMED_BOTH
+) -> list[dict[str, Any]]:
     return [
         {
             "region": _REGION_NAMES.get(c.region, "preset"),
@@ -786,7 +810,7 @@ def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
             "before": c.old,
             "after": c.new,
             "name": c.field.name if c.field is not None else None,
-            **change_names_json(c, "before", "after"),
+            **change_names_json(c, "before", "after", named),
         }
         for c in changes
     ]
@@ -831,7 +855,9 @@ def write_json(
             "ack": True,
             "after": hex_bytes(result.after.data),
             "global_after": hex_bytes(result.global_after.data),
-            "changes": _changes_json(result.changes),
+            "changes": _changes_json(
+                result.changes, names_for(plan.before.data, result.after.data)
+            ),
             "applied": result.applied,
         }
         if result.return_index is not None:
@@ -914,7 +940,8 @@ def human_edit(plan: EditPlan, result: EditResult | None) -> str:
     if result is None:
         lines.append("  dry run: nothing sent")
         return "\n".join(lines)
-    texts = [_change_text(c) for c in result.changes] or ["no change"]
+    named = names_for(None, None if result.after is None else result.after.data)[1]
+    texts = [_change_text(c, named) for c in result.changes] or ["no change"]
     lines.append(f"  after  {texts[0]}")
     lines += [f"         {text}" for text in texts[1:]]
     lines.append(NOT_SAVED_EDIT if plan.global_before.data[3] == 0 else NOT_SAVED)
@@ -996,7 +1023,10 @@ def edit_json(
             "global_after": (
                 None if result.global_after is None else hex_bytes(result.global_after.data)
             ),
-            "changes": _changes_json(result.changes),
+            "changes": _changes_json(
+                result.changes,
+                names_for(plan.before.data, None if result.after is None else result.after.data),
+            ),
             "applied": result.applied,
         }
     return document

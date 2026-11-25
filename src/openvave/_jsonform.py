@@ -23,8 +23,10 @@ def identity_json(identity: DeviceIdentity) -> dict[str, Any]:
     }
 
 
-def field_json(field: DecodedField) -> dict[str, Any]:
-    """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema)."""
+def field_json(field: DecodedField, *, named: bool = True) -> dict[str, Any]:
+    """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema).
+
+    ``named=False`` (the bypass placeholder buffer) keeps ``position_name`` ``null``."""
     entry = field.entry
     ranged = entry.min is not None and entry.max is not None
     document = {
@@ -42,7 +44,8 @@ def field_json(field: DecodedField) -> dict[str, Any]:
         "out_of_range": field.out_of_range,
     }
     if entry.name in NAMED_FIELDS:
-        name = None if field.out_of_range else position_name(entry.name, field.value)
+        shown = named and not field.out_of_range
+        name = position_name(entry.name, field.value) if shown else None
         document["position_name"] = None if name is None else position_name_json(name)
     return document
 

@@ -348,8 +348,9 @@ Display: `preset dump`, `info` and `watch` add `name: <model>, <detail> (<source
 to the field line and `#4 (Plexi 100 ?)` to changes (`?` while a hypothesis); JSON adds
 `position_name` (`name`, `detail`, `text`, `factory`, `source`, `confidence`, `firmware` (96), or `null`) to the
 two fields and `position_name_<old>` / `position_name_<new>` (the same object, or `null`) to their
-changes (`pedal_changes` keeps `display_before` / `display_after` as `#4`); a change into or out
-of bypass names only its preset side (the bypass buffer is zeros). The raw value,
+changes (`pedal_changes` keeps `display_before` / `display_after` as `#4`); the bypass edit
+buffer (21 zero bytes, a placeholder) carries no names: not in reads, and in a change into or out
+of bypass only the preset side is named. The raw value,
 `display` (`#4`) and input (`set amp_type 4`) are unchanged. IR cab names describe the **factory**
 IRs: a slot overwritten by an imported IR keeps its number but not its name. The brand and model
 names are trademarks of their owners, used only to describe the sound character, as the vendor's

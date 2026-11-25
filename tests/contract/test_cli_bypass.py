@@ -244,3 +244,53 @@ def test_off_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert doc["plan"]["action"] == "bypass off 1B"
     assert doc["plan"]["target"]["kind"] == "preset_select"
     assert doc["result"]["applied"] is True
+
+
+# -- position names on the bypass placeholder (spec 007 US4, Codex round 3) ----------------------
+
+
+def _amp_change(doc: dict[str, Any]) -> dict[str, Any]:
+    return next(c for c in doc["result"]["changes"] if c["name"] == "amp_type")
+
+
+def test_on_json_names_only_the_preset_side(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, err = run(capsys, ["on", "--json"], make_fake(NORMAL))
+    assert code == 0, err
+    amp = _amp_change(json.loads(out))
+    assert (amp["before"], amp["after"]) == (P[5], 0)
+    assert amp["position_name_before"] is not None
+    assert amp["position_name_after"] is None  # zeros of the bypass buffer, not amp 0
+
+
+def test_off_json_names_only_the_preset_side(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, err = run(capsys, ["off", "1B", "--json"], bypassed_fake())
+    assert code == 0, err
+    amp = _amp_change(json.loads(out))
+    assert (amp["before"], amp["after"]) == (0, P[5])
+    assert amp["position_name_before"] is None
+    assert amp["position_name_after"] is not None
+
+
+def test_bypassed_preset_dump_json_has_no_names(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["preset", "dump", "--json"], transport_factory=factory_for(bypassed_fake()))
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    fields = {f["name"]: f for f in json.loads(out)["preset"]["fields"]}
+    assert fields["amp_type"]["value"] == 0
+    assert fields["amp_type"]["position_name"] is None
+    assert fields["ir_cab"]["position_name"] is None
+
+
+def test_bypassed_set_preview_names_only_the_requested_position(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openvave.protocol.names import position_name
+
+    code = main(
+        ["set", "amp_type", "4", "--dry-run"], transport_factory=factory_for(bypassed_fake())
+    )
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    name = position_name("amp_type", 4)
+    assert name is not None
+    assert out.splitlines()[0].startswith(f"Set amp_type #0 → #4 ({name.text}")

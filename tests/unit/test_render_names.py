@@ -103,21 +103,44 @@ def test_change_names_for_json_carry_confidence_and_factory_flag() -> None:
     assert names["position_name_after"]["confidence"] == POSITION_NAMES["ir_cab"][7].confidence
 
 
-def test_names_are_not_shown_on_a_bypass_side() -> None:
-    """Codex round 2: in bypass the buffer is zeros, not a preset."""
-    from openvave.cli.render import change_names_json, names_shown, watch_change_lines
-    from openvave.models import PedalState, WatchChange
+def test_names_are_not_shown_on_the_bypass_placeholder() -> None:
+    """Codex rounds 2 and 3: the bypass buffer (21 zero bytes) is not a preset."""
+    from openvave.cli.render import (
+        change_names_json,
+        is_placeholder,
+        names_for,
+        names_for_event,
+        region_json,
+        watch_change_lines,
+    )
+    from openvave.models import RegionRead, WatchChange
+    from openvave.protocol.decode import decode_region
 
-    normal = PedalState("normal", 1, 1, False)
-    bypass = PedalState("bypass", None, None, False)
-    assert names_shown(normal, bypass) == (True, False)
-    assert names_shown(bypass, normal) == (False, True)
-    assert names_shown(None, None) == (True, True)
+    preset = bytes.fromhex("01 00 00 01 0f 04 3c 3c 46 32 32 00 00 00 00 05 04 07 43 16 43")
+    zeros = bytes(21)
+    assert is_placeholder(zeros) and not is_placeholder(preset) and not is_placeholder(None)
+    assert not is_placeholder(bytes(4))  # a zero global block is not the edit buffer
+    assert names_for(preset, zeros) == (True, False)
+    assert names_for(zeros, preset) == (False, True)
+    assert names_for(None, None) == (True, True)
+
     change = ByteChange(Region.CURRENT_PRESET, 5, 4, 0, ENTRIES["amp_type"], ())
     names = change_names_json(change, "old", "new", (True, False))
     assert names["position_name_old"] is not None
     assert names["position_name_new"] is None
-    event = WatchChange(t=0.0, cycle=1, changes=(change,), regions={})
-    (line,) = watch_change_lines(event, 0.0, (True, False))
+
+    regions = {Region.CURRENT_PRESET: decode_region(RegionRead(Region.CURRENT_PRESET, zeros), 96)}
+    event = WatchChange(t=0.0, cycle=1, changes=(change,), regions=regions)
+    assert names_for_event(event) == (True, False)  # before = zeros with amp 4: a preset side
+    (line,) = watch_change_lines(event, 0.0, names_for_event(event))
     assert line.rstrip().endswith("→ #0")
     assert f"#4 ({POSITION_NAMES['amp_type'][4].text}" in line
+
+    fields = {
+        f["name"]: f for f in region_json(RegionRead(Region.CURRENT_PRESET, zeros), 96)["fields"]
+    }
+    assert fields["amp_type"]["position_name"] is None
+    named = {
+        f["name"]: f for f in region_json(RegionRead(Region.CURRENT_PRESET, preset), 96)["fields"]
+    }
+    assert named["amp_type"]["position_name"] is not None
