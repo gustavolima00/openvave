@@ -2,8 +2,10 @@
 
 Status: **manual, not yet matched on fw 96** (2026-11-25). Sources are found and transcribed. At
 the owner's request (2026-11-25) openvave shows the manual's names (S1) as `hypothesis` next to the
-raw position, in the draft PR for spec 007 Milestone 4. The names do not ship in a release until
-the matching below is recorded (FR-011).
+raw position, in the draft PR for spec 007 Milestone 4. The owner will not run the by-ear match and
+asked to settle the names from documents (2026-11-25): see "Documentary match" below. The result
+is **inconclusive for S1 and negative for S3** on the owner's fw 96 pedal, so the decision between
+shipping S1 as a hypothesis and shipping no names goes back to the owner.
 
 The manual's images and the vendor PDF are **not** committed (copyright). This file cites and
 transcribes only. Local copies used for the transcription stay outside the repository.
@@ -16,6 +18,8 @@ transcribes only. Local copies used for the transcription stay outside the repos
 | S2 | "M Vave Tank G Multi Guitar Pedal manual" (12 page images of S1) | `https://askmanual.pages.dev/m-vave/tank-g-multi-guitar-pedal` (page 5 = amp list; the IR cab list image is missing from its page 7, only the caption `FIG-6` is printed) | askmanual (third party) | — | 2026-11-24 |
 | S3 | "TANK-G NEW PRESET" preset card (PDF title `(PD34)TANK-G 预设介绍卡片_英文_电子详细版_120x75mm_V04_20260208`) | `https://community.m-vave.com/bbs/api/software?file=TANK-G_en.pdf`, linked as "Preset EN" from `https://www.m-vave.com/download.html` | M-VAVE (vendor) | V04 2026-02-08 (PDF created 2026-02-24) | 2026-11-24 |
 | S4 | TANK-G firmware release notes | `https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/releaseNote/firmware/Tank-G.txt`, linked from the same download page | M-VAVE (vendor) | v96 2024-12-31 … v99 2026-11-16 | 2026-11-24 |
+| S5 | M-EFCS Android app (`com.digAmp.m_efcs`), the vendor's APK: factory data files `assets/flutter_assets/lib/resources/bin/tankG/tankG_am3_ampCab.bin`, `tankG_am3_preset.bin`, `tankG_am4_ampCab.bin`, `tankG_am4_preset.bin` (212 992 / 758 bytes each); the app's "Restore AM3 Amp/Cab" and "Restore AM4" factory-reset data | `https://resource.m-vave.com/software/app/M-EFCS.apk` (128 363 643 bytes), linked from `https://www.m-vave.com/download.html` | M-VAVE (vendor) | fetched 2026-11-25 (not installed or run; read with `unzip` and `strings`) | 2026-11-25 |
+| S6 | "ultrarig for M-VAVE Tank-G" (third-party firmware page): "On 96, 53 or older, update first with M-VAVE's M-UPGRADE … (it installs 98). That update puts the factory presets, amps and cabs back" | `https://reverbose.com/f/ultrarig` | Reverbose / manuaguirre9 (third party) | Nov 2026 | 2026-11-25 |
 
 Also searched, nothing usable: manuals.plus direct pages and PDFs (HTTP 403 to scripts),
 Scribd copies "Tank-G User Manual and Presets Guide" and "M-Vave Tank-G 2" (no text without a
@@ -221,6 +225,46 @@ its name.
 The procedure above therefore records a note at **every** position (steps 3 and 4), and the record
 lists, per position: the note, the list it fits (S1, S3, neither, or both), and the resulting
 confidence. The IR cab names stay labelled factory names.
+
+## Documentary match (owner decision 2026-11-25, replaces the by-ear T031)
+
+The owner has **never imported** an IR, amp model or preset pack on this pedal (owner, 2026-11-25),
+so its slots hold the factory content its firmware came with. What the vendor's own files say:
+
+1. **S3's names are the AM4 factory set, tied to raw positions.** `tankG_am4_ampCab.bin` holds 9
+   amp slots of 0x4000 bytes, then 8 cab slots of 0x2000 bytes; each slot starts with a magic
+   (`AM4` / `CAB`) and the model's name, in position order: `1J120_CL`, `2J900_CL`, `3VAVE_TS`,
+   `4RAT_OD`, `5VAVE_HTS`, `6VAVE_DS`, `7MS_GV2`, `8J900_HV`, `9MS_HIGAIN`, then `1AC-SeVin`,
+   `2JVM_1960_57`, `3MESA_412`, `4WANGS112`, `5VOX_AC30`, `6HIFI_YAMAHA`, `7EGNL_412`,
+   `8V30_MD421`, exactly S3's tables. `tankG_am4_preset.bin` (a 758-byte stored image) equals S3's
+   36-preset table (amp and cab of every preset). AM4 files load from firmware 97 ("Supports AM4
+   format files for AMP modules", S4), and the factory update to 98 puts the factory amps and cabs
+   back (S6).
+2. **The owner's fw 96 pedal has the AM3 factory set, not the AM4 one.** `tankG_am3_preset.bin`
+   equals, byte for byte (all 21 bytes), the five compared stored presets the owner never edited
+   (2B, 9A, 9B, 9C, 9D in "Preset comparison (fw 96)"); 1A–1D and 2A differ (the owner's own
+   presets). `tankG_am4_preset.bin` matches none of the ten.
+3. **The AM3 set carries no names.** `tankG_am3_ampCab.bin` has the same layout, but each slot's
+   name field is empty (magic `AM2` / `CAB`, then zeros), and no AM3 amp model or cab IR is equal
+   to any AM4 one (about 15 % equal bytes at the same index, none identical). So the AM3 content is
+   different from the models S3 names, and the app has no name to show for it (it shows 1–9 and
+   `OFF`, 1–8, as observed in spec 004).
+4. **S1 predates AM3.** The manual copy (S1) was posted 2024-02-13; AM3 support arrived with
+   firmware 96 on 2024-12-31 (S4), and the manual says the timbres may be updated without notice.
+   No document found ties S1's list to the AM3 factory set, or says the AM3 set re-models the same
+   nine amps and eight cabs.
+
+| Claim | Confidence |
+|---|---|
+| S3 names = AM4 factory set, by raw position (fw ≥ 97 / after the 98 update) | documented (vendor file S5, matches S3) |
+| The owner's never-imported fw 96 pedal holds the AM3 factory set | documented (5 of 5 untouched stored presets = S5's AM3 image) |
+| S3 names apply to the owner's pedal | **refuted** (AM3 ≠ AM4 content) |
+| S1 names apply to the owner's pedal | hypothesis (only source, but from before AM3; not tied by any document) |
+
+Decision options (for the owner): (a) ship S1's names marked `hypothesis` with `?`, amending FR-011
+to allow an unmatched manual list; (b) ship no names (`NAME_CHOICE` all `None`), deferring US4,
+and keep both lists in the docs as background. If a pedal is ever updated to firmware 98, S3's
+names become documented for it (the data table can key them by firmware then).
 
 ## What changes for each outcome
 

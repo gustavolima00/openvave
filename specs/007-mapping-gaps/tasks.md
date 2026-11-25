@@ -51,6 +51,11 @@
 - [ ] T031 Owner, hardware (read-only, nothing saved): match the positions on the pedal by ear,
   as in the evidence record's "Position matching" procedure; record which list fits each
   position, firmware and date in the evidence record
+  - 2026-11-25, owner decision: no by-ear session; settle from documents instead. Documentary
+    match in the evidence record: S3 = the AM4 factory set (vendor app file, by position), refuted
+    for this pedal; the never-imported fw 96 pedal holds the AM3 factory set (5 of 5 untouched
+    presets equal the vendor's AM3 image), which has no names; S1 predates AM3. Inconclusive for
+    S1: the owner chooses between S1 as a hypothesis and no names (still open)
 
 ### Tests first (the owner asked on 2026-11-25 to build with the manual's names before T031)
 

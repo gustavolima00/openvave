@@ -150,3 +150,5 @@ offsets 19–21. On 2026-11-16 they were compared, in either byte order, against
 BLE and Classic Bluetooth MAC addresses as recorded in an Android bugreport of the pairing:
 **no match**. No serial number for the pedal was found to compare against. The bytes are
 therefore committed unchanged (`"sanitized": []`) and documented as unknown.
+Re-checked on 2026-11-25 (spec 001 review item): compared again with the pedal's Classic and BLE
+MAC addresses in both byte orders, no match; the serial number is not available.

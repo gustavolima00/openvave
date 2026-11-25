@@ -129,8 +129,10 @@ everything every story needs.
 - [X] CI green on all 6 matrix jobs — pending: branch not pushed yet.
   - Closed 2026-11-24: the first pushed run, PR #1 (Actions run 43971347862, 2026-11-16), passed
     all 6 jobs (Linux, macOS, Windows × Python 3.11, 3.13) on a tree that contains this milestone.
-- [ ] Reviewer confirms the R7 sanitization decision (no MAC match → bytes unchanged) in
+- [X] Reviewer confirms the R7 sanitization decision (no MAC match → bytes unchanged) in
   `captures/README.md` — pending review.
+  - Closed 2026-11-25: checked against the pedal's Classic and BLE MAC addresses (both byte
+    orders), no match; serial unavailable; orchestrator check 2026-11-25.
 
 **Checkpoint**: Milestone 0 DONE — pending CI run and reviewer sign-off (local gate passed)
 
