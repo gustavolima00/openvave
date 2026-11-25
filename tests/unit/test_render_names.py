@@ -144,3 +144,14 @@ def test_names_are_not_shown_on_the_bypass_placeholder() -> None:
         f["name"]: f for f in region_json(RegionRead(Region.CURRENT_PRESET, preset), 96)["fields"]
     }
     assert named["amp_type"]["position_name"] is not None
+
+
+def test_text_dump_of_the_placeholder_buffer_has_no_names() -> None:
+    """Codex round 4: text and JSON agree on the all-zero buffer (also when unrecognised)."""
+    from openvave.cli.render import field_lines
+    from openvave.models import RegionRead
+    from openvave.protocol.decode import decode_region
+
+    zeros = decode_region(RegionRead(Region.CURRENT_PRESET, bytes(21)), 96)
+    assert not any("name:" in line for line in field_lines(zeros))
+    assert any(line.rstrip().endswith("selector   confirmed") for line in field_lines(zeros))

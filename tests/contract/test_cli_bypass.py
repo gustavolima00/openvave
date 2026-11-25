@@ -294,3 +294,18 @@ def test_bypassed_set_preview_names_only_the_requested_position(
     name = position_name("amp_type", 4)
     assert name is not None
     assert out.splitlines()[0].startswith(f"Set amp_type #0 → #4 ({name.text}")
+
+
+def test_bypassed_save_preview_names_only_the_stored_side(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Codex round 4: the buffer saved from bypass is zeros; the stored slot keeps its name."""
+    code = main(
+        ["preset", "save", "--to", "1B", "--dry-run", "--unsafe"],
+        transport_factory=factory_for(bypassed_fake()),
+    )
+    out, err = capsys.readouterr()
+    amp = [line for line in out.splitlines() if "amp_type" in line]
+    assert amp, (code, out, err)
+    assert amp[0].rstrip().endswith("→ #0")
+    assert "amp_type #4 (" in amp[0]

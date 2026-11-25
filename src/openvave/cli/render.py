@@ -152,7 +152,7 @@ def _short_name(field: DecodedField) -> str | None:
     return name.text + (" ?" if name.confidence == "hypothesis" else "")
 
 
-def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
+def field_line(field: DecodedField, indent: str = FIELD_INDENT, *, named: bool = True) -> str:
     """``[15] reverb decay   5   0–127   observed`` (contracts/cli.md column layout)."""
     entry = field.entry
     line = (
@@ -167,9 +167,9 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     reading = type_reading(field)
     if reading is not None:
         line += f"  type: {reading}"
-    named = name_reading(field)
-    if named is not None:
-        line += f"  name: {named}"
+    name = name_reading(field) if named else None
+    if name is not None:
+        line += f"  name: {name}"
     return line
 
 
@@ -188,8 +188,9 @@ def field_lines(decoded: DecodedRegion, indent: str = FIELD_INDENT) -> list[str]
     """One line per named field (the LED colour also as ``#rrggbb``), then ``unknown: …``
     listing the unknown offsets."""
     lines = []
+    named = not is_placeholder(decoded.read.data)  # the bypass buffer is not a preset
     for f in decoded.fields:
-        line = field_line(f, indent)
+        line = field_line(f, indent, named=named)
         if f.entry.name == LED_PARTS[-1]:
             colour = led_colour_text(decoded)
             if colour is not None:
@@ -1067,12 +1068,12 @@ def _sequence_refusal_line(
     return [f"  refused: {reason} ({detail})"]
 
 
-def _diff_line(change: ByteChange) -> str:
+def _diff_line(change: ByteChange, named: tuple[bool, bool] = NAMED_BOTH) -> str:
     entry = change.field
     if entry is None:
         return f"  [{change.offset}] {change.old} → {change.new}"
-    old = with_reading(decode_field(entry, change.old))
-    new = with_reading(decode_field(entry, change.new))
+    old = with_reading(decode_field(entry, change.old), named=named[0])
+    new = with_reading(decode_field(entry, change.new), named=named[1])
     return f"  [{change.offset}] {entry.name} {old} → {new}"
 
 
@@ -1099,7 +1100,8 @@ def human_sequence_header(plan: SequencePlan, source: str | None) -> str:
     else:
         head = f"Restore {position(index)} from {source}"
     lines = [f"{head}   UNSAFE: overwrites a stored preset"]
-    lines += [_diff_line(c) for c in plan.diff]
+    named = names_for(plan.before, plan.after)  # the slot now, and what will be stored
+    lines += [_diff_line(c, named) for c in plan.diff]
     return "\n".join(lines)
 
 
