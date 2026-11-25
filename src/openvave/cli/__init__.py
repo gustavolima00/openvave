@@ -763,8 +763,14 @@ async def _sequence(
     def on_backup(backup: Backup) -> None:
         if args.create_backup_dir:
             args.backup_dir.mkdir(parents=True, exist_ok=True)
-        path = files.automatic_backup_path(args.backup_dir, action, datetime.now())
-        files.write_json_atomic(path, backup.to_document(), force=False)
+        document = backup.to_document()
+        while True:
+            path = files.automatic_backup_path(args.backup_dir, action, datetime.now())
+            try:
+                files.write_json_atomic(path, document, force=False)
+            except files.TargetExistsError:
+                continue  # another process took the name after the check: the next one
+            break
         saved.append(str(path))
         if not args.json:
             print(f"Backup saved: {path}", flush=True)

@@ -166,3 +166,162 @@ async def test_the_confirmation_is_not_a_tool_argument(tmp_path) -> None:
     restore = listed["preset_restore"].input_schema
     assert "confirmation" not in restore["properties"]
     assert restore.get("required") == ["file"]
+
+
+class ReplacingOwner(Owner):
+    """Accepts, but the first time it is asked the restore file is replaced by another valid
+    backup while the question is open (spec 006 T064, Codex review of 0475c9e [P1])."""
+
+    def __init__(self, path: Path, replacement: dict[str, Any]) -> None:
+        super().__init__("accept", True)
+        self.path = path
+        self.replacement = replacement
+
+    async def __call__(self, context: Any, params: types.ElicitRequestParams) -> types.ElicitResult:
+        if not self.messages:
+            self.path.write_text(json.dumps(self.replacement), encoding="utf-8")
+        return await super().__call__(context, params)
+
+
+def preset_document(data: bytes) -> dict[str, Any]:
+    from datetime import UTC, datetime
+
+    from openvave import PresetFile
+
+    return PresetFile(
+        identity=rf.identity(),
+        created_at=datetime(2026, 11, 19, 12, 0, tzinfo=UTC),
+        source_index=4,
+        data=data,
+    ).to_document()
+
+
+def fingerprint(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_restore_writes_the_backup_the_owner_was_asked_about(tmp_path, mode) -> None:
+    from openvave import Backup
+
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    first = rf.document()
+    source.write_text(json.dumps(first), encoding="utf-8")
+    first_bytes = source.read_bytes()
+    second = rf.document(rf.image_with(s5=GAIN_90))
+    owner = ReplacingOwner(source, second)
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        await h.ok("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+        after = await h.ok("preset_backup")
+    stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
+    # Asked once in both modes (the modern retry reuses the pinned read): the bytes that were
+    # asked about are written, not the file that replaced them.
+    assert len(owner.messages) == 1
+    assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
+    assert stored.image == Backup.from_document(first).image
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize(
+    ("action", "confirm"),
+    [("decline", None), ("cancel", None), ("accept", False)],
+    ids=["decline", "cancel", "confirm_false"],
+)
+async def test_a_refusal_stays_final_when_the_file_changes(tmp_path, mode, action, confirm) -> None:
+    """Codex round 3 [P2]: a replaced file must not turn the owner's *no* into a new question."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    source.write_text(json.dumps(rf.document()), encoding="utf-8")
+    owner = ReplacingOwner(source, rf.document(rf.image_with(s5=GAIN_90)))
+    owner.action, owner.confirm = action, confirm
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        text = await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+    assert text.startswith("declined_by_owner: ")
+    assert len(owner.messages) == 1
+    assert factory.calls == 0
+
+
+async def test_a_new_call_reads_the_file_again(tmp_path) -> None:
+    """The pin lasts one call: the next call asks about the file as it is now."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "source.json"
+    source.write_text(json.dumps(rf.document()), encoding="utf-8")
+    first = fingerprint(source.read_bytes())
+    owner = Owner("decline")
+    async with open_harness(
+        options(tmp_path),
+        CountingFactory(make=changed_fake),
+        mode="auto",
+        elicitation_callback=owner,
+    ) as h:
+        await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+        source.write_text(json.dumps(rf.document(rf.image_with(s5=GAIN_90))), encoding="utf-8")
+        await h.error("preset_restore", {"file": "source.json", "all": True, "unsafe": True})
+    second = fingerprint(source.read_bytes())
+    assert first != second
+    assert f"(fingerprint {first})" in owner.messages[0]
+    assert f"(fingerprint {second})" in owner.messages[1]
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_import_writes_the_preset_file_the_owner_was_asked_about(tmp_path, mode) -> None:
+    from openvave import Backup
+
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    source = folder / "tone.json"
+    first = preset_document(GAIN_90)
+    source.write_text(json.dumps(first), encoding="utf-8")
+    first_bytes = source.read_bytes()
+    other = P[:7] + bytes([33]) + P[8:]
+    second = preset_document(other)
+    owner = ReplacingOwner(source, second)
+    factory = CountingFactory(make=changed_fake)
+    async with open_harness(options(tmp_path), factory, mode=mode, elicitation_callback=owner) as h:
+        await h.ok("preset_import", {"file": "tone.json", "to": "2C", "unsafe": True})
+        after = await h.ok("preset_backup")
+    stored = Backup.from_document(json.loads(Path(after["path"]).read_text(encoding="utf-8")))
+    slot = stored.image[2 + 21 * 6 : 23 + 21 * 6]
+    assert len(owner.messages) == 1
+    assert f"(fingerprint {fingerprint(first_bytes)})" in owner.messages[0]
+    assert slot == GAIN_90 != other
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("preset_restore", {"file": "source.json", "slot": "10A"}),
+        ("preset_restore", {"file": "source.json", "slot": "1A", "all": True}),
+        ("preset_restore", {"file": "source.json"}),
+        ("preset_import", {"file": "source.json", "to": "10A"}),
+    ],
+    ids=["bad_slot", "slot_and_all", "neither", "bad_to"],
+)
+async def test_bad_destination_is_refused_without_reading_the_file(
+    tmp_path, monkeypatch, tool, args
+) -> None:
+    """Codex round 2 [P3]: a refusal that depends only on the arguments opens no file."""
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    (folder / "source.json").write_text(json.dumps(rf.document()), encoding="utf-8")
+    read: list[str] = []
+    real = Path.read_bytes
+
+    def counting(self: Path) -> bytes:
+        read.append(self.name)
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting)
+    owner = Owner("accept", True)
+    async with open_harness(options(tmp_path), CountingFactory(), elicitation_callback=owner) as h:
+        text = await h.error(tool, {**args, "unsafe": True})
+    assert text.startswith("invalid_value: ")
+    assert read == [] and owner.messages == []

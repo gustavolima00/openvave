@@ -38,7 +38,7 @@ def manual_backup_path(folder: Path, when: datetime) -> Path:
     stem = f"tankg-backup-{when.strftime('%Y%m%d-%H%M%S')}"
     path = folder / f"{stem}.json"
     n = 0
-    while path.exists():
+    while os.path.lexists(path):  # a dangling link counts as taken
         n += 1
         path = folder / f"{stem}-{n}.json"
     return path
@@ -50,7 +50,7 @@ def preset_file_path(folder: Path, position: str, when: datetime) -> Path:
     stem = f"tankg-preset-{position}-{when.strftime('%Y%m%d-%H%M%S')}"
     path = folder / f"{stem}.json"
     n = 0
-    while path.exists():
+    while os.path.lexists(path):  # a dangling link counts as taken
         n += 1
         path = folder / f"{stem}-{n}.json"
     return path

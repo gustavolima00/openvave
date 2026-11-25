@@ -70,13 +70,14 @@ def test_options_reach_the_server(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
 
 def test_default_backup_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPENVAVE_BACKUP_DIR", raising=False)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     assert mcp_command.default_backup_dir() == tmp_path / "data" / "openvave" / "backups"
     monkeypatch.delenv("XDG_DATA_HOME")
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    if sys.platform != "win32":
-        expected = tmp_path / "home" / ".local" / "share" / "openvave" / "backups"
-        assert mcp_command.default_backup_dir() == expected
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    expected = tmp_path / "home" / ".local" / "share" / "openvave" / "backups"
+    assert mcp_command.default_backup_dir() == expected
 
 
 async def test_tool_calls_print_nothing_on_stdout(

@@ -114,9 +114,18 @@ With `unsafe: true`, `dry_run: false` and a client that declared the elicitation
 server asks before connecting for the write: *"Overwrite stored preset 2A with the current sound?
 A full backup is written to <folder> first."* (restore: the file and `slot` / all 36 presets),
 schema `{confirm: boolean}`. Accept with `confirm: true` → run; decline, cancel or
-`confirm: false` → error `declined_by_owner`, nothing sent. Clients without the capability are
-not asked (CLI parity). Nobody is asked for a call the tool refuses from its arguments alone (bad
-position, `slot` and `all` both or neither, a restore `file` that is not a valid backup in the
+`confirm: false` → error `declined_by_owner`, nothing sent. Restore and import read their file once
+per call and the question names its fingerprint (first 12 hex digits of its SHA-256); the pedal is
+written only from those bytes. In the modern protocol (≥ 2026-07-28), where the client answers in a
+retry of the call, the retry reuses that read (pinned in the server until a call for the same file
+and destination ends, at most 10 minutes), so the question is the same, the owner's answer, *no*
+included, is final, and a file replaced meanwhile is neither written nor asked about. The next call
+reads the file again. Two identical restore / import calls that overlap while the file is replaced,
+or an answer given after the 10 minutes, can be asked again about the new bytes (the SDK gives no
+per-call id that survives the retry); nothing is written without an accepted answer to the question
+that names the bytes written. Clients without the capability are not asked (CLI parity). Nobody is
+asked for a call the tool refuses from its arguments alone (bad position, `slot` and `all` both or
+neither, a restore `file` that is not a valid backup in the
 folder): that call fails with `invalid_value` / `invalid_file` instead.
 
 Save / restore errors add, after the hints: `stored presets may have changed; nothing was

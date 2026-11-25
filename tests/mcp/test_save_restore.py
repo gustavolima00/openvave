@@ -316,11 +316,34 @@ async def test_automatic_backup_is_the_pedal_before_the_save(tmp_path) -> None:
     [saved] = automatic(tmp_path, "save")
     backup = Backup.from_document(json.loads(saved.read_text(encoding="utf-8")))
     assert backup.image == image_1c_public()
-    assert (backup_folder(tmp_path).stat().st_mode & 0o777) == 0o700
+    if os.name == "posix":  # Windows reports no POSIX modes
+        assert (backup_folder(tmp_path).stat().st_mode & 0o777) == 0o700
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores folder permissions")
-async def test_backup_write_failure_sends_nothing(tmp_path) -> None:
+async def test_backup_write_failure_sends_nothing(tmp_path, monkeypatch) -> None:
+    """Any platform: the automatic backup's writer fails, so nothing reaches the pedal."""
+    from openvave.cli import files
+
+    def refuse(*_args: Any, **_kwargs: Any) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(files, "write_json_atomic", refuse)
+    factory = CountingFactory(make=edited_fake)
+    async with open_harness(options(tmp_path), factory) as h:
+        text = await h.error("preset_save", {"to": "1C", "unsafe": True})
+    assert text.startswith("invalid_file: ")
+    assert "Permission denied" in text
+    assert "nothing was written to the pedal" in text
+    assert writes(factory.fake) == []
+    assert automatic(tmp_path, "save") == []
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="needs POSIX folder permissions, which Windows and root do not enforce",
+)
+async def test_read_only_backup_folder_sends_nothing(tmp_path) -> None:
+    """The same failure from a real read-only folder (POSIX only)."""
     folder = backup_folder(tmp_path)
     folder.mkdir()
     folder.chmod(0o500)
@@ -348,3 +371,39 @@ async def test_failure_mid_sequence_carries_the_partial_document_and_the_backup(
     assert document["command"] == "preset save"
     assert document["backup_saved_to"] == str(saved)
     assert [s["status"] for s in document["result"]["steps"]][:3] == ["acked", "waited", "nak"]
+
+
+async def test_automatic_backup_never_replaces_a_file_published_after_the_check(
+    tmp_path, monkeypatch
+) -> None:
+    """Two servers sharing the folder in the same second (spec 006 T064, Codex review of
+    0475c9e [P2]): the name chosen here is published by the other server before this one writes
+    it, so this backup goes to the next name and the other recovery snapshot stays intact."""
+    from openvave.cli import files
+
+    folder = backup_folder(tmp_path)
+    folder.mkdir()
+    taken = folder / "tankg-backup-20261124-120000-before-save.json"
+    real_path, real_check = files.automatic_backup_path, files.check_target
+    names = iter([taken])
+
+    def racing_path(directory: Path, action: str, when: Any) -> Path:
+        return next(names, None) or real_path(directory, action, when)
+
+    def racing_check(path: Path, *, force: bool) -> None:
+        if path == taken:
+            # Every check finds nothing; the other server publishes the name right after.
+            if not taken.exists():
+                taken.write_text("the other server's backup", encoding="utf-8")
+            return
+        real_check(path, force=force)
+
+    monkeypatch.setattr(files, "automatic_backup_path", racing_path)
+    monkeypatch.setattr(files, "check_target", racing_check)
+    factory = CountingFactory(make=edited_fake)
+    async with open_harness(options(tmp_path), factory) as h:
+        result = await h.ok("preset_save", {"to": "1C", "unsafe": True})
+    assert taken.read_text(encoding="utf-8") == "the other server's backup"
+    assert result["backup_saved_to"] != str(taken)
+    assert Path(result["backup_saved_to"]).parent == folder
+    assert len(writes(factory.fake)) == 3
