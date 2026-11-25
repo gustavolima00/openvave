@@ -401,8 +401,10 @@ folder, and the owner's confirmation through elicitation where supported.
   and `src/openvave/__init__.py`; `tests/contract/test_changelog_060.py`
 - [X] T060 Suite, ruff, mypy green
 - [X] T061 Owner: quickstart §3 steps 1–9 in their own assistant and terminal (fw 96)
-- [ ] T062 Owner (optional): step 10 (no-op save; elicitation decline) — not run in this gate;
+- [X] T062 Owner (optional): step 10 (no-op save; elicitation decline) — not run in this gate;
   the owner checked saving in a separate test of their own (see Hardware check)
+  - Closed 2026-11-25: covered by the owner's own save test on the pedal (2026-11-24), not run
+    from the quickstart; the elicitation decline was not observed (no dialog in that client)
 - [X] T063 Record the results under "Hardware check" below (client and version, firmware, macOS)
 - [X] T064 Fix regressions found by the gate (each with a test): the gate found none. Fixed
   before it, each with a test: Codex's review of 0475c9e ([P1] restore writes the confirmed
