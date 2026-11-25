@@ -347,7 +347,8 @@ the positions on a fw 96 pedal (spec 007 T031) openvave shows the manual's names
 Display: `preset dump`, `info` and `watch` add `name: <model>, <detail> (<source>, <confidence>)`
 to the field line and `#4 (Plexi 100 ?)` to changes (`?` while a hypothesis); JSON adds
 `position_name` (`name`, `detail`, `text`, `factory`, `source`, `confidence`, or `null`) to the
-two fields and `position_name_<old>` / `position_name_<new>` to their changes. The raw value,
+two fields and `position_name_<old>` / `position_name_<new>` (the same object, or `null`) to their
+changes (`pedal_changes` keeps `display_before` / `display_after` as `#4`). The raw value,
 `display` (`#4`) and input (`set amp_type 4`) are unchanged. IR cab names describe the **factory**
 IRs: a slot overwritten by an imported IR keeps its number but not its name. The brand and model
 names are trademarks of their owners, used only to describe the sound character, as the vendor's

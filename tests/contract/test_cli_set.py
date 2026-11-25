@@ -413,6 +413,7 @@ def test_amp_type_shows_names_and_takes_the_raw_position(
 
 
 def test_amp_type_json_changes_carry_the_names(capsys: pytest.CaptureFixture[str]) -> None:
+    from openvave._jsonform import position_name_json
     from openvave.protocol.names import position_name
 
     code, out, err, _ = run(capsys, ["set", "ir_cab", "0", "--json"])
@@ -428,7 +429,7 @@ def test_amp_type_json_changes_carry_the_names(capsys: pytest.CaptureFixture[str
             "before": 7,
             "after": 0,
             "name": "ir_cab",
-            "position_name_before": cab7.text,
+            "position_name_before": position_name_json(cab7),
             "position_name_after": None,
         }
     ]

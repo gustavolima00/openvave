@@ -84,15 +84,19 @@ def test_json_position_name_null_without_a_name() -> None:
     assert "position_name" not in field_json(decode_field(ENTRIES["gain"], 60))
 
 
-def test_change_names_for_json() -> None:
-    from openvave.cli.render import change_names
+def test_change_names_for_json_carry_confidence_and_factory_flag() -> None:
+    from openvave._jsonform import position_name_json
+    from openvave.cli.render import change_names_json
 
     change = ByteChange(Region.CURRENT_PRESET, 5, 4, 8, ENTRIES["amp_type"], ())
-    assert change_names(change) == (
-        POSITION_NAMES["amp_type"][4].text,
-        POSITION_NAMES["amp_type"][8].text,
-    )
+    assert change_names_json(change, "old", "new") == {
+        "position_name_old": position_name_json(POSITION_NAMES["amp_type"][4]),
+        "position_name_new": position_name_json(POSITION_NAMES["amp_type"][8]),
+    }
     gain = ByteChange(Region.CURRENT_PRESET, 6, 60, 90, ENTRIES["gain"], ())
-    assert change_names(gain) is None
+    assert change_names_json(gain, "old", "new") == {}
     off = ByteChange(Region.CURRENT_PRESET, 17, 0, 7, ENTRIES["ir_cab"], ())
-    assert change_names(off) == (None, POSITION_NAMES["ir_cab"][7].text)
+    names = change_names_json(off, "before", "after")
+    assert names["position_name_before"] is None
+    assert names["position_name_after"]["factory"] is True
+    assert names["position_name_after"]["confidence"] == POSITION_NAMES["ir_cab"][7].confidence

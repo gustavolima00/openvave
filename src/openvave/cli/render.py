@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from openvave._jsonform import field_json, hex_bytes, identity_json
+from openvave._jsonform import field_json, hex_bytes, identity_json, position_name_json
 from openvave.models import (
     IMAGE_ACTIONS,
     Backup,
@@ -405,14 +405,27 @@ def with_reading(field: DecodedField) -> str:
     return field.display if reading is None else f"{field.display} ({reading})"
 
 
-def change_names(change: ByteChange) -> tuple[str | None, str | None] | None:
-    """Names of the old and new position of an amp type or IR cab change, for JSON
-    (``None`` for a position without one); ``None`` for any other byte."""
+def change_names(
+    change: ByteChange,
+) -> tuple[PositionName | None, PositionName | None] | None:
+    """Names of the old and new position of an amp type or IR cab change (``None`` for a
+    position without one); ``None`` for any other byte."""
     entry = change.field
     if entry is None or entry.name not in NAMED_FIELDS:
         return None
     old, new = (_position_name(decode_field(entry, raw)) for raw in (change.old, change.new))
-    return (None if old is None else old.text, None if new is None else new.text)
+    return old, new
+
+
+def change_names_json(change: ByteChange, old_key: str, new_key: str) -> dict[str, Any]:
+    """``position_name_<old>`` / ``position_name_<new>`` for an amp type or IR cab change, each
+    the ``position_name`` object (with its confidence and factory flag) or ``null`` (spec 007
+    US4, additive keys); empty for any other byte."""
+    names = change_names(change)
+    if names is None:
+        return {}
+    old, new = (None if n is None else position_name_json(n) for n in names)
+    return {f"position_name_{old_key}": old, f"position_name_{new_key}": new}
 
 
 def _change_cells(change: ByteChange) -> tuple[str, str, str]:
@@ -507,7 +520,7 @@ def watch_change_json(
                 "old": c.old,
                 "new": c.new,
                 "field": c.field.name if c.field is not None else None,
-                **_names_json(c, "old", "new"),
+                **change_names_json(c, "old", "new"),
             }
             for c in event.changes
         ],
@@ -748,19 +761,10 @@ def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
             "before": c.old,
             "after": c.new,
             "name": c.field.name if c.field is not None else None,
-            **_names_json(c, "before", "after"),
+            **change_names_json(c, "before", "after"),
         }
         for c in changes
     ]
-
-
-def _names_json(change: ByteChange, old_key: str, new_key: str) -> dict[str, str | None]:
-    """``position_name_<old>`` / ``position_name_<new>`` for an amp type or IR cab change
-    (spec 007 US4, additive keys); empty for any other byte."""
-    names = change_names(change)
-    if names is None:
-        return {}
-    return {f"position_name_{old_key}": names[0], f"position_name_{new_key}": names[1]}
 
 
 def write_json(

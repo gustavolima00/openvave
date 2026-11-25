@@ -163,7 +163,8 @@ async def test_wait_is_capped(tmp_path: Path, wait: float) -> None:
 
 
 async def test_amp_type_change_shows_the_names(tmp_path: Path) -> None:
-    """Spec 007 US4: raw positions stay, names are added (from the names table)."""
+    """Spec 007 US4: display stays the raw position; names go in new keys and the summary."""
+    from openvave._jsonform import position_name_json
     from openvave.protocol.names import position_name
 
     factory = CountingFactory(make=normal_pedal)
@@ -176,7 +177,7 @@ async def test_amp_type_change_shows_the_names(tmp_path: Path) -> None:
     assert before is not None and after is not None
     mark = " ?" if after.confidence == "hypothesis" else ""
     assert (change["before"], change["after"]) == (4, 8)
-    assert change["display_before"] == f"#4 ({before.text}{mark})"
-    assert change["display_after"] == f"#8 ({after.text}{mark})"
-    assert change["position_name_before"] == before.text
-    assert change["position_name_after"] == after.text
+    assert (change["display_before"], change["display_after"]) == ("#4", "#8")
+    assert change["position_name_before"] == position_name_json(before)
+    assert change["position_name_after"] == position_name_json(after)
+    assert f"amp type #4 ({before.text}{mark}) → #8 ({after.text}{mark})" in result["summary"]

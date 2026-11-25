@@ -26,7 +26,13 @@ from openvave.errors import ConfigError
 from openvave.mcp_server import backups, resources
 from openvave.mcp_server.errors import InvalidValue, tool_errors
 from openvave.mcp_server.holder import PedalHolder
-from openvave.mcp_server.results import add_knob_types, change_json, change_label, with_summary
+from openvave.mcp_server.results import (
+    add_knob_types,
+    change_json,
+    change_label,
+    change_text,
+    with_summary,
+)
 from openvave.mcp_server.sequences import register_sequences
 from openvave.mcp_server.writes import parse_preset_position, register_writes
 from openvave.models import ByteChange, DeviceInfo, PedalState, Region, RegionRead
@@ -395,8 +401,8 @@ def _changes_summary(
         return "no change" + (f" within {waited:g} s" if waited else "") + f" (state: {after})"
     parts = [] if before == after else [f"state {before} → {after}"]
     for change in changes:
-        item = change_json(change)
-        parts.append(f"{change_label(change)} {item['display_before']} → {item['display_after']}")
+        old, new = change_text(change)
+        parts.append(f"{change_label(change)} {old} → {new}")
     return "; ".join(parts)
 
 

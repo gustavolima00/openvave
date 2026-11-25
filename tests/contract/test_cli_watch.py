@@ -219,12 +219,13 @@ def test_json_lines_validate(
         (16, "reverb_mix"),
         (17, "ir_cab"),
     ]
+    from openvave._jsonform import position_name_json
     from openvave.protocol.names import position_name
 
     cab = changes[3]["changes"][1]
     names = [position_name("ir_cab", cab[k]) for k in ("old", "new")]
     assert [cab["position_name_old"], cab["position_name_new"]] == [
-        None if n is None else n.text for n in names
+        None if n is None else position_name_json(n) for n in names
     ]
     assert "position_name_old" not in changes[3]["changes"][0]
     times = [e["t"] for e in events]
