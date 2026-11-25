@@ -58,7 +58,7 @@ def change_json(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> 
 
 def change_text(change: ByteChange, named: tuple[bool, bool] = (True, True)) -> tuple[str, str]:
     """Before and after of a changed byte for the human ``summary``: the display form with the
-    type reading or, for amp type / IR cab, the position's name (``#4 (Plexi 100 ?)``)."""
+    type reading or, for amp type / IR cab, the position's name (``#3 (Friedman 100)``)."""
     entry = change.field
     if entry is None:
         return f"0x{change.old:02x}", f"0x{change.new:02x}"

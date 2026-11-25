@@ -337,15 +337,17 @@ block on (byte 1 stayed `00`).
 
 Spec 007 US4. The pedal reports only the position (byte 5 `amp_type`, byte 17 `ir_cab`, raw
 0–8); the names below come from the evidence record
-[`specs/007-mapping-gaps/evidence-amp-cab-names.md`](../007-mapping-gaps/evidence-amp-cab-names.md),
-which transcribes two M-VAVE lists that disagree: the 2024 user manual (figures 5 and 6,
-`manual-2024`) and the 2026 "TANK-G NEW PRESET" card (`preset-card-2026`). Until the owner matches
-the positions on a fw 96 pedal (spec 007 T031) openvave shows the manual's names as
-**hypothesis**: manual, not yet matched on fw 96. Numbering: manual amp slot *k* = raw *k* − 1
-(the app shows raw + 1), cab slot *k* = raw *k* (slot 0 = cab off, heard in gate session C).
+[`specs/007-mapping-gaps/evidence-amp-cab-names.md`](../007-mapping-gaps/evidence-amp-cab-names.md).
+M-VAVE has printed three lists: an early 2024 manual (`manual-2024`), the manual revision printed
+with fw 96 pedals (`manual-am3`: the AM3 factory set; photo of the shipped manual, vendor PDF of
+2025-02-18), and the 2026 "TANK-G NEW PRESET" card (`preset-card-2026`, the AM4 set of firmware
+97+, named so in the vendor app's factory files). openvave uses `manual-am3`, confidence
+**documented**: matched against the shipped printed manual instead of on the pedal (owner decision
+2026-11-25). Numbering: amp slot *k* = raw *k* − 1 (the app shows raw + 1), cab slot *k* = raw *k*
+(slot 0 = cab off, heard in gate session C).
 
 Display: `preset dump`, `info` and `watch` add `name: <model>, <detail> (<source>, <confidence>)`
-to the field line and `#4 (Plexi 100 ?)` to changes (`?` while a hypothesis); JSON adds
+to the field line and `#3 (Friedman 100)` to changes (`?` only for a name that is a hypothesis); JSON adds
 `position_name` (`name`, `detail`, `text`, `factory`, `source`, `confidence`, `firmware` (96), or `null`) to the
 two fields and `position_name_<old>` / `position_name_<new>` (the same object, or `null`) to their
 changes (`pedal_changes` keeps `display_before` / `display_after` as `#4`); the bypass edit
@@ -354,28 +356,28 @@ of bypass only the preset side is named. The raw value,
 `display` (`#4`) and input (`set amp_type 4`) are unchanged. IR cab names describe the **factory**
 IRs: a slot overwritten by an imported IR keeps its number but not its name. The brand and model
 names are trademarks of their owners, used only to describe the sound character, as the vendor's
-manual does. `src/openvave/protocol/names.py` holds both lists and the per-position choice; this
+manual does. `src/openvave/protocol/names.py` holds the three lists and the per-position choice; this
 table mirrors the chosen names (`tests/unit/test_names_doc.py`).
 
 | Field | Raw | Name | Detail | Factory | Source | Confidence |
 |---|---|---|---|---|---|---|
-| `amp_type` | 0 | VOX AC30HW Normal | clean | — | manual-2024 | hypothesis |
-| `amp_type` | 1 | Fender 65 Twin Reverb | clean | — | manual-2024 | hypothesis |
-| `amp_type` | 2 | Bogner Shiva | overdrive | — | manual-2024 | hypothesis |
-| `amp_type` | 3 | Marshall JTM45 OD | overdrive | — | manual-2024 | hypothesis |
-| `amp_type` | 4 | Plexi 100 | overdrive | — | manual-2024 | hypothesis |
-| `amp_type` | 5 | Marshall JCM800 | distortion | — | manual-2024 | hypothesis |
-| `amp_type` | 6 | EVH 5150 LEAD | distortion | — | manual-2024 | hypothesis |
-| `amp_type` | 7 | ENGL Powerball E645/2 | distortion | — | manual-2024 | hypothesis |
-| `amp_type` | 8 | Mesa Boogie Dual Rectifier | distortion | — | manual-2024 | hypothesis |
-| `ir_cab` | 1 | VHT Deliverance | 4x12 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 2 | Sperimental | 4x12 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 3 | Electrovoice | 2x10 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 4 | Mesa Boogie | 4x12 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 5 | Fender Champ | 1x8 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 6 | Fender Pr Junior | 1x10 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 7 | Marshall 1960V30 | 4x12 | factory IR | manual-2024 | hypothesis |
-| `ir_cab` | 8 | Diezel V30 | 4x12 | factory IR | manual-2024 | hypothesis |
+| `amp_type` | 0 | UWE-Twins 335 | clean | — | manual-am3 | documented |
+| `amp_type` | 1 | Archetype_C_W | clean | — | manual-am3 | documented |
+| `amp_type` | 2 | TH-Mars VM410 | overdrive | — | manual-am3 | documented |
+| `amp_type` | 3 | Friedman 100 | overdrive | — | manual-am3 | documented |
+| `amp_type` | 4 | Brit Plex 50 | overdrive | — | manual-am3 | documented |
+| `amp_type` | 5 | Mars FD Hundred | distortion | — | manual-am3 | documented |
+| `amp_type` | 6 | Pea V 534 | distortion | — | manual-am3 | documented |
+| `amp_type` | 7 | Diesel_Hagan_6 | distortion | — | manual-am3 | documented |
+| `amp_type` | 8 | EVH 5150 III 100S EL34 | distortion | — | manual-am3 | documented |
+| `ir_cab` | 1 | VHT Deliverance | 4x12 | factory IR | manual-am3 | documented |
+| `ir_cab` | 2 | Sperimental | 4x12 | factory IR | manual-am3 | documented |
+| `ir_cab` | 3 | Electrovoice | 2x10 | factory IR | manual-am3 | documented |
+| `ir_cab` | 4 | Mesa Boogie | 4x12 | factory IR | manual-am3 | documented |
+| `ir_cab` | 5 | Fender Champ | 1x8 | factory IR | manual-am3 | documented |
+| `ir_cab` | 6 | Fender Pr Junior | 1x10 | factory IR | manual-am3 | documented |
+| `ir_cab` | 7 | Marshall 1960V30 | 4x12 | factory IR | manual-am3 | documented |
+| `ir_cab` | 8 | Diezel V30 | 4x12 | factory IR | manual-am3 | documented |
 
 ### Control inventory (fw 96)
 
@@ -741,8 +743,8 @@ tested.
   image write, and non-zero write status codes (no NAK seen yet).
 - Still unknown from earlier: the meaning of the header `a5 5a`; the names of the 9 amp types and
   the 8 IR cabs (the app has no names: amp type as 1–9, IR cab `OFF` then 1–8). ~~The manual's
-  lists are images, not transcribed~~: transcribed in spec 007 (see "Amp type and IR cab names");
-  which of the two vendor lists a fw 96 pedal has is still to be matched on the pedal (T031). IR cab `0` = cab off was heard in spec 007 gate session C. ~~Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair~~: done in
+  lists are images, not transcribed~~: transcribed in spec 007 (see "Amp type and IR cab names"); a
+  fw 96 pedal takes the manual revision printed with it (`manual-am3`, documented, T031). IR cab `0` = cab off was heard in spec 007 gate session C. ~~Naming the status byte `loopback` in `bytemap.py` needs a status-byte fixture pair~~: done in
   spec 007 (the fixture index covers gate excerpts and the status region; preset 18–20 are named
   `led_red`, `led_green`, `led_blue` the same way).
 - ~~The automatic backup defaults to the current directory, which may be a git working tree~~

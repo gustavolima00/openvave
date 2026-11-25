@@ -73,14 +73,15 @@ def _evidence_rows() -> set[tuple[str, ...]]:
     return rows
 
 
-def test_manual_names_are_transcribed_in_the_evidence_record() -> None:
+@pytest.mark.parametrize("source", ["manual-am3", "manual-2024"])
+def test_manual_names_are_transcribed_in_the_evidence_record(source: str) -> None:
     """Each manual name is a row of the record: printed slot, "Based on <name>", type."""
     rows = _evidence_rows()
     printed = {"clean": "Clean", "overdrive": "Overdrive", "distortion": "Dist"}
-    for raw, item in enumerate(source_list("manual-2024", "amp_type")):
+    for raw, item in enumerate(source_list(source, "amp_type")):
         assert item is not None
         assert (str(raw + 1), f"Based on {item[0]}", printed[item[1]]) in rows, item
-    for raw, item in enumerate(source_list("manual-2024", "ir_cab")):
+    for raw, item in enumerate(source_list(source, "ir_cab")):
         if item is None:
             assert (str(raw), "The IR CAB turn off", "None") in rows
             continue
@@ -102,4 +103,5 @@ def test_every_source_is_cited_in_the_evidence_record() -> None:
     text = (REPO_ROOT / EVIDENCE).read_text(encoding="utf-8")
     assert "TANK-G NEW PRESET" in text
     assert "figure 5" in text and "figure 6" in text
-    assert set(NAME_SOURCES) == {"manual-2024", "preset-card-2026"}
+    assert set(NAME_SOURCES) == {"manual-am3", "manual-2024", "preset-card-2026"}
+    assert "UWE-Twins 335" in text and "amps_da_tank_g" in text

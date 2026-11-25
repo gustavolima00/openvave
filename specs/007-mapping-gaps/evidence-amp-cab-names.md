@@ -1,11 +1,10 @@
 # Evidence record: amp type and IR cab names (spec 007 US4, FR-011)
 
-Status: **manual, not yet matched on fw 96** (2026-11-25). Sources are found and transcribed. At
-the owner's request (2026-11-25) openvave shows the manual's names (S1) as `hypothesis` next to the
-raw position, in the draft PR for spec 007 Milestone 4. The owner will not run the by-ear match and
-asked to settle the names from documents (2026-11-25): see "Documentary match" below. The result
-is **inconclusive for S1 and negative for S3** on the owner's fw 96 pedal, so the decision between
-shipping S1 as a hypothesis and shipping no names goes back to the owner.
+Status: **documented** (2026-11-25). openvave names the amp types and IR cabs from the Tank-G
+manual revision that is printed with the pedal (S7, S8, S9: the AM3 factory set of a fw 96 pedal),
+by owner decision 2026-11-25: matched against the shipped printed manual instead of by ear
+(spec 007 FR-011, T031). Confidence `documented`: from the vendor's documents, not seen or heard on
+the pedal. Earlier status: the 2024 manual (S1) as a hypothesis; see "Documentary match".
 
 The manual's images and the vendor PDF are **not** committed (copyright). This file cites and
 transcribes only. Local copies used for the transcription stay outside the repository.
@@ -20,6 +19,9 @@ transcribes only. Local copies used for the transcription stay outside the repos
 | S4 | TANK-G firmware release notes | `https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/releaseNote/firmware/Tank-G.txt`, linked from the same download page | M-VAVE (vendor) | v96 2024-12-31 … v99 2026-11-16 | 2026-11-24 |
 | S5 | M-EFCS Android app (`com.digAmp.m_efcs`), the vendor's APK: factory data files `assets/flutter_assets/lib/resources/bin/tankG/tankG_am3_ampCab.bin`, `tankG_am3_preset.bin`, `tankG_am4_ampCab.bin`, `tankG_am4_preset.bin` (212 992 / 758 bytes each); the app's "Restore AM3 Amp/Cab" and "Restore AM4" factory-reset data | `https://resource.m-vave.com/software/app/M-EFCS.apk` (128 363 643 bytes), linked from `https://www.m-vave.com/download.html` | M-VAVE (vendor) | fetched 2026-11-25 (not installed or run; read with `unzip` and `strings`) | 2026-11-25 |
 | S6 | "ultrarig for M-VAVE Tank-G" (third-party firmware page): "On 96, 53 or older, update first with M-VAVE's M-UPGRADE … (it installs 98). That update puts the factory presets, amps and cabs back" | `https://reverbose.com/f/ultrarig` | Reverbose / manuaguirre9 (third party) | Nov 2026 | 2026-11-25 |
+| S7 | r/guitarras post "amps da tank g" (2024-07-29) with a photo of page 3 of the printed manual that came with the poster's Tank-G ("a minha tank-g veio com esses amps de fabrica nela, de acordo com o manual"); a second owner: "Fui olhar o meu aqui e está igual ao seu" | `https://www.reddit.com/r/guitarras/comments/1eevr0x/amps_da_tank_g/`, read from the archive `https://web.archive.org/web/20250321165558/https://www.reddit.com/r/guitarras/comments/1eevr0x/amps_da_tank_g/` | Reddit users (third party), photo of M-VAVE's printed manual | 2024-07-29 | 2026-11-25 |
+| S8 | "USER MANUAL TANK-G" (EN section, pages 6–8: AMP and IR CAB tables) | `https://manualf.oss-cn-hongkong.aliyuncs.com/manual/Combined-Effect-Pedals/TANK-G-Z.pdf` | M-VAVE / Cuvave manual host (PDF created 2025-02-18) | 2025-02-18 | 2026-11-25 |
+| S9 | "TANK-G GUITAR PEDAL USER MANUAL" (multilingual, EN pages 4–6) | `https://m.media-amazon.com/images/I/B1iPdtSRxtL.pdf` | M-VAVE, hosted by Amazon (PDF created 2026-03-26) | 2026-03-26 | 2026-11-25 |
 
 Also searched, nothing usable: manuals.plus direct pages and PDFs (HTTP 403 to scripts),
 Scribd copies "Tank-G User Manual and Presets Guide" and "M-Vave Tank-G 2" (no text without a
@@ -112,6 +114,30 @@ S1's.
 So on newer firmware the AMP positions also take user files, like the IR slots; whether fw 96's
 amp positions can be replaced is not known.
 
+### S7 / S8 / S9 (manual, AM3 revision), AMP and IR CAB modules
+
+S7's photo (page 3 of the printed manual), "2. AMP module", "TYPE knob: Select the types of AMP,
+there are 9 different types, please look at the list.":
+
+| SLOT | NAME | TYPE |
+|---|---|---|
+| 1 | Based on UWE-Twins 335 | Clean |
+| 2 | Based on Archetype_C_W | Clean |
+| 3 | Based on TH-Mars VM410 | Overdrive |
+| 4 | Based on Friedman 100 | Overdrive |
+| 5 | Based on Brit Plex 50 | Overdrive |
+| 6 | Based on Mars FD Hundred | Dist |
+| 7 | Based on Pea V 534 | Dist |
+| 8 | Based on Diesel_Hagan_6 | Dist |
+| 9 | Based on EVH 5150 III 100S EL34 | Dist |
+
+S8 (page 6) and S9 (page 4) print the same table word for word, except "El34" for "EL34" in slot 9
+(openvave uses the printed manual's "EL34"). Their IR CAB table (S8 page 8, S9 page 5) is the same
+as S1's, word for word (slot 0 "The IR CAB turn off", "None"; slots 1–8 "Based on VHT Deliverance"
+… "Based on Diezel V30" with the same cab types), and they carry the same trademark note as S1.
+S8 and S9 also add a feature S1 does not mention: "import the AMP module timbre date", which
+fits firmware 96's AM3 model support (S4).
+
 ## The two lists disagree
 
 S1 and S3 are both M-VAVE's own content (S1 through a third-party copy) and name **different**
@@ -165,7 +191,10 @@ sounds the pedal has: the presets may also have been edited. No source lists S1'
 | IR cab raw 1–8 = S1 slots 1–8, amp type raw 0–8 = S1 slots 1–9 | hypothesis (numbering inferred) |
 | The owner's fw 96 pedal has S1's set, not S3's | hypothesis (S3 presets absent; sound not compared) |
 
-## Position matching on the pedal (pending)
+## Position matching on the pedal (superseded)
+
+*Superseded on 2026-11-25 by the documentary match below (owner decision): kept for the record
+and for anyone who wants to check the names by ear.*
 
 Nothing is written from the computer and nothing is saved: the owner turns the pedal's own knobs
 in LIVE mode (edit buffer only) while `openvave watch` (read-only) shows the raw position, then
@@ -261,12 +290,23 @@ so its slots hold the factory content its firmware came with. What the vendor's 
 | S3 names apply to the owner's pedal | **refuted** (AM3 ≠ AM4 content) |
 | S1 names apply to the owner's pedal | hypothesis (only source, but from before AM3; not tied by any document) |
 
-Decision options (for the owner): (a) ship S1's names marked `hypothesis` with `?`, amending FR-011
-to allow an unmatched manual list; (b) ship no names (`NAME_CHOICE` all `None`), deferring US4,
-and keep both lists in the docs as background. If a pedal is ever updated to firmware 98, S3's
-names become documented for it (the data table can key them by firmware then).
+Decision (owner, 2026-11-25): name the positions from the manual revision printed with the pedal
+(S7), corroborated by S8 and S9. That revision is the one shipped with fw 96 pedals: it is dated
+after firmware 96 (S8, 2025-02-18), it describes the amp import that fw 96 added, two owners found
+it in their boxes (S7), and the earlier list (S1, 2024-02, no amp import) predates the AM3 set. The
+vendor's AM3 data (S5) carries no names and no identifier that could contradict it (empty name
+fields, no model strings). So NAME_CHOICE = S7/S8 for amps and cabs, confidence `documented`; S1 and
+S3 stay in the data and in this record as other revisions.
 
-## What changes for each outcome
+| Claim | Confidence |
+|---|---|
+| A fw 96 pedal ships with the manual revision S7/S8/S9 (AM3 set) | documented (S7 photo + second owner, S8 date and content, S9) |
+| Its amp and cab names by raw position (slot k = raw k − 1 amp, raw k cab) | documented (owner decision 2026-11-25; not matched on the pedal) |
+
+## What changes for each outcome (superseded)
+
+*Superseded on 2026-11-25 by the documentary match below (owner decision): kept for the record
+and for anyone who wants to check the names by ear.*
 
 The names live in one table, `src/openvave/protocol/names.py`; the tests, the command-layer.md
 table and the docs' tables are built from or checked against it.

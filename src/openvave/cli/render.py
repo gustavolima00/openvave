@@ -135,8 +135,8 @@ def _position_name(field: DecodedField) -> PositionName | None:
 
 def name_reading(field: DecodedField) -> str | None:
     """The model an amp type or IR cab position is named after, with its source and confidence
-    (spec 007 US4): ``Plexi 100, overdrive (manual-2024, hypothesis)``, or for a cab
-    ``Mesa Boogie 4x12, factory IR (manual-2024, hypothesis)``. ``None`` without a name."""
+    (spec 007 US4): ``Friedman 100, overdrive (manual-am3, documented)``, or for a cab
+    ``Mesa Boogie 4x12, factory IR (manual-am3, documented)``. ``None`` without a name."""
     name = _position_name(field)
     if name is None:
         return None
@@ -145,7 +145,7 @@ def name_reading(field: DecodedField) -> str | None:
 
 
 def _short_name(field: DecodedField) -> str | None:
-    """``Plexi 100 ?`` (``?`` while the name is a hypothesis), or ``None``."""
+    """``Friedman 100``, or ``… ?`` while the name is a hypothesis,, or ``None``."""
     name = _position_name(field)
     if name is None:
         return None
@@ -431,7 +431,7 @@ def names_for_event(event: WatchChange) -> tuple[bool, bool]:
 
 
 def with_reading(field: DecodedField, *, named: bool = True) -> str:
-    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#4 (Plexi 100 ?)``
+    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#3 (Friedman 100)``
     (``named=False``: without the name, e.g. on the bypass side of a change)."""
     reading = type_reading(field) or (_short_name(field) if named else None)
     return field.display if reading is None else f"{field.display} ({reading})"

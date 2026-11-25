@@ -175,7 +175,7 @@ openvave set FIELD=VALUE [FIELD=VALUE ...] [--dry-run] [--experimental]
 |---|---|---|
 | `noise_gate`, `gain`, `treble`, `middle`, `bass`, `volume`, `mod_speed`, `delay_time`, `reverb_mix` | 0–127 | |
 | `mod_fx`, `delay_mix`, `reverb_decay` | position 1–40 (keep type); with `--type TYPE`; or raw 0–127 with `--raw`. In `FIELD=VALUE` form: `POSITION`, `TYPE:POSITION`, `raw:N` | |
-| `amp_type`, `ir_cab` | position 0–8 (the number; output adds the manual's model name, a hypothesis: [Effect types](effect-types.md#amp-types-and-ir-cabs)) | |
+| `amp_type`, `ir_cab` | position 0–8 (the number; output adds the manual's model name, `documented`: [Effect types](effect-types.md#amp-types-and-ir-cabs)) | |
 | `amp_on`, `mod_on`, `delay_on`, `reverb_on` | `on` / `off` | |
 | `led_colour` | `#rrggbb` or `r,g,b` | |
 
@@ -352,7 +352,7 @@ raw values in JSON.
 and the write results add `position_name_old` / `position_name_new` (watch) or
 `position_name_before` / `position_name_after` (the same object, or `null`). `value` and `display`
 (`#4`) stay the raw position.
-The names are the manual's, `confidence` `hypothesis` until matched on a firmware 96 pedal
+The names come from the manual printed with firmware 96 pedals, `confidence` `documented`
 ([Effect types](effect-types.md#amp-types-and-ir-cabs)).
 
 Abbreviated `openvave set gain 90 --json`:

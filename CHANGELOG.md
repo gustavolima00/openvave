@@ -6,14 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added (spec 007 US4): amp type and IR cab names, as a hypothesis
+### Added (spec 007 US4): amp type and IR cab names, from the manual
 
-- `amp_type` and `ir_cab` positions show the model the Tank-G manual lists for them (figures 5
-  and 6 of the 2024 manual): `preset dump`, `info` and `watch` add `name: Plexi 100, overdrive
-  (manual-2024, hypothesis)` to the field line, and changes in `watch`, `set` and the MCP
-  `pedal_changes` summary show `#4 (Plexi 100 ?)`. The `?` / `hypothesis` stays until the positions are
-  matched on a firmware 96 pedal: a 2026 M-VAVE preset card names other models for the same
-  positions. Sources and the numbering: `specs/007-mapping-gaps/evidence-amp-cab-names.md`.
+- `amp_type` and `ir_cab` positions show the model the Tank-G manual printed with firmware 96
+  pedals lists for them (the AM3 set: "UWE-Twins 335" … "EVH 5150 III 100S EL34", "VHT Deliverance"
+  … "Diezel V30"): `preset dump`, `info` and `watch` add `name: Friedman 100, overdrive
+  (manual-am3, documented)` to the field line, and changes in `watch`, `set` and the MCP
+  `pedal_changes` summary show `#3 (Friedman 100)`. `documented` means taken from the vendor's
+  manual (the copy shipped with the pedal, and the vendor's PDF of 2025-02-18), not checked on the
+  pedal. An earlier 2024 manual and a 2026 card for firmware 97+ list other models; both stay in
+  the data and the evidence record: `specs/007-mapping-gaps/evidence-amp-cab-names.md`.
 - JSON gains keys only (`schema_version` stays 2): `position_name` on the two field items
   (`name`, `detail`, `text`, `factory`, `source`, `confidence`, `firmware` (96)), `position_name_old` /
   `position_name_new` on their `watch --json` changes, `position_name_before` /

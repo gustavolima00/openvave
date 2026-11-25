@@ -1,16 +1,20 @@
 """Amp type and IR cab position names (spec 007 US4, pure data).
 
 Every name comes from the evidence record ``specs/007-mapping-gaps/evidence-amp-cab-names.md``
-(FR-011), which transcribes two M-VAVE lists that disagree:
+(FR-011), which transcribes three M-VAVE lists:
 
-- ``manual-2024``: the Tank-G user manual, figures 5 (amp) and 6 (IR cab);
-- ``preset-card-2026``: M-VAVE's "TANK-G NEW PRESET" card (V04, 2026-02-08).
+- ``manual-am3``: the Tank-G manual revision printed with the pedal from 2024 (vendor PDF
+  ``TANK-G-Z.pdf`` of 2025-02-18): the AM3 factory set of a fw 96 pedal. openvave's names;
+- ``manual-2024``: an earlier manual revision (Manuals+ copy, 2024-02), from before AM3;
+- ``preset-card-2026``: M-VAVE's "TANK-G NEW PRESET" card (V04, 2026-02-08), the AM4 set that
+  firmware 97+ loads (the vendor's app names its slots so).
 
-:data:`NAME_CHOICE` says which list names each raw position, and with which confidence. Until the
-owner matches the positions on a fw 96 pedal (spec 007 T031) every position takes the manual's
-name as a ``hypothesis``. Switching to the card, or mixing the two, changes only
-:data:`NAME_CHOICE`. ``specs/protocol/command-layer.md`` ("Amp type and IR cab names") mirrors
-the chosen names and ``tests/unit/test_names_doc.py`` fails on any difference.
+:data:`NAME_CHOICE` says which list names each raw position, and with which confidence:
+``documented`` (matched against the printed manual shipped with the pedal, owner decision
+2026-11-25, spec 007 T031), unlike ``observed`` / ``confirmed`` (seen or heard on the pedal).
+Switching lists, or mixing them, changes only :data:`NAME_CHOICE`.
+``specs/protocol/command-layer.md`` ("Amp type and IR cab names") mirrors the chosen names
+and ``tests/unit/test_names_doc.py`` fails on any difference.
 
 The brand and model names are trademarks of their owners, used only to describe the sound
 character, as the vendor's manual does; the IR cab names describe the **factory** IRs, which a
@@ -50,7 +54,7 @@ class PositionName:
     field: str
     raw: int
     name: str
-    """The model as printed, without the "Based on" prefix (``Plexi 100``)."""
+    """The model as printed, without the "Based on" prefix (``Friedman 100``)."""
     detail: str
     """Amp: ``clean``, ``overdrive`` or ``distortion``; cab: the speaker layout (``4x12``)."""
     factory: bool
@@ -58,16 +62,24 @@ class PositionName:
     source: str
     """A key of :data:`NAME_SOURCES`."""
     confidence: str
-    """``hypothesis`` until matched on the pedal, then ``observed`` (by ear) or ``confirmed``."""
+    """``documented`` (matched against the shipped manual), ``hypothesis``, or ``observed`` /
+    ``confirmed`` if ever matched on the pedal itself."""
 
     @property
     def text(self) -> str:
-        """``Plexi 100`` or, for a cab, ``Mesa Boogie 4x12``."""
+        """``Friedman 100`` or, for a cab, ``Mesa Boogie 4x12``."""
         return f"{self.name} {self.detail}" if self.factory else self.name
 
 
 NAME_SOURCES: Mapping[str, NameSource] = MappingProxyType(
     {
+        "manual-am3": NameSource(
+            "manual-am3",
+            "TANK-G user manual, AM3 revision: the printed manual shipped with the pedal (2024), "
+            "vendor PDF TANK-G-Z.pdf",
+            "M-VAVE",
+            "2025-02-18",
+        ),
         "manual-2024": NameSource(
             "manual-2024",
             "M-VAVE TANK-G Multi Guitar Pedal User Manual, figures 5 and 6",
@@ -85,8 +97,35 @@ NAME_SOURCES: Mapping[str, NameSource] = MappingProxyType(
 
 # Printed lists, in raw order (amp: printed slot k = raw k - 1; cab: printed slot k = raw k).
 # Each item: (name, detail). ``None`` = no model (IR cab 0 turns the cab off).
+_MANUAL_CABS: tuple[tuple[str, str] | None, ...] = (
+    None,
+    ("VHT Deliverance", "4x12"),
+    ("Sperimental", "4x12"),
+    ("Electrovoice", "2x10"),
+    ("Mesa Boogie", "4x12"),
+    ("Fender Champ", "1x8"),
+    ("Fender Pr Junior", "1x10"),
+    ("Marshall 1960V30", "4x12"),
+    ("Diezel V30", "4x12"),
+)
+"""The IR cab table, the same in both manual revisions (spelling as printed)."""
+
 _LISTS: Mapping[str, Mapping[str, tuple[tuple[str, str] | None, ...]]] = MappingProxyType(
     {
+        "manual-am3": {
+            "amp_type": (
+                ("UWE-Twins 335", "clean"),
+                ("Archetype_C_W", "clean"),
+                ("TH-Mars VM410", "overdrive"),
+                ("Friedman 100", "overdrive"),
+                ("Brit Plex 50", "overdrive"),
+                ("Mars FD Hundred", "distortion"),
+                ("Pea V 534", "distortion"),
+                ("Diesel_Hagan_6", "distortion"),
+                ("EVH 5150 III 100S EL34", "distortion"),
+            ),
+            "ir_cab": _MANUAL_CABS,
+        },
         "manual-2024": {
             "amp_type": (
                 ("VOX AC30HW Normal", "clean"),
@@ -99,17 +138,7 @@ _LISTS: Mapping[str, Mapping[str, tuple[tuple[str, str] | None, ...]]] = Mapping
                 ("ENGL Powerball E645/2", "distortion"),
                 ("Mesa Boogie Dual Rectifier", "distortion"),
             ),
-            "ir_cab": (
-                None,
-                ("VHT Deliverance", "4x12"),
-                ("Sperimental", "4x12"),
-                ("Electrovoice", "2x10"),
-                ("Mesa Boogie", "4x12"),
-                ("Fender Champ", "1x8"),
-                ("Fender Pr Junior", "1x10"),
-                ("Marshall 1960V30", "4x12"),
-                ("Diezel V30", "4x12"),
-            ),
+            "ir_cab": _MANUAL_CABS,
         },
         "preset-card-2026": {
             "amp_type": (
@@ -138,18 +167,20 @@ _LISTS: Mapping[str, Mapping[str, tuple[tuple[str, str] | None, ...]]] = Mapping
     }
 )
 
-_MANUAL = ("manual-2024", "hypothesis")
+_SHIPPED = ("manual-am3", "documented")
 
 NAME_CHOICE: Mapping[str, tuple[tuple[str, str] | None, ...]] = MappingProxyType(
     {
-        "amp_type": (_MANUAL,) * 9,
-        "ir_cab": (None,) + (_MANUAL,) * 8,
+        "amp_type": (_SHIPPED,) * 9,
+        "ir_cab": (None,) + (_SHIPPED,) * 8,
     }
 )
 """Per field, per raw position 0–8: ``(source, confidence)`` or ``None`` (no name). Spec 007
-T031 (the owner's match on a fw 96 pedal) decides this; until then: the manual, unmatched."""
+T031, owner decision 2026-11-25: the printed manual shipped with the pedal (AM3 revision)."""
 
-NAME_STATUS = "manual, not yet matched on fw 96"
+NAME_STATUS = (
+    "printed manual shipped with the pedal (AM3 revision); matched by document, not on the pedal"
+)
 """How far the chosen names are verified, in words (docs, MCP resources)."""
 
 

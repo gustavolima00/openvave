@@ -52,11 +52,18 @@ def test_names_follow_the_choice_table() -> None:
             assert name.raw == raw and name.field == field
 
 
-def test_no_name_is_confirmed_before_the_owner_matches_the_positions() -> None:
-    """Spec 007 T031 is open: every chosen name stays a hypothesis (FR-011)."""
+def test_names_are_documented_not_observed() -> None:
+    """Spec 007 T031 (owner decision 2026-11-25): matched against the printed manual shipped
+    with the pedal, not on the pedal, so ``documented`` and never ``observed`` / ``confirmed``."""
     for names in POSITION_NAMES.values():
         for name in names.values():
-            assert name.confidence == "hypothesis"
+            assert name.confidence == "documented"
+            assert name.source == "manual-am3"
+
+
+def test_both_manual_revisions_print_the_same_cab_table() -> None:
+    assert source_list("manual-am3", "ir_cab") == source_list("manual-2024", "ir_cab")
+    assert source_list("manual-am3", "amp_type") != source_list("manual-2024", "amp_type")
 
 
 def test_cab_names_are_factory_names_and_amp_names_are_not() -> None:

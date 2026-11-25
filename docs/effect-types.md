@@ -125,25 +125,27 @@ In the library the value is a tuple: `("spring", 10)`, or `(None, 10)` to keep t
 They are not typed knobs (no sections, no off zones between types). The pedal reports only the
 position; the phone app shows amp types as 1–9 and the IR cab as `OFF`, 1–8.
 
-**Names (a hypothesis).** The Tank-G manual lists a model for each position, and openvave shows it
-next to the number: `#4 (Plexi 100 ?)` in changes, `name: Plexi 100, overdrive (manual-2024,
-hypothesis)` in `preset dump`, `position_name` in JSON. The `?` and `hypothesis` mean the names are
-from the manual but **not yet matched on a firmware 96 pedal**: a newer M-VAVE preset card (2026)
-lists different models for the same positions, and which list your pedal has is still being
-checked by ear. The number stays the value and the input (`set amp_type 4`). Sources and how the
-numbers were matched to the printed slots: [the evidence record](../specs/007-mapping-gaps/evidence-amp-cab-names.md).
+**Names.** openvave shows the model the Tank-G manual printed with firmware 96 pedals lists for each
+position, next to the number: `#3 (Friedman 100)` in changes, `name: Friedman 100, overdrive
+(manual-am3, documented)` in `preset dump`, `position_name` in JSON. `documented` means the names
+come from that manual (and the vendor's PDF of it), matched by document rather than on the pedal.
+M-VAVE has printed other lists too: an early 2024 manual (the "VOX AC30HW … Mesa Boogie Dual
+Rectifier" table seen in many videos) and a 2026 preset card for the firmware 97+ amp set; if your
+pedal was updated or you imported amp models, the names may not fit. The number stays the value and
+the input (`set amp_type 4`). Sources and how the numbers were matched to the printed slots:
+[the evidence record](../specs/007-mapping-gaps/evidence-amp-cab-names.md).
 
 | `amp_type` | Model (manual) | Type |
 |---|---|---|
-| 0 | VOX AC30HW Normal | clean |
-| 1 | Fender 65 Twin Reverb | clean |
-| 2 | Bogner Shiva | overdrive |
-| 3 | Marshall JTM45 OD | overdrive |
-| 4 | Plexi 100 | overdrive |
-| 5 | Marshall JCM800 | distortion |
-| 6 | EVH 5150 LEAD | distortion |
-| 7 | ENGL Powerball E645/2 | distortion |
-| 8 | Mesa Boogie Dual Rectifier | distortion |
+| 0 | UWE-Twins 335 | clean |
+| 1 | Archetype_C_W | clean |
+| 2 | TH-Mars VM410 | overdrive |
+| 3 | Friedman 100 | overdrive |
+| 4 | Brit Plex 50 | overdrive |
+| 5 | Mars FD Hundred | distortion |
+| 6 | Pea V 534 | distortion |
+| 7 | Diesel_Hagan_6 | distortion |
+| 8 | EVH 5150 III 100S EL34 | distortion |
 
 - `ir_cab`: **position 0 turns the cabinet simulation off** (the manual says so, the app shows
   `OFF`, and it sounded that way on the pedal, spec 007, 2026-11-19), so openvave prints `off` for

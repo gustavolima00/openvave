@@ -59,8 +59,19 @@ def test_with_reading_short_form() -> None:
     assert with_reading(decode_field(ENTRIES["gain"], 60)) == "60"
 
 
-def test_hypothesis_names_are_marked() -> None:
-    assert short(POSITION_NAMES["ir_cab"][7]).endswith(" ?")
+def test_only_hypothesis_names_are_marked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``?`` marks a hypothesis; the documented manual names carry none."""
+    import dataclasses
+
+    from openvave.cli import render
+
+    field = decode_field(ENTRIES["ir_cab"], 7)
+    documented = POSITION_NAMES["ir_cab"][7]
+    assert documented.confidence == "documented"
+    assert with_reading(field) == f"#7 ({documented.text})"
+    guess = dataclasses.replace(documented, confidence="hypothesis")
+    monkeypatch.setattr(render, "position_name", lambda _f, _r: guess)
+    assert with_reading(field) == f"#7 ({documented.text} ?)"
 
 
 def test_json_adds_position_name_and_keeps_display_raw() -> None:
@@ -74,7 +85,7 @@ def test_json_adds_position_name_and_keeps_display_raw() -> None:
         "text": name.text,
         "factory": True,
         "source": name.source,
-        "confidence": "hypothesis",
+        "confidence": name.confidence,
         "firmware": 96,
     }
 

@@ -48,7 +48,7 @@
   `evidence-amp-cab-names.md` (FR-011): S1, the 2024 manual (Manuals+ copy, archived) and S3, the
   vendor's 2026 "NEW PRESET" card, name different models; position numbering derived
   (amp slot *k* = raw *k* − 1, cab slot *k* = raw *k*); no images committed
-- [ ] T031 Owner, hardware (read-only, nothing saved): match the positions on the pedal by ear,
+- [X] T031 Owner, hardware (read-only, nothing saved): match the positions on the pedal by ear,
   as in the evidence record's "Position matching" procedure; record which list fits each
   position, firmware and date in the evidence record
   - 2026-11-25, owner decision: no by-ear session; settle from documents instead. Documentary
@@ -56,6 +56,10 @@
     for this pedal; the never-imported fw 96 pedal holds the AM3 factory set (5 of 5 untouched
     presets equal the vendor's AM3 image), which has no names; S1 predates AM3. Inconclusive for
     S1: the owner chooses between S1 as a hypothesis and no names (still open)
+  - Closed 2026-11-25: matched against the shipped printed manual instead of by ear, owner
+    decision 2026-11-25. The manual revision printed with fw 96 pedals (S7 photo, two owners; S8
+    vendor PDF 2025-02-18; S9) gives the amp list and the same cab list as S1; `NAME_CHOICE` =
+    `manual-am3`, confidence `documented` (FR-011 amended)
 
 ### Tests first (the owner asked on 2026-11-25 to build with the manual's names before T031)
 
@@ -81,6 +85,6 @@
 
 - [ ] T036 Owner: `uv run openvave preset dump` on two presets shows the names next to `#n`
 
-**Checkpoint**: Milestone 4 done when T031 is recorded and `NAME_CHOICE` follows it. Until then
-the PR stays a draft: the names are built and shown as `hypothesis` ("manual, not yet matched on
-fw 96"), and FR-011 keeps them from shipping in a release.
+**Checkpoint**: Milestone 4 done: T031 closed by the documentary match (owner decision
+2026-11-25), `NAME_CHOICE` = the manual printed with fw 96 pedals, `documented`. T036 (one real
+`preset dump` showing the names) is left for the owner after the merge.
