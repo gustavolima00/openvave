@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added (spec 007 US4): amp type and IR cab names, as a hypothesis
+
+- `amp_type` and `ir_cab` positions show the model the Tank-G manual lists for them (figures 5
+  and 6 of the 2024 manual): `preset dump`, `info` and `watch` add `name: Plexi 100, overdrive
+  (manual-2024, hypothesis)` to the field line, and changes in `watch`, `set` and the MCP
+  `pedal_changes` show `#4 (Plexi 100 ?)`. The `?` / `hypothesis` stays until the positions are
+  matched on a firmware 96 pedal: a 2026 M-VAVE preset card names other models for the same
+  positions. Sources and the numbering: `specs/007-mapping-gaps/evidence-amp-cab-names.md`.
+- JSON gains keys only (`schema_version` stays 2): `position_name` on the two field items
+  (`name`, `detail`, `text`, `factory`, `source`, `confidence`), `position_name_old` /
+  `position_name_new` on their `watch --json` changes, `position_name_before` /
+  `position_name_after` on write-result changes and `pedal_changes`, and `position_names` on the
+  two rows of `openvave://byte-map`. `value`, `display` (`#4`) and input (`set amp_type 4`) are
+  unchanged.
+- IR cab names describe the factory IRs: a slot overwritten by an imported IR keeps its number
+  but not its name. The brand and model names are trademarks of their owners, used only to
+  describe the sound character, as the vendor's manual does.
+- Library: `openvave.protocol.POSITION_NAMES`, `PositionName` and `position_name()`; both vendor
+  lists and the per-position choice live in `openvave.protocol.names`.
+
 ## [0.6.0]
 
 AI assistants and preset management. `openvave mcp` runs a Model Context Protocol server, so an

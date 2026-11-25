@@ -27,6 +27,7 @@ from openvave.protocol.commands import (
 from openvave.protocol.decode import decode_region, diff
 from openvave.protocol.frame import ALLOWED_COMMANDS, Frame, checksum, decode_frame, encode_frame
 from openvave.protocol.identity import TESTED_FIRMWARE, parse_identity
+from openvave.protocol.names import POSITION_NAMES, PositionName, position_name
 from openvave.protocol.state import classify
 from openvave.protocol.storage import StorageRead
 from openvave.protocol.writes import WRITE_MESSAGES, WriteMessage, WriteTarget
@@ -37,6 +38,8 @@ __all__ = [
     "Frame",
     "FrameAssembler",
     "MAP_FIRMWARE",
+    "POSITION_NAMES",
+    "PositionName",
     "REVERB_SECTIONS",
     "REVERB_SECTION_SIZE",
     "REVERB_SECTION_STEPS",
@@ -58,6 +61,7 @@ __all__ = [
     "decode_frame",
     "decode_region",
     "diff",
+    "position_name",
     "encode_frame",
     "parse_identity",
     "parse_read_reply",

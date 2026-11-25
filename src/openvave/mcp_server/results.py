@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from openvave.cli.render import type_reading
+from openvave.cli.render import change_names, with_reading
 from openvave.models import ByteChange
 from openvave.protocol import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field
@@ -29,19 +29,17 @@ def add_knob_types(region: dict[str, Any]) -> dict[str, Any]:
 
 def change_json(change: ByteChange) -> dict[str, Any]:
     """One changed byte of ``pedal_changes``: name, raw before/after and their display form
-    (``5 (room 6)`` for a typed knob, hex for an unknown or flag byte)."""
+    (``5 (room 6)`` for a typed knob, ``#4 (Plexi 100 ?)`` for a named position, hex for an
+    unknown or flag byte)."""
     entry = change.field
     if entry is not None:
         before, after = (decode_field(entry, raw) for raw in (change.old, change.new))
-        display = tuple(
-            f.display if type_reading(f) is None else f"{f.display} ({type_reading(f)})"
-            for f in (before, after)
-        )
+        display = (with_reading(before), with_reading(after))
         name: str | None = entry.name
     else:
         display = (f"0x{change.old:02x}", f"0x{change.new:02x}")
         name = None
-    return {
+    document: dict[str, Any] = {
         "region": change.region.name.lower(),
         "offset": change.offset,
         "name": name,
@@ -50,6 +48,10 @@ def change_json(change: ByteChange) -> dict[str, Any]:
         "display_before": display[0],
         "display_after": display[1],
     }
+    names = change_names(change)
+    if names is not None:  # amp type / IR cab (spec 007 US4)
+        document["position_name_before"], document["position_name_after"] = names
+    return document
 
 
 def change_label(change: ByteChange) -> str:

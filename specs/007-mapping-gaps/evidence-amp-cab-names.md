@@ -1,7 +1,9 @@
 # Evidence record: amp type and IR cab names (spec 007 US4, FR-011)
 
-Status: **sources found and transcribed; position matching on the pedal pending** (2026-11-24).
-Until the matching below is recorded, FR-011 keeps the positions numbered (`#0`–`#8`) in openvave.
+Status: **manual, not yet matched on fw 96** (2026-11-25). Sources are found and transcribed. At
+the owner's request (2026-11-25) openvave shows the manual's names (S1) as `hypothesis` next to the
+raw position, in the draft PR for spec 007 Milestone 4. The names do not ship in a release until
+the matching below is recorded (FR-011).
 
 The manual's images and the vendor PDF are **not** committed (copyright). This file cites and
 transcribes only. Local copies used for the transcription stay outside the repository.
@@ -189,5 +191,18 @@ Procedure:
 6. Also record: whether an IR or amp model was ever imported, or a preset pack loaded with the
    vendor software, on this pedal.
 
-Passes when the notes point to one list at amp 4 and 8 and cab 3, 5 and 6 (record per position).
+Passes when, at amp 4 and 8 and at cab 3, 5 and 6, each note fits one list's description (record
+it per position, with firmware and date). A position whose sound fits neither list stays unnamed.
 A match by ear gives the names `observed`; the IR cab names stay labelled factory names.
+
+## What changes for each outcome
+
+The names live in one table, `src/openvave/protocol/names.py`; the tests, the command-layer.md
+table and the docs' tables are built from or checked against it.
+
+| Outcome of the match | Change |
+|---|---|
+| S1 (manual) at every position | `NAME_CHOICE`: confidence `hypothesis` → `observed` for the matched positions; `NAME_STATUS` → "manual, matched by ear on fw 96 (date)"; regenerate the command-layer.md table; docs drop "not yet matched"; this record gets the session; T031 and T036 ticked |
+| S3 (card) at every position | `NAME_CHOICE`: source `manual-2024` → `preset-card-2026`, confidence `observed`; the same doc steps; the docs' tables list the card's names |
+| Mixed (some positions fit each list, or neither) | `NAME_CHOICE` per position: the matching source with `observed`, `None` (no name, shown `#n`) where neither fits; the same doc steps; the docs say the lists are mixed |
+| Inconclusive | nothing changes: the names stay a `hypothesis` and the PR stays a draft, or US4 is deferred again with the names removed (`NAME_CHOICE` all `None`) |

@@ -52,24 +52,30 @@
   as in the evidence record's "Position matching" procedure; record which list fits each
   position, firmware and date in the evidence record
 
-### Tests first (after T031 picks the list)
+### Tests first (the owner asked on 2026-11-25 to build with the manual's names before T031)
 
-- [ ] T032 `tests/unit/test_bytemap.py`, `tests/unit/test_bytemap_doc.py`: `amp_type` and
-  `ir_cab` labels per raw position from the evidence record, each with its confidence; raw input
-  still accepted (`set amp_type 3`); `ir_cab` names marked as factory names
-- [ ] T033 `tests/contract/`: `preset dump`, `watch`, `set` human and JSON output show the name and
-  keep the raw value; JSON gains keys only (schemas validate, no `schema_version` bump)
+- [X] T032 `tests/unit/test_names.py`, `tests/unit/test_names_doc.py`,
+  `tests/unit/test_render_names.py`: one names table (`src/openvave/protocol/names.py`, both
+  vendor lists + a per-position choice), every chosen name a `hypothesis`, IR cab names factory
+  names, cab 0 keeps `off`, the doc table and the evidence record match the data; expected texts
+  built from the table, so switching lists is a data change
+- [X] T033 Contract tests: `preset dump` human and JSON (`position_name`), `watch` human and JSON
+  (`position_name_old` / `_new`), `set` human and JSON (`position_name_before` / `_after`, raw
+  input), MCP `preset_read`, `pedal_changes` and `openvave://byte-map`; schemas validate,
+  `schema_version` stays 2
 
 ### Implementation
 
-- [ ] T034 `src/openvave/protocol/bytemap.py` + `specs/protocol/command-layer.md` rows 5 and 17
-  (same commit), rendering, MCP tools if they show labels
-- [ ] T035 Docs (`docs/tank-g.md`, `docs/effect-types.md`, `cli-reference`), trademark disclaimer
-  as in the manual, CHANGELOG [Unreleased]
+- [X] T034 `src/openvave/protocol/names.py`; rendering (`render.py`, `_jsonform.py`), MCP results
+  and resources; `specs/protocol/command-layer.md` "Amp type and IR cab names" (byte-map rows 5
+  and 17 unchanged: the byte stays `confirmed`, the names carry their own confidence)
+- [X] T035 Docs (`docs/effect-types.md`, `docs/tank-g.md`, `docs/cli-reference.md`,
+  `docs/mcp.md`) with the trademark note; CHANGELOG [Unreleased]
 
 ### Live verification
 
 - [ ] T036 Owner: `uv run openvave preset dump` on two presets shows the names next to `#n`
 
-**Checkpoint**: Milestone 4 done when T031 is recorded and the names ship with their confidence;
-without T031 the positions stay numbered (FR-011).
+**Checkpoint**: Milestone 4 done when T031 is recorded and `NAME_CHOICE` follows it. Until then
+the PR stays a draft: the names are built and shown as `hypothesis` ("manual, not yet matched on
+fw 96"), and FR-011 keeps them from shipping in a release.

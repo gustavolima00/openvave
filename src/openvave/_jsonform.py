@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from openvave.models import DecodedField, DeviceIdentity
+from openvave.protocol.names import NAMED_FIELDS, PositionName, position_name
 
 
 def hex_bytes(data: bytes) -> str:
@@ -26,7 +27,7 @@ def field_json(field: DecodedField) -> dict[str, Any]:
     """One ``fields[]`` item: the 001 keys plus the additive 002 keys (decoded-field schema)."""
     entry = field.entry
     ranged = entry.min is not None and entry.max is not None
-    return {
+    document = {
         "offset": entry.offset,
         "size": 1,
         "name": entry.name,
@@ -39,4 +40,23 @@ def field_json(field: DecodedField) -> dict[str, Any]:
         "display": field.display,
         "interpreted": field.interpreted,
         "out_of_range": field.out_of_range,
+    }
+    if entry.name in NAMED_FIELDS:
+        name = None if field.out_of_range else position_name(entry.name, field.value)
+        document["position_name"] = None if name is None else position_name_json(name)
+    return document
+
+
+def position_name_json(name: PositionName) -> dict[str, Any]:
+    """The model an amp type or IR cab position is named after (spec 007 US4; additive key).
+
+    ``confidence`` is the name's own (``hypothesis`` until matched on the pedal), not the
+    byte's; ``factory`` is true for IR cabs, whose slots a user can overwrite."""
+    return {
+        "name": name.name,
+        "detail": name.detail,
+        "text": name.text,
+        "factory": name.factory,
+        "source": name.source,
+        "confidence": name.confidence,
     }

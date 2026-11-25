@@ -160,3 +160,23 @@ async def test_wait_is_capped(tmp_path: Path, wait: float) -> None:
     assert text.startswith("invalid_value: ")
     assert "0" in text and "30" in text
     assert factory.calls == 0
+
+
+async def test_amp_type_change_shows_the_names(tmp_path: Path) -> None:
+    """Spec 007 US4: raw positions stay, names are added (from the names table)."""
+    from openvave.protocol.names import position_name
+
+    factory = CountingFactory(make=normal_pedal)
+    async with open_harness(options(tmp_path), factory) as h:
+        await h.ok("pedal_changes")
+        turn(factory.fake, 5, 8)  # amp type 4 -> 8
+        result = await h.ok("pedal_changes")
+    (change,) = result["changes"]
+    before, after = position_name("amp_type", 4), position_name("amp_type", 8)
+    assert before is not None and after is not None
+    mark = " ?" if after.confidence == "hypothesis" else ""
+    assert (change["before"], change["after"]) == (4, 8)
+    assert change["display_before"] == f"#4 ({before.text}{mark})"
+    assert change["display_after"] == f"#8 ({after.text}{mark})"
+    assert change["position_name_before"] == before.text
+    assert change["position_name_after"] == after.text

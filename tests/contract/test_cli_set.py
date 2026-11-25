@@ -388,3 +388,47 @@ def test_keep_hint_names_the_save_opt_ins_while_unconfirmed() -> None:
     needs = not all(sendable_by_default(k, None, 96) for k in ("stored_slot", "commit"))
     assert ("--experimental" in NOT_SAVED_NORMAL) is needs
     assert "Keep: openvave preset save --unsafe" in NOT_SAVED_NORMAL
+
+
+def _short(field: str, raw: int) -> str:
+    from openvave.protocol.names import position_name
+
+    name = position_name(field, raw)
+    assert name is not None
+    return name.text + (" ?" if name.confidence == "hypothesis" else "")
+
+
+def test_amp_type_shows_names_and_takes_the_raw_position(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Spec 007 US4 (FR-012): the raw position stays the input and stays visible."""
+    code, out, err, _ = run(capsys, ["set", "amp_type", "8"])
+    assert code == 0, err
+    lines = out.splitlines()
+    assert lines[0] == (
+        f"Set amp_type #4 ({_short('amp_type', 4)}) → #8 ({_short('amp_type', 8)})   "
+        "(current preset 1B, edit mode)"
+    )
+    assert lines[3] == f"  after  [5] amp_type #8 ({_short('amp_type', 8)})   applied"
+
+
+def test_amp_type_json_changes_carry_the_names(capsys: pytest.CaptureFixture[str]) -> None:
+    from openvave.protocol.names import position_name
+
+    code, out, err, _ = run(capsys, ["set", "ir_cab", "0", "--json"])
+    assert code == 0, err
+    doc = json.loads(out)
+    validate(doc)
+    cab7 = position_name("ir_cab", 7)
+    assert cab7 is not None
+    assert doc["result"]["changes"] == [
+        {
+            "region": "preset",
+            "offset": 17,
+            "before": 7,
+            "after": 0,
+            "name": "ir_cab",
+            "position_name_before": cab7.text,
+            "position_name_after": None,
+        }
+    ]

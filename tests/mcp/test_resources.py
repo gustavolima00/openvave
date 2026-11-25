@@ -89,6 +89,23 @@ async def test_byte_map(tmp_path: Path) -> None:
     assert document["map_firmware"] == 96
 
 
+async def test_byte_map_names_amp_type_and_ir_cab(tmp_path: Path) -> None:
+    """Spec 007 US4: the byte-map resource carries the names table and its status."""
+    from openvave.protocol.names import NAME_STATUS, POSITION_NAMES
+
+    async with open_harness(options(tmp_path), CountingFactory()) as h:
+        _, text = await h.resource("openvave://byte-map")
+    rows = {e["name"]: e for e in json.loads(text)["regions"]["current_preset"]}
+    for field in ("amp_type", "ir_cab"):
+        names = rows[field]["position_names"]
+        assert set(names) == {str(raw) for raw in POSITION_NAMES[field]}
+        for raw, name in POSITION_NAMES[field].items():
+            assert names[str(raw)]["text"] == name.text
+            assert names[str(raw)]["confidence"] == name.confidence
+        assert rows[field]["names_status"] == NAME_STATUS
+    assert "position_names" not in rows["gain"]
+
+
 async def test_safety(tmp_path: Path) -> None:
     async with open_harness(options(tmp_path), CountingFactory()) as h:
         mime, text = await h.resource("openvave://safety")

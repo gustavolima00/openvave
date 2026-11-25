@@ -36,6 +36,7 @@ from openvave.models import (
 )
 from openvave.protocol.bytemap import TYPED_FIELDS, type_parts
 from openvave.protocol.decode import decode_field, decode_region
+from openvave.protocol.names import NAMED_FIELDS, PositionName, position_name
 from openvave.protocol.state import classify
 from openvave.protocol.storage import EXPECTED_HEADER, position
 from openvave.protocol.writes import WRITABLE_FIELDS, sendable_by_default
@@ -126,6 +127,31 @@ def type_reading(field: DecodedField) -> str | None:
     return "off" if type_name is None else f"{type_name} {position}"
 
 
+def _position_name(field: DecodedField) -> PositionName | None:
+    if field.out_of_range:
+        return None
+    return position_name(field.entry.name, field.value)
+
+
+def name_reading(field: DecodedField) -> str | None:
+    """The model an amp type or IR cab position is named after, with its source and confidence
+    (spec 007 US4): ``Plexi 100, overdrive (manual-2024, hypothesis)``, or for a cab
+    ``Mesa Boogie 4x12, factory IR (manual-2024, hypothesis)``. ``None`` without a name."""
+    name = _position_name(field)
+    if name is None:
+        return None
+    kind = "factory IR" if name.factory else name.detail
+    return f"{name.text}, {kind} ({name.source}, {name.confidence})"
+
+
+def _short_name(field: DecodedField) -> str | None:
+    """``Plexi 100 ?`` (``?`` while the name is a hypothesis), or ``None``."""
+    name = _position_name(field)
+    if name is None:
+        return None
+    return name.text + (" ?" if name.confidence == "hypothesis" else "")
+
+
 def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     """``[15] reverb decay   5   0–127   observed`` (contracts/cli.md column layout)."""
     entry = field.entry
@@ -141,6 +167,9 @@ def field_line(field: DecodedField, indent: str = FIELD_INDENT) -> str:
     reading = type_reading(field)
     if reading is not None:
         line += f"  type: {reading}"
+    named = name_reading(field)
+    if named is not None:
+        line += f"  name: {named}"
     return line
 
 
@@ -370,10 +399,20 @@ def watch_label_line(text: str) -> str:
     return f"── label: {text} ──"
 
 
-def _with_reading(field: DecodedField) -> str:
-    """``5`` or, for a typed knob, ``5 (room 6)``."""
-    reading = type_reading(field)
+def with_reading(field: DecodedField) -> str:
+    """``5``; for a typed knob ``5 (room 6)``; for a named position ``#4 (Plexi 100 ?)``."""
+    reading = type_reading(field) or _short_name(field)
     return field.display if reading is None else f"{field.display} ({reading})"
+
+
+def change_names(change: ByteChange) -> tuple[str | None, str | None] | None:
+    """Names of the old and new position of an amp type or IR cab change, for JSON
+    (``None`` for a position without one); ``None`` for any other byte."""
+    entry = change.field
+    if entry is None or entry.name not in NAMED_FIELDS:
+        return None
+    old, new = (_position_name(decode_field(entry, raw)) for raw in (change.old, change.new))
+    return (None if old is None else old.text, None if new is None else new.text)
 
 
 def _change_cells(change: ByteChange) -> tuple[str, str, str]:
@@ -381,8 +420,8 @@ def _change_cells(change: ByteChange) -> tuple[str, str, str]:
     if change.field is not None:
         return (
             change.field.label,
-            _with_reading(decode_field(change.field, change.old)),
-            _with_reading(decode_field(change.field, change.new)),
+            with_reading(decode_field(change.field, change.old)),
+            with_reading(decode_field(change.field, change.new)),
         )
     name = " / ".join(e.label for e in change.fields) if change.fields else "unknown"
     return name, f"0x{change.old:02x}", f"0x{change.new:02x}"
@@ -468,6 +507,7 @@ def watch_change_json(
                 "old": c.old,
                 "new": c.new,
                 "field": c.field.name if c.field is not None else None,
+                **_names_json(c, "old", "new"),
             }
             for c in event.changes
         ],
@@ -536,7 +576,7 @@ def _value_text(field: str, data: bytes) -> str:
     if spec.kind == "led_colour":
         return "#" + data[spec.offset : spec.offset + 3].hex()
     assert spec.entry is not None
-    return _with_reading(decode_field(spec.entry, data[spec.offset]))
+    return with_reading(decode_field(spec.entry, data[spec.offset]))
 
 
 def _requested(plan: WritePlan) -> bytes:
@@ -554,9 +594,7 @@ def _change_text(change: ByteChange) -> str:
     else:
         where = f"[{change.offset}]"
     if change.field is not None:
-        return (
-            f"{where} {change.field.name} {_with_reading(decode_field(change.field, change.new))}"
-        )
+        return f"{where} {change.field.name} {with_reading(decode_field(change.field, change.new))}"
     return f"{where} {change.new}"
 
 
@@ -710,9 +748,19 @@ def _changes_json(changes: tuple[ByteChange, ...]) -> list[dict[str, Any]]:
             "before": c.old,
             "after": c.new,
             "name": c.field.name if c.field is not None else None,
+            **_names_json(c, "before", "after"),
         }
         for c in changes
     ]
+
+
+def _names_json(change: ByteChange, old_key: str, new_key: str) -> dict[str, str | None]:
+    """``position_name_<old>`` / ``position_name_<new>`` for an amp type or IR cab change
+    (spec 007 US4, additive keys); empty for any other byte."""
+    names = change_names(change)
+    if names is None:
+        return {}
+    return {f"position_name_{old_key}": names[0], f"position_name_{new_key}": names[1]}
 
 
 def write_json(
@@ -964,8 +1012,8 @@ def _diff_line(change: ByteChange) -> str:
     entry = change.field
     if entry is None:
         return f"  [{change.offset}] {change.old} → {change.new}"
-    old = _with_reading(decode_field(entry, change.old))
-    new = _with_reading(decode_field(entry, change.new))
+    old = with_reading(decode_field(entry, change.old))
+    new = with_reading(decode_field(entry, change.new))
     return f"  [{change.offset}] {entry.name} {old} → {new}"
 
 

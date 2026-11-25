@@ -219,6 +219,13 @@ def test_protocol_module_exposes_byte_map() -> None:
     assert {"BYTE_MAP", "MAP_FIRMWARE"} <= set(openvave.protocol.__all__)
 
 
+def test_protocol_module_exposes_position_names() -> None:
+    """Spec 007 US4: the names table is public library data."""
+    assert {"POSITION_NAMES", "PositionName", "position_name"} <= set(openvave.protocol.__all__)
+    name = openvave.protocol.position_name("amp_type", 0)
+    assert isinstance(name, openvave.protocol.PositionName)
+
+
 def test_protocol_module_exposes_storage_read() -> None:
     assert "StorageRead" in openvave.protocol.__all__
     target = openvave.protocol.StorageRead.preset(6)
