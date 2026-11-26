@@ -197,3 +197,10 @@ def test_memoryview_is_counted_in_bytes() -> None:
 def test_not_bytes() -> None:
     with pytest.raises(ValueError):
         group_enabled("AMP", 21)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("name", [["AMP"], None, 5])
+def test_group_name_that_is_not_text(name: object) -> None:
+    with pytest.raises(ValueError):
+        group_enabled(name, bytes(range(21)))  # type: ignore[arg-type]
+    assert panel_group(name) is None  # type: ignore[arg-type]

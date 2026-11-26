@@ -169,6 +169,8 @@ def _valid_reply(request: Frame, reply: bytes) -> bytes | None:
     return decoded.body[ECHO_LEN:]
 
 
+_QUERY_REQUEST = encode_frame(QUERY, b"")
+"""The handshake request the session sends (``build_query()``: command ``0x11``, empty body)."""
 _DEVICE_INFO_ECHO = bytes([5]) + LOOPBACK_ADDRESS.to_bytes(4, "little") + (32).to_bytes(3, "little")
 """The device-information read (type 5, ``0xD0000000``, 32 bytes) the session's snapshot sends."""
 
@@ -186,14 +188,14 @@ def _simulated_parts(
     dropped, so later reads answer from memory and writes are applied to it. A session without a
     device-information reply answers that read with 32 zero bytes. Raises :class:`ValueError`
     when the handshake, the global read or the current-preset read has no good reply, or when
-    the recorded state has no loaded preset.
+    the recorded state is not a preset in normal or edit mode.
     """
     from openvave.protocol.state import classify
 
     script: dict[str, tuple[bytes, Replies]] = {}
     scripted: set[bytes] = set()
     memory: dict[int, bytes] = {}
-    for label, raw_request, raw_reply in _exchanges(path):
+    for _, raw_request, raw_reply in _exchanges(path):
         try:
             request = decode_frame(raw_request)
         except ProtocolError:
@@ -207,31 +209,31 @@ def _simulated_parts(
             if data is not None:
                 memory[shape[0]] = data
             continue
-        is_query = request.command == QUERY
+        is_query = raw_request == _QUERY_REQUEST
         is_other_read = request.command == READ and len(body) == ECHO_LEN
         if not (is_query or is_other_read) or raw_request in scripted:
             continue
         if _valid_reply(request, raw_reply) is None:
             continue
-        key = label if label not in script else f"{label} ({len(script)})"
-        script[key] = (raw_request, raw_reply)
+        script[raw_request.hex(" ")] = (raw_request, raw_reply)  # keyed by frame, not label
         scripted.add(raw_request)
-    if not any(decode_frame(tx).command == QUERY for tx in scripted):
+    if _QUERY_REQUEST not in scripted:
         raise ValueError(f"{path}: no valid handshake (query 0x11) reply in the recorded session")
     if GLOBAL_ADDRESS not in memory:
         raise ValueError(f"{path}: no global block read (type 4, 0x20000000 x4) in the session")
     if EDIT_BUFFER not in memory:
         raise ValueError(f"{path}: no current preset read (type 4, 0x10000000 x21) in the session")
     state = classify(memory[GLOBAL_ADDRESS], memory[EDIT_BUFFER])
-    if state.index is None:
+    if state.kind not in ("normal", "edit"):
         raise ValueError(
-            f"{path}: the recorded state is {state.kind}, with no loaded preset "
-            "(a simulated pedal needs a session recorded on a preset)"
+            f"{path}: the recorded state is {state.kind}, not a loaded preset in normal or edit "
+            "mode (a simulated pedal needs a session recorded on a preset, not bypass or tuner)"
         )
+    assert state.index is not None
     memory.setdefault(LOOPBACK_ADDRESS, b"\x00")
     info = encode_frame(READ, _DEVICE_INFO_ECHO)
     if info not in scripted:
-        script["device info (not recorded)"] = (
+        script[info.hex(" ")] = (
             info,
             encode_frame(READ, _DEVICE_INFO_ECHO + bytes(32)),
         )
@@ -434,8 +436,8 @@ class FakeTransport:
         constructor. :attr:`sent`, :attr:`commits` and :meth:`lose_link` work as on any fake.
 
         Raises :class:`ValueError` when the handshake, the global read or the current-preset
-        read is missing, when the recorded state has no loaded preset (bypass, unrecognised),
-        when ``image`` is not 758 bytes, or for an unknown fault kind or action.
+        read is missing, when the recorded state is not a preset in normal or edit mode
+        (bypass, tuner), when ``image`` is not 758 bytes, or for an unknown fault kind or action.
 
         It is a model of the pedal built from the protocol document, not evidence of what a
         pedal does: only a capture proves behaviour.

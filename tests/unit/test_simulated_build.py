@@ -324,3 +324,34 @@ def test_one_label_for_two_different_writes(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="two different requests"):
         FakeTransport.from_capture(path)  # replay keeps its rule
     FakeTransport.simulated(path)  # the simulated pedal drops writes
+
+
+# -- Codex round 2 ------------------------------------------------------------------------------
+
+
+async def test_a_label_cannot_replace_another_request(tmp_path: Path) -> None:
+    """Script entries are keyed by request frame: a handshake labelled like the device-info
+    fallback keeps its reply."""
+    path = derive(
+        tmp_path,
+        drop=[QUERY, DEVICE_INFO],
+        extra=[("device info (not recorded)", CAP.tx(QUERY), CAP.rx(QUERY))],
+    )
+    fake = FakeTransport.simulated(path)
+    async with TankG.over(fake, timeout=1.0) as pedal:
+        assert pedal.identity.firmware == 96
+        snap = await pedal.snapshot()
+    assert snap.regions[Region.DEVICE_INFO].data == bytes(32)
+
+
+def test_tuner_capture_is_refused(tmp_path: Path) -> None:
+    tuner = with_payload(CAP.rx(GLOBAL), bytes([0, 0, 1, 2]))  # mode 2, on 1B
+    with pytest.raises(ValueError, match="tuner"):
+        FakeTransport.simulated(derive(tmp_path, replace={GLOBAL: tuner}))
+
+
+def test_handshake_must_be_the_query_the_session_sends(tmp_path: Path) -> None:
+    other_query = sf.frame(0x11, b"\x01")  # a 0x11 request with a body
+    path = derive(tmp_path, drop=[QUERY], extra=[("query", other_query, CAP.rx(QUERY))])
+    with pytest.raises(ValueError, match="handshake"):
+        FakeTransport.simulated(path)

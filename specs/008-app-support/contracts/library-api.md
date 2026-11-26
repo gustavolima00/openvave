@@ -34,7 +34,7 @@ FakeTransport.simulated(
 - Accepts every allowlisted write and applies it to its memory; answers every read from that
   memory. A frame outside the allowlist raises `AssertionError`, as on any `FakeTransport`.
 - Raises `ValueError` when the session lacks the handshake, the global read or the current-preset
-  read, when the recorded state has no loaded preset, when `image` is not 758 bytes, or for an
+  read, when the recorded state is not a preset in normal or edit mode, when `image` is not 758 bytes, or for an
   unknown fault kind or action.
 - The returned object is a plain `FakeTransport`: `sent`, `commits`, `lose_link()` and the
   transport methods work as documented there.

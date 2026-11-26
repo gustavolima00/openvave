@@ -132,7 +132,7 @@ _BY_NAME = {g.name: g for g in PANEL_GROUPS}
 
 def panel_group(name: str) -> PanelGroup | None:
     """The group printed ``name`` (exact, upper case), or ``None``."""
-    return _BY_NAME.get(name)
+    return _BY_NAME.get(name) if isinstance(name, str) else None
 
 
 def group_enabled(group: str, preset: bytes) -> bool | None:
@@ -145,7 +145,7 @@ def group_enabled(group: str, preset: bytes) -> bool | None:
     placeholder, not a preset, and bypass is read from :meth:`openvave.TankG.state`. Raises
     :class:`ValueError` for an unknown group name or a ``preset`` that is not 21 bytes.
     """
-    entry = _BY_NAME.get(group)
+    entry = _BY_NAME.get(group) if isinstance(group, str) else None
     if entry is None:
         raise ValueError(f"unknown panel group {group!r} (expected one of {', '.join(_BY_NAME)})")
     if not isinstance(preset, bytes | bytearray | memoryview):

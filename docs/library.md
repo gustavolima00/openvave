@@ -397,7 +397,7 @@ fake.sent  # every request, in order
   `corrupt` or `ignore`. `select_transient=n` shows the loading state on the next `n` global
   reads after a select; `chunk_size=182` splits replies as the pedal does at ATT MTU 185.
 - **Errors.** `ValueError` for a missing handshake, global or current-preset read, a recorded
-  state with no loaded preset (bypass), an `image` that is not 758 bytes, or an unknown fault.
+  state that is not a preset in normal or edit mode (bypass, tuner), an `image` that is not 758 bytes, or an unknown fault.
 - `fake.sent` lists every request in order, `fake.commits` counts commits and `fake.lose_link()`
   drops the link at any moment.
 
