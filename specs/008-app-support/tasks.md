@@ -47,12 +47,14 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
 
 ### Setup
 
-- [ ] T001 Create the implementation branch from `origin/main` and run `uv sync && uv run pytest`
+- [X] T001 Create the implementation branch from `origin/main` and run `uv sync && uv run pytest`
   once to record the green baseline (test count) in the pull request description; no file changes
+  (branch `008-m1-app-support` from `spec-app-support` 536f1e1 on `fc0a6ae`; baseline 2026-11-26:
+  3122 passed, 25 skipped)
 
 ### Tests first (write them, see them fail)
 
-- [ ] T002 [P] [US2] `tests/unit/test_panel.py`: `PANEL_CONTROLS` has 19 entries with
+- [X] T002 [P] [US2] `tests/unit/test_panel.py`: `PANEL_CONTROLS` has 19 entries with
   `order == index` (unique, no gaps); the sequence of fields (with `master` for the entry without
   one) equals the sequence parsed from the `<desc>` element of `docs/images/tankg-controls.svg`
   (FR-013); labels and groups equal the table in research R5; every `CURRENT_PRESET` entry of
@@ -61,7 +63,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   exactly one control (MASTER, order 0) has `field is None and offset is None` (FR-012);
   `panel_control()` returns the entry for each field and `None` for `led_red`, `mode`, `loopback`,
   `"nope"` and `None` (FR-015); `PanelControl` is frozen
-- [ ] T019 [P] [US2] `tests/unit/test_panel_groups.py`: `PANEL_GROUPS` has seven entries with
+- [X] T019 [P] [US2] `tests/unit/test_panel_groups.py`: `PANEL_GROUPS` has seven entries with
   `order == index`, names MASTER, CAB, REVERB, DELAY, MOD, AMP, GATE, in the order in which the
   groups first appear in `PANEL_CONTROLS`; every `PanelControl.group` is a group name; each
   `enabled_field` is a control of its own group; field, rule and confidence equal the table in
@@ -75,11 +77,11 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   gives `None`; `bytes(21)` gives `None` for all seven groups (FR-028); an unknown group, a
   lower-case name, 20 and 22 bytes raise `ValueError` (FR-029); `panel_group()` returns the entry
   or `None`; `PanelGroup` is frozen
-- [ ] T020 [P] [US2] `tests/unit/test_panel_doc.py` (modelled on `tests/unit/test_names_doc.py`):
+- [X] T020 [P] [US2] `tests/unit/test_panel_doc.py` (modelled on `tests/unit/test_names_doc.py`):
   parse the group-enabled table under "Front panel" in `specs/protocol/command-layer.md` and
   assert its rows equal `PANEL_GROUPS` (group, field, rule, confidence; MASTER as none) and that
   the GATE row says `documented` and the CAB row cites gate session C (FR-030)
-- [ ] T003 [P] [US3] `tests/unit/test_preset_positions.py`: for every index 0–35,
+- [X] T003 [P] [US3] `tests/unit/test_preset_positions.py`: for every index 0–35,
   `preset_position(i) == PedalState(kind="normal", index=i, bank=i // 4).position` and
   `preset_index(preset_position(i)) == i` (FR-019); `preset_index` raises `ValueError` for `"0A"`,
   `"10A"`, `"1E"`, `""`, `"1a"`, `" 1A"`, `"1A "`, `"6"`, `6`, `None` and `b"1A"` (FR-017);
@@ -87,7 +89,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   both names are importable from `openvave` and `openvave.protocol` and are the same objects
   (FR-016); the internal `parse_position("2c")`, `parse_position("6")` and `position(6)` still
   return what they did (FR-020)
-- [ ] T004 [P] [US1] `tests/unit/test_simulated_build.py`: from
+- [X] T004 [P] [US1] `tests/unit/test_simulated_build.py`: from
   `captures/fw96/20261116-probe-connect.jsonl` the simulated pedal answers the handshake and the
   global, preset, status and device-information reads with the recorded bytes (FR-002); its
   stored image equals `tests.support.storage_fixture.synthetic_image()` byte for byte (generated
@@ -103,7 +105,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   research R2); unknown fault kind or action raises `ValueError`; `FakeTransport(...)` and
   `from_capture(...)` signatures are unchanged (`inspect.signature`, FR-020). Temporary captures
   are derived from committed ones with `tests/support/mutations.py` / `tests/support/captures.py`
-- [ ] T005 [P] [US1] `tests/integration/test_simulated_pedal.py`, through the public session API
+- [X] T005 [P] [US1] `tests/integration/test_simulated_pedal.py`, through the public session API
   only (`TankG.over(FakeTransport.simulated(...))`), each case run twice (simulated pedal, and
   `tests.support.write_fixture.make_fake(NORMAL, status=b"\x01")` as the oracle: the capture
   records 1B, normal mode, loopback on) and compared on
@@ -120,7 +122,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   `sent` holds every request in order (FR-007); a frame outside the allowlist raises
   `AssertionError` (FR-009). Tests that send stored-slot, commit or stored-image writes carry the
   `persistent_writes` marker (the suite's audit requires it)
-- [ ] T006 [P] [US4] `tests/contract/test_changelog_070.py` (modelled on
+- [X] T006 [P] [US4] `tests/contract/test_changelog_070.py` (modelled on
   `tests/contract/test_changelog_060.py`): the `[0.7.0]` section exists between `[Unreleased]` and
   `[0.6.0]`, opens with a summary paragraph, names `FakeTransport.simulated`, `PANEL_CONTROLS`,
   `PanelControl`, `panel_control`, `PANEL_GROUPS`, `PanelGroup`, `panel_group`, `group_enabled`,
@@ -131,12 +133,12 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   and `openvave --version` say `0.7.0` (FR-022, FR-023). In the same commit move the three version
   assertions out of `tests/contract/test_changelog_060.py` (commit `fc0a6ae`, tag `v0.6.0`, left
   them there; its section checks stay)
-- [ ] T007 [P] [US4] `tests/contract/test_public_api.py`: add `preset_index` and `preset_position`
+- [X] T007 [P] [US4] `tests/contract/test_public_api.py`: add `preset_index` and `preset_position`
   to `CONTRACT_EXPORTS`, and a test that `{"PANEL_CONTROLS", "PanelControl", "panel_control", "PANEL_GROUPS", "PanelGroup",
   "panel_group", "group_enabled",
   "preset_index", "preset_position"} <= set(openvave.protocol.__all__)`; no existing expectation
   is removed or weakened (SC-005)
-- [ ] T008 [P] [US4] `tests/integration/test_example_simulated_pedal.py` (new; no existing test
+- [X] T008 [P] [US4] `tests/integration/test_example_simulated_pedal.py` (new; no existing test
   runs the scripts in `docs/examples/`): run `docs/examples/simulated_pedal.py` with
   `runpy.run_path(..., run_name="__main__")` and assert it finishes without error and prints the
   panel's first (`MASTER`) and last (`D/AMP`) labels, one enabled line per group and a verified
@@ -146,22 +148,22 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
 
 ### Implementation
 
-- [ ] T009 [P] [US3] `src/openvave/protocol/storage.py`: add `preset_index(position)` and
+- [X] T009 [P] [US3] `src/openvave/protocol/storage.py`: add `preset_index(position)` and
   `preset_position(index)` (strict, `ValueError` only, research R7); leave `parse_position`,
   `position` and `_check_index` as they are
-- [ ] T010 [P] [US2] `src/openvave/protocol/panel.py` (new): `PanelControl` (frozen dataclass),
+- [X] T010 [P] [US2] `src/openvave/protocol/panel.py` (new): `PanelControl` (frozen dataclass),
   `PANEL_CONTROLS` (the 19 rows of research R5) and `panel_control(field)`; pure data, imports
   nothing but the standard library (data-model.md)
-- [ ] T021 [US2] `src/openvave/protocol/panel.py`: `PanelGroup` (frozen dataclass), `PANEL_GROUPS`
+- [X] T021 [US2] `src/openvave/protocol/panel.py`: `PanelGroup` (frozen dataclass), `PANEL_GROUPS`
   (the seven rows of research R11), `panel_group(name)` and `group_enabled(group, preset)`
   (`None` for the bypass placeholder, for MASTER and for a switch byte that is neither value;
   `ValueError` for an unknown group or a wrong length). The docstrings state each rule's
   confidence and evidence, GATE's `documented` plainly (after T010, same file)
-- [ ] T011 [US2] [US3] `src/openvave/protocol/__init__.py`: export `PANEL_CONTROLS`,
+- [X] T011 [US2] [US3] `src/openvave/protocol/__init__.py`: export `PANEL_CONTROLS`,
   `PanelControl`, `panel_control`, `PANEL_GROUPS`, `PanelGroup`, `panel_group`, `group_enabled`,
   `preset_index`, `preset_position`; `src/openvave/__init__.py`:
   export `preset_index`, `preset_position` (after T009, T010, T021)
-- [ ] T012 [US1] `src/openvave/transport/fake.py`: `FakeTransport.simulated(path, *, image=None,
+- [X] T012 [US1] `src/openvave/transport/fake.py`: `FakeTransport.simulated(path, *, image=None,
   faults=None, select_transient=0, chunk_size=None)` with two private helpers: one that splits the
   parsed capture into the script (query, non-type-4 reads) and the memory blocks (global, edit
   buffer, status, optional whole image) by decoded frame, raising the `ValueError`s of FR-008
@@ -170,14 +172,14 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   Docstring states every argument, the starting state, the error cases and that it is a model,
   not evidence. Update the module docstring's first line ("for tests and simulations") only if
   needed
-- [ ] T013 [US1] `docs/examples/simulated_pedal.py` (new, runnable without a pedal, public imports
+- [X] T013 [US1] `docs/examples/simulated_pedal.py` (new, runnable without a pedal, public imports
   only): build the simulated pedal, print `PANEL_CONTROLS` and `group_enabled` for each of `PANEL_GROUPS`, edit two fields, select 2C through
   `preset_index("2C")`, backup, save with `unsafe=True` and `on_backup`, restore, print
   `len(fake.sent)` (after T011, T012)
 
 ### Documentation and release
 
-- [ ] T014 [US4] `docs/library.md`: under "Testing without a pedal" document
+- [X] T014 [US4] `docs/library.md`: under "Testing without a pedal" document
   `FakeTransport.simulated` (arguments, starting state, stored image, faults, `sent`, "a model,
   not evidence") and replace the pointer to `tests/support/write_fixture.py`; under "Writing"
   replace "There is no name parser in the public API…" with `preset_index` / `preset_position`
@@ -187,7 +189,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   0 as OFF, not checked on the pedal), and the three cautions of FR-031 (MASTER has no state; the
   bypass placeholder gives no answer, read `state()`; effect off zones are not part of the rule); add 008's contract to the list of
   contracts at the top; link `examples/simulated_pedal.py` (FR-024)
-- [ ] T015 [P] [US4] `docs/tank-g.md` (one sentence after the knob table pointing to
+- [X] T015 [P] [US4] `docs/tank-g.md` (one sentence after the knob table pointing to
   `openvave.protocol.PANEL_CONTROLS`, and one under "Signal chain" pointing to `PANEL_GROUPS` for
   the on/off rules, keeping "a gate of 0 is shown as off" as the app's display), `docs/images/README.md` (the drawing's description text is
   checked against the panel data by `tests/unit/test_panel.py`; change both together),
@@ -197,17 +199,17 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   `test_writes_doc.py` stay green), `docs/README.md` and `README.md` (current version 0.7.0, one
   line on what it adds), `docs/examples/README.md` (the new example), and `docs/cli-reference.md` only if a sentence
   there names the current version
-- [ ] T016 [US4] `CHANGELOG.md`: new `## [0.7.0]` with a summary paragraph, "Added (spec 008)"
+- [X] T016 [US4] `CHANGELOG.md`: new `## [0.7.0]` with a summary paragraph, "Added (spec 008)"
   entries for the simulated pedal, the panel data with the group enabled state (confidences
   stated) and the position helpers, and `### Tested` (hardware-free suite; no pedal message
   added); nothing of spec 007 moves (its US4 section is already in `[0.6.0]`); leave `## [Unreleased]`
   empty; do not touch `[0.6.0]` or anything below it (FR-023, research R10)
-- [ ] T017 [US4] `pyproject.toml` (`version = "0.7.0"`), `src/openvave/__init__.py`
+- [X] T017 [US4] `pyproject.toml` (`version = "0.7.0"`), `src/openvave/__init__.py`
   (`__version__ = "0.7.0"`), then `uv lock` so `uv.lock` carries 0.7.0 (FR-022)
 
 ### Live verification (milestone gate)
 
-- [ ] T018 Run [quickstart.md](quickstart.md) §1–§3 and record the output in the pull request:
+- [X] T018 Run [quickstart.md](quickstart.md) §1–§3 and record the output in the pull request:
   - `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest` all
     green; the test count is the T001 baseline plus the new tests, with no test removed or skipped
     and no expectation changed apart from the moved version assertions (SC-005).
@@ -222,6 +224,15 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   - No pedal is needed: nothing in this milestone sends a new message.
   - Not part of the pull request (owner, after the merge): tag `v0.7.0` on the merge commit, then
     quickstart §4 (`v0.6.0` already exists on `fc0a6ae`) (FR-025, SC-007).
+  - **Evidence (2026-11-26, on c240035, macOS, Python 3.13):** ruff check, ruff format
+    --check and mypy src clean; pytest 3329 passed, 25 skipped (baseline 3122 passed, 25 skipped:
+    +207 new, none removed or skipped; the two version assertions moved from
+    `test_changelog_060.py` to `test_changelog_070.py`); `docs/examples/simulated_pedal.py` exits
+    0 (153 frames sent); `openvave --version` prints `openvave 0.7.0`; quickstart §3 prints
+    `0.6.0 unchanged`; the `git diff --stat` of the CLI, MCP server, session, models, byte map and
+    allowlist against `origin/main` prints nothing. No pedal used.
+  - Spec correction found while testing (decision ledger): the byte map has 18 front-panel
+    fields (12 continuous knobs, 2 selectors, 4 switches), not 17; FR-011 and SC-003 amended.
 
 **Checkpoint**: Milestone 1 DONE — the suite, linters and type check are green, the three
 additions are public and documented, the version is 0.7.0, and the pull request waits for the
