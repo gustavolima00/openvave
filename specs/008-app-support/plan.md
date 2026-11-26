@@ -7,12 +7,14 @@
 ## Summary
 
 Publish three things the repository already knows, as public and documented API, and release them
-with the unreleased spec 007 names as 0.7.0:
+as 0.7.0 on top of tag `v0.6.0` (`fc0a6ae`, which already holds the spec 007 names):
 
 1. `FakeTransport.simulated(path, …)`: a simulated pedal that accepts every allowlisted write,
    built from one recorded session, with its memory assembled inside the library (research R1–R4).
 2. `openvave.protocol.PANEL_CONTROLS`, `PanelControl` and `panel_control()`: the front panel in
-   the order of `docs/images/tankg-controls.svg` (R5–R6).
+   the order of `docs/images/tankg-controls.svg` (R5–R6), and `PANEL_GROUPS`, `PanelGroup`,
+   `panel_group()` and `group_enabled()`: per group, how to read whether it is enabled, with its
+   confidence (R11).
 3. `preset_index()` and `preset_position()`: strict `"1A"`…`"9D"` ↔ 0–35 (R7).
 
 Everything is additive. No pedal message, no byte-map row, no write-table row and no JSON document
@@ -40,12 +42,12 @@ code under test and the existing independent fixtures (`tests/support/write_fixt
 **Constraints**: additive only; `schema_version` stays 2; CLI and MCP output unchanged; the
 existing `FakeTransport(...)`, `from_capture(...)`, `parse_position` and `position` keep their
 behaviour; no pedal message; no hardware step; the `[0.6.0]` changelog section stays identical to
-commit `61fdf6a`.
+tag `v0.6.0` (`fc0a6ae`).
 
-**Scale/Scope**: about 250 lines of application code: one new classmethod and two private helpers
-in `transport/fake.py` (~110), one new module `protocol/panel.py` (~90), two functions in
-`protocol/storage.py` (~25), exports (~15). Six new public names in `openvave.protocol`, two of
-them also in `openvave`. Documentation and the version bump.
+**Scale/Scope**: about 310 lines of application code: one new classmethod and two private helpers
+in `transport/fake.py` (~110), one new module `protocol/panel.py` (~150, with the groups), two
+functions in `protocol/storage.py` (~25), exports (~20). Nine new public names in
+`openvave.protocol`, two of them also in `openvave`. Documentation and the version bump.
 
 ## Constitution Check
 
@@ -53,8 +55,12 @@ them also in `openvave`. Documentation and the version bump.
 
 - [x] **I. Protocol docs**: no message is added or changed. The panel order and labels are
   already documented in `docs/tank-g.md` and the drawing; `specs/protocol/command-layer.md` gains
-  one short "Front panel" pointer so the data has a home in the protocol docs.
-- [x] **II. Evidence**: no new protocol claim. Panel labels come from the owner's own pedal (the
+  a short "Front panel" section: a pointer for the order and labels, and the table of the six
+  group-enabled rules with confidence and evidence (FR-030), mirrored by a test.
+- [x] **II. Evidence**: no new observation; the group rules restate documented findings with
+  their existing evidence (block switches `confirmed`; IR cab 0 = off `confirmed`, heard in spec
+  007 gate session C; noise gate 0 = off `documented`, from the vendor app's display only, and
+  said so). Panel labels come from the owner's own pedal (the
   drawing's stated source); MASTER "no byte" is spec 007's `observed` finding and keeps that
   wording. The simulated pedal is documented as a model, not evidence (FR-024).
 - [x] **III. Capture-driven tests**: tests are written first from the committed captures and fail
@@ -72,16 +78,16 @@ them also in `openvave`. Documentation and the version bump.
 
 ## Delivery Plan
 
-Projected PR count: **1** (≤ 8). The application code is about 250 lines, well under one sitting,
+Projected PR count: **1** (≤ 8). The application code is about 310 lines, well under one sitting,
 and the three additions share the release bump, so splitting would only add a second release
 step.
 
 | # | Milestone | PR | Scope | Verification gate | Builds on |
 |---|---|---|---|---|---|
-| 1 | Milestone 1: Panel data, preset position helpers, simulated pedal and release 0.7.0 | 1 | `FakeTransport.simulated` with its memory built in the library; `PANEL_CONTROLS`, `PanelControl`, `panel_control`; `preset_index`, `preset_position`; exports; `docs/library.md`, `docs/tank-g.md`, `docs/README.md`, `README.md`, `docs/images/README.md`, protocol-doc pointer, runnable example; `CHANGELOG.md` `[0.7.0]` (with the spec 007 US4 section), version `0.7.0` in `pyproject.toml`, `__init__` and `uv.lock`; `test_changelog_070` | Machine-checked, no pedal: `uv run pytest`, `ruff check`, `ruff format --check` and `mypy src` green; the new tests (simulated pedal equals the internal write fixture for every operation and fault; panel order equals the drawing's description text; helpers agree with `PedalState.position`) pass; every 0.6.0 test passes with unchanged expectations except the version assertion; `[0.6.0]` section identical to `61fdf6a`; `openvave --version` prints `0.7.0`; quickstart §2 runs with public imports only | none |
+| 1 | Milestone 1: Panel data, preset position helpers, simulated pedal and release 0.7.0 | 1 | `FakeTransport.simulated` with its memory built in the library; `PANEL_CONTROLS`, `PanelControl`, `panel_control`; `PANEL_GROUPS`, `PanelGroup`, `panel_group`, `group_enabled`; `preset_index`, `preset_position`; exports; `docs/library.md`, `docs/tank-g.md`, `docs/README.md`, `README.md`, `docs/images/README.md`, protocol-doc pointer, runnable example; `CHANGELOG.md` `[0.7.0]` (this feature only), version `0.7.0` in `pyproject.toml`, `__init__` and `uv.lock`; `test_changelog_070` | Machine-checked, no pedal: `uv run pytest`, `ruff check`, `ruff format --check` and `mypy src` green; the new tests (simulated pedal equals the internal write fixture for every operation and fault; panel order equals the drawing's description text; group-enabled answers equal the rules and the protocol-doc table; the bypass placeholder gives no answer; helpers agree with `PedalState.position`) pass; every 0.6.0 test passes with unchanged expectations except the version assertion; `[0.6.0]` section identical to tag `v0.6.0`; `openvave --version` prints `0.7.0`; quickstart §2 runs with public imports only | none |
 
-After the gate the owner merges and creates tag `v0.7.0` on the merge commit (and `v0.6.0` on
-`61fdf6a`, separately). The tag is not part of the pull request.
+After the gate the owner merges and creates tag `v0.7.0` on the merge commit (`v0.6.0` already exists on
+`fc0a6ae`). The tag is not part of the pull request.
 
 ## Project Structure
 
@@ -105,8 +111,8 @@ specs/008-app-support/
 src/openvave/
 ├── __init__.py                 # + preset_index, preset_position; __version__ = "0.7.0"
 ├── protocol/
-│   ├── __init__.py             # + PANEL_CONTROLS, PanelControl, panel_control, preset_index, preset_position
-│   ├── panel.py                # NEW: the front panel as data
+│   ├── __init__.py             # + PANEL_CONTROLS, PanelControl, panel_control, PANEL_GROUPS, PanelGroup, panel_group, group_enabled, preset_index, preset_position
+│   ├── panel.py                # NEW: the front panel as data (controls, groups, enabled rules)
 │   └── storage.py              # + preset_index, preset_position (strict); parse_position / position untouched
 └── transport/
     └── fake.py                 # + FakeTransport.simulated, _generated_image, _simulated_parts
@@ -114,6 +120,8 @@ src/openvave/
 tests/
 ├── unit/
 │   ├── test_panel.py           # NEW (US2)
+│   ├── test_panel_groups.py    # NEW (US2: enabled rules, bypass placeholder)
+│   ├── test_panel_doc.py       # NEW (US2: protocol-doc rule table = data)
 │   ├── test_preset_positions.py# NEW (US3)
 │   └── test_simulated_build.py # NEW (US1: start state, image rules, ValueErrors)
 ├── integration/
@@ -129,7 +137,7 @@ docs/
 ├── tank-g.md                   # pointer from the panel table to PANEL_CONTROLS
 ├── README.md, images/README.md # version; the drawing is now checked against the data
 └── examples/simulated_pedal.py # NEW runnable example (no pedal)
-specs/protocol/command-layer.md # short "Front panel" pointer
+specs/protocol/command-layer.md # "Front panel": pointer + group-enabled rule table
 CHANGELOG.md, pyproject.toml, uv.lock, README.md
 ```
 

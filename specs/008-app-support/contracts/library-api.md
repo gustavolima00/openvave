@@ -57,6 +57,30 @@ PANEL_CONTROLS[0]               # MASTER: field None, offset None
 
 The order is the one of `docs/images/tankg-controls.svg`.
 
+### Is a group enabled?
+
+```python
+from openvave import Region
+from openvave.protocol import PANEL_GROUPS, PanelGroup, group_enabled, panel_group
+
+for group in PANEL_GROUPS:                            # 7, in panel order
+    print(group.name, group.enabled_field, group.enabled_rule, group.enabled_confidence)
+# MASTER None None None
+# CAB ir_cab nonzero confirmed
+# REVERB reverb_on switch confirmed   (DELAY, MOD, AMP alike)
+# GATE noise_gate nonzero documented
+
+preset = (await pedal.read(Region.CURRENT_PRESET)).data   # 21 bytes
+group_enabled("DELAY", preset)     # True / False (None for a switch byte that is neither 0 nor 1)
+group_enabled("MASTER", preset)    # None: no on/off notion
+group_enabled("AMP", bytes(21))    # None: the bypass placeholder is not a preset; read pedal.state()
+group_enabled("EQ", preset)        # ValueError (also a preset that is not 21 bytes)
+panel_group("GATE").enabled_confidence   # "documented": the vendor app shows 0 as OFF; not checked on the pedal
+```
+
+MOD, DELAY and REVERB follow their block switch only; the off zones between effect types are not
+part of the rule (`type_parts()` reports them).
+
 ## Preset positions
 
 ```python

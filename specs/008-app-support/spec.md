@@ -28,6 +28,13 @@ in `61fdf6a`. The owner merges and creates tag `v0.7.0` on the merge commit."
 allowlist and the fake pedal that applies them) and
 [`007-mapping-gaps`](../007-mapping-gaps/spec.md) (every preset byte named; MASTER has no byte).
 
+**Revision 2026-11-26** (approved by the owner after the first plan): (a) `origin/main` is now
+`fc0a6ae`, tagged `v0.6.0`, and that commit already released the spec 007 US4 amp type / IR cab
+names in `[0.6.0]`; so `[0.7.0]` carries only this feature, and the unchanged-section check is
+against tag `v0.6.0`, not `61fdf6a`. The quoted input above is kept as written; where it differs,
+this note wins. (b) The panel data also says, per group, how to read whether the group is enabled
+(User Story 2, FR-026–FR-031), because the application may not derive that itself.
+
 **Scope source**: the Riffmind app's spec 002, Milestone 9 (tasks T117–T124) and research R15
 (rows U1, U2, U3). This spec settles the names R15 only proposed.
 
@@ -37,14 +44,15 @@ table. It publishes knowledge the repository already holds: the panel order and 
 `docs/images/tankg-controls.svg`, the position arithmetic the command line already uses, and the
 write-accepting fake pedal that openvave's own test suite builds for itself.
 
-## Starting point (0.6.0 + the unreleased names of spec 007 US4)
+## Starting point (0.6.0, tag `v0.6.0` on `fc0a6ae`)
 
 | Area | Today | Gap |
 |---|---|---|
 | Front panel | order, printed labels and groups exist only in a drawing and a table in `docs/tank-g.md` | an application that draws the panel must copy them by hand |
 | Preset positions | `PedalState.position` gives `"2C"`; the text ↔ index conversion is internal (`docs/library.md`: "There is no name parser in the public API") | applications repeat the arithmetic |
 | Simulated pedal | `FakeTransport.from_capture` replays a recorded session; a pedal that accepts writes exists only in the test suite (`tests/support/write_fixture.py`), which is not installed with the package | an application must assemble memory blocks from addresses itself |
-| Release | `main` holds 0.6.0 plus the amp type / IR cab names under `[Unreleased]` | the names and the three additions need a version applications can pin |
+| Group on/off | the block switches are byte-map fields; "cab off = `ir_cab` 0" and "gate off = `noise_gate` 0" are sentences in the docs | an application would have to copy protocol knowledge to light a group as on or off |
+| Release | `main` is 0.6.0 (which already holds the amp type / IR cab names); `[Unreleased]` is empty | the additions need a version applications can pin |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -110,7 +118,8 @@ from the documentation.
 
 **Independent Test**: the list read from `openvave.protocol` names the same controls, in the same
 order, as the description text inside `docs/images/tankg-controls.svg`, and covers every
-front-panel field of the byte map.
+front-panel field of the byte map; the enabled answer of every group, for presets built from the
+committed captures, equals the block switch, "IR cab is not 0" or "noise gate is not 0".
 
 **Acceptance Scenarios**:
 
@@ -125,6 +134,15 @@ front-panel field of the byte map.
    no panel control for them (no control on the panel moves them).
 4. **Given** the MASTER knob, **When** the developer reads its entry, **Then** it has a label, a
    group and an order number, and no field and no byte.
+5. **Given** the list of panel groups, **When** the developer reads it, **Then** it holds the
+   seven groups in panel order, and for each one either the field and rule that say whether it is
+   enabled, with a confidence level, or nothing when the group has no on/off notion (MASTER).
+6. **Given** the 21 bytes of a current preset with the delay block switched off, IR cab 3 and
+   noise gate 0, **When** the developer asks whether each group is enabled, **Then** DELAY is off,
+   CAB is on, GATE is off, and MASTER has no answer.
+7. **Given** the bypass placeholder (21 zero bytes), **When** the developer asks whether any group
+   is enabled, **Then** there is no answer for any group (not "off"): the buffer is not a preset,
+   and the pedal state says bypass.
 
 ---
 
@@ -152,8 +170,8 @@ other input is rejected with `ValueError`.
 
 ### User Story 4 - Pin a released version (Priority: P4)
 
-A developer pins `v0.7.0` and gets the three additions together with the amp type and IR cab
-names that were merged after 0.6.0. Nothing they used in 0.6.0 behaves differently.
+A developer pins `v0.7.0` and gets the three additions. Nothing they used in 0.6.0 behaves
+differently.
 
 **Why this priority**: the additions are only usable by applications that pin tags once they are
 released; it depends on the other three stories.
@@ -166,10 +184,10 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
 1. **Given** the merged work, **When** the developer reads the version from the package and from
    `openvave --version`, **Then** both say `0.7.0`.
 2. **Given** `CHANGELOG.md`, **When** the developer reads the 0.7.0 section, **Then** it names the
-   panel data, the position helpers, the simulated pedal and the amp type / IR cab names, and says
-   that nothing was removed and `schema_version` stays 2.
-3. **Given** `CHANGELOG.md`, **When** its 0.6.0 section is compared with the one at commit
-   `61fdf6a`, **Then** they are identical.
+   panel data with the group enabled state, the position helpers and the simulated pedal, and
+   says that nothing was removed and `schema_version` stays 2.
+3. **Given** `CHANGELOG.md`, **When** its 0.6.0 section is compared with the one at tag
+   `v0.6.0`, **Then** they are identical.
 4. **Given** `docs/library.md`, **When** the developer reads it, **Then** it documents the three
    additions with a runnable example each and no longer says there is no position parser or
    points to a test-suite file for write simulation.
@@ -194,6 +212,12 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
   the protocol document describes it, and that only a capture proves behaviour.
 - A position in lower case (`"2c"`) or an index as text (`"6"`): rejected by the new helpers. The
   command line and the MCP tools keep accepting both, as today.
+- A block switch byte that is neither its on value nor its off value: the enabled answer for that
+  group is "unknown" (nothing), not a guess.
+- The effect "off zones" between two types of MOD FX, DLY MIX and RVB DECAY (the manual says the
+  module is off there; not checked) do not count: MOD, DELAY and REVERB follow their block switch
+  only, and the documentation says so.
+- A preset that is not 21 bytes, or an unknown group name, given to the enabled helper: `ValueError`.
 - Footswitch pairs printed on the panel (BANK −, BANK +, LIVE / PRESET, TUNER / BT) and the XLR
   jack are not controls of the current preset and are not listed.
 
@@ -259,6 +283,32 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
   returns nothing for a field without one (LED colour bytes, global and status fields, unknown
   names).
 
+**Group enabled state (U1, revision)**
+
+- **FR-026**: `openvave.protocol` MUST export the panel groups as ordered data: the seven printed
+  groups in panel order (MASTER, CAB, REVERB, DELAY, MOD, AMP, GATE), each with the field and the
+  rule that say whether the group is enabled and the confidence of that rule, or with none of the
+  three when the group has no on/off notion.
+- **FR-027**: The rules and confidences MUST be exactly these, each traceable to the protocol
+  documents: AMP, MOD, DELAY and REVERB are enabled when their block switch field (`amp_on`,
+  `mod_on`, `delay_on`, `reverb_on`) holds its on value, **confirmed**; CAB is enabled when
+  `ir_cab` is not 0, **confirmed** (manual, the vendor app shows 0 as OFF, heard in spec 007 gate
+  session C on 2026-11-19); GATE is enabled when `noise_gate` is not 0, **documented** only (the
+  vendor app shows 0 as OFF; never heard as off); MASTER has none.
+- **FR-028**: `openvave.protocol` MUST export a helper that takes a group name and the 21 bytes of
+  a current preset and returns enabled, not enabled, or no answer. No answer is returned for a
+  group without an on/off notion, for a block switch byte that is neither its on nor its off
+  value, and, for every group, when the bytes are the bypass placeholder (21 zero bytes).
+- **FR-029**: The helper MUST raise `ValueError` for a group name that is not one of the seven and
+  for bytes that are not 21 long.
+- **FR-030**: `specs/protocol/command-layer.md` MUST state the six rules with their confidence and
+  evidence in one table, and a test MUST fail when that table and the data differ. No byte-map row
+  and no write-table row changes.
+- **FR-031**: The documentation MUST say plainly that GATE's rule is `documented` and what that
+  means (the vendor's app shows it; not checked on the pedal), that MASTER has no state, that the
+  bypass placeholder gives no answer and the pedal state is where bypass is read, and that effect
+  off zones are not part of the rule.
+
 **Preset positions (U2)**
 
 - **FR-016**: The library MUST export a helper from a position text to its index and one from an
@@ -280,21 +330,23 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
 - **FR-022**: The package version MUST be `0.7.0` in `pyproject.toml`, in `openvave.__version__`
   and in the lock file.
 - **FR-023**: `CHANGELOG.md` MUST gain a `[0.7.0]` section that opens with a summary, describes
-  the three additions, and carries the spec 007 US4 section (amp type and IR cab names) that is
-  under `[Unreleased]` today. `[Unreleased]` MUST be left empty above it. The `[0.6.0]` section
-  MUST stay identical to the one at commit `61fdf6a`.
+  the additions of this feature only (the spec 007 US4 names were released in 0.6.0).
+  `[Unreleased]` MUST be left empty above it. The `[0.6.0]` section MUST stay identical to the one
+  at tag `v0.6.0` (`fc0a6ae`).
 - **FR-024**: `docs/library.md` MUST document the three additions with an example each, replace
   the sentence that says there is no position parser and the pointer to
   `tests/support/write_fixture.py`, and state that the simulated pedal is a model, not evidence.
   `docs/tank-g.md` MUST point from its panel table to the panel data. Documentation that names the
   current version MUST say 0.7.0.
 - **FR-025**: The pull request MUST NOT create the tag. The owner merges and creates `v0.7.0` on
-  the merge commit; `v0.6.0` on `61fdf6a` is the owner's separate step.
+  the merge commit (`v0.6.0` already exists on `fc0a6ae`).
 
 ### Key Entities
 
 - **Panel control**: one control printed on the Tank-G front panel: order number, printed label,
   printed group, kind, and the current-preset field and byte it drives (or none).
+- **Panel group**: one printed group of the panel: name, order, and (when it has an on/off
+  notion) the field, the rule and the confidence that say whether it is enabled.
 - **Preset position**: the text `"1A"`…`"9D"` (bank 1–9, slot A–D) of a stored preset; index =
   4 × (bank − 1) + slot, 0–35.
 - **Simulated pedal**: an in-memory stand-in for one pedal: identity, global block, current
@@ -324,6 +376,9 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
 - **SC-007**: After the merge and the owner's tag, a fresh install of `v0.7.0` reports `0.7.0` and
   the Riffmind app can delete its interim panel table, its position arithmetic and its own memory
   assembly.
+- **SC-008**: For every group and every preset in the committed captures, the enabled answer
+  equals the rule of FR-027 in 100% of cases; the bypass placeholder gives no answer for 7 of 7
+  groups; the rule table in the protocol document and the data agree in 6 of 6 rows.
 
 ## Assumptions
 
@@ -340,7 +395,8 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
   so, and this feature repeats it rather than adding claims.
 - A session recorded in edit mode is treated as if the stored preset at the loaded position
   equals the recorded buffer (the recording cannot say otherwise); the documentation states it.
-- Spec 007's task T036 (the owner's look at `preset dump` showing the names on a real pedal) stays
-  an open owner check; it does not block 0.7.0, which releases the names as `documented`.
-- The owner merges the pull request and creates both tags; nothing here pushes a tag or publishes
+- `documented`, for GATE, means "shown by the vendor's own material (here the phone app's display
+  of 0 as OFF), not checked on the pedal": the meaning spec 007 gave the word for the amp and cab
+  names, with the app in place of the manual.
+- The owner merges the pull request and creates the tag; nothing here pushes a tag or publishes
   a package.

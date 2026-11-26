@@ -1,6 +1,7 @@
 # Research: Pedal knowledge for applications (spec 008)
 
-Facts were read from the tree at `origin/main` (`1af6615`) on 2026-11-26. There was no open
+Facts were read from the tree at `origin/main` (`1af6615`) on 2026-11-26, and again after the
+revision of the same day at `fc0a6ae` (tag `v0.6.0`; that commit changed only `CHANGELOG.md`). There was no open
 technical unknown; these are the design decisions.
 
 ## R1. The simulated pedal is a classmethod of `FakeTransport`
@@ -78,7 +79,7 @@ at any moment. An application that needs the label-keyed options can still build
 
 **Decision**: a new pure-data module `openvave/protocol/panel.py` with a frozen dataclass
 `PanelControl(order, label, group, kind, field, offset)`, the tuple `PANEL_CONTROLS` and
-`panel_control(field)`. `ByteMapEntry` is not touched.
+`panel_control(field)`. The groups and their enabled rules are in the same module (R11). `ByteMapEntry` is not touched.
 
 **Rationale**: MASTER has no byte, so it cannot be a byte-map row; `ByteMapEntry` is mirrored row
 for row from the protocol document by `tests/unit/test_bytemap_doc.py`, and new columns there
@@ -156,18 +157,75 @@ product feature (the app's "simulated pedal" option) that nobody asked for here.
 600-line ceiling; the three parts do not depend on each other but share one release. Two
 milestones would mean a first PR that cannot be tagged.
 
-## R10. Release mechanics
+## R10. Release mechanics (revised 2026-11-26)
 
-- `[0.7.0]` opens with a summary paragraph, then "Added (spec 008)" subsections for the three
-  additions, then the existing "Added (spec 007 US4)" subsection moved unchanged from
-  `[Unreleased]`, then "Tested" (hardware-free; the names are `documented`, not checked on the
-  pedal). `[Unreleased]` stays as an empty heading.
-- The `[0.6.0]` section is not edited. The gate compares it with `git show 61fdf6a:CHANGELOG.md`
+- Base: tag `v0.6.0` on `fc0a6ae`. That commit moved the "Added (spec 007 US4)" section into
+  `[0.6.0]` and left `[Unreleased]` empty, so nothing of spec 007 moves in this feature.
+- `[0.7.0]` opens with a summary paragraph, then "Added (spec 008)" subsections for the simulated
+  pedal, the panel data with the group enabled state, and the position helpers, then "Tested"
+  (hardware-free; no pedal message added). `[Unreleased]` stays as an empty heading.
+- The `[0.6.0]` section is not edited. The gate compares it with `git show v0.6.0:CHANGELOG.md`
   (a shell check in the quickstart, since the test suite does not read git history).
-- `tests/contract/test_changelog_060.py` keeps its section checks; its three version assertions
-  (`__version__`, `pyproject.toml`, `--version`) move to the new `test_changelog_070.py`, as was
-  done for 0.5.0 when 0.6.0 was released.
+- `fc0a6ae` did not touch the tests: `tests/contract/test_changelog_060.py` still holds the three
+  version assertions (`__version__`, `pyproject.toml`, `--version`). They move to the new
+  `test_changelog_070.py`; the section checks of the 0.6.0 test stay.
 - `uv.lock` carries the package version; `uv lock` updates it.
 - Version text in `README.md`, `docs/README.md` and `docs/cli-reference.md` is updated where it
   names the current version.
 - R15's optional U4 (captures inside the wheel) is out of scope (spec, Assumptions).
+
+## R11. Group enabled state (revision 2026-11-26)
+
+**Why here**: the app's constitution forbids copying protocol knowledge, and "CAB is off when
+`ir_cab` is 0" is protocol knowledge. openvave publishes it as data with its confidence.
+
+**Decision**: in `openvave/protocol/panel.py`:
+
+- `PanelGroup(name, order, enabled_field, enabled_rule, enabled_confidence)`, frozen;
+- `PANEL_GROUPS`: the seven groups in panel order;
+- `panel_group(name)` → the group or `None`;
+- `group_enabled(group, preset)` → `True`, `False` or `None`, where `preset` is the 21 bytes of
+  a current preset (`RegionRead.data`).
+
+| order | name | enabled_field | enabled_rule | enabled_confidence | Evidence |
+|---|---|---|---|---|---|
+| 0 | MASTER | — | — | — | no byte follows the knob (spec 007) |
+| 1 | CAB | `ir_cab` | `nonzero` | `confirmed` | manual; the vendor app shows 0 as OFF; heard in spec 007 gate session C, 2026-11-19 |
+| 2 | REVERB | `reverb_on` | `switch` | `confirmed` | byte-map row and `block_switch` write row |
+| 3 | DELAY | `delay_on` | `switch` | `confirmed` | same |
+| 4 | MOD | `mod_on` | `switch` | `confirmed` | same |
+| 5 | AMP | `amp_on` | `switch` | `confirmed` | same |
+| 6 | GATE | `noise_gate` | `nonzero` | `documented` | the vendor app shows 0 as `OFF` (`specs/protocol/app-features.md`, GATE row; `docs/tank-g.md`); never heard as off |
+
+Rules: `switch` → `True` when the byte equals the field's on value (1), `False` when it equals the
+off value (0), `None` otherwise; `nonzero` → `byte != 0`.
+
+**The bypass placeholder**: 21 zero bytes are not a preset (spec 004; spec 007 gives no amp or cab
+name there). `group_enabled` returns `None` for every group on that buffer. Returning `False`
+would read "this preset has every block off", which is a statement about a preset the buffer does
+not hold; the fact "everything is bypassed" is `PedalState.kind == "bypass"` and stays there. A
+real preset with every block off still has non-zero knob bytes in practice; a stored preset of 21
+zeros would also give `None`, the same trade spec 007 made for names.
+
+**Separate table, not fields on `PanelControl`**: the state belongs to a group, and a group has
+several controls (AMP has six); repeating the rule on each would let them disagree. Each
+`PanelControl.group` is the `name` of one `PanelGroup` (tested).
+
+**Confidence values**: `confirmed` and `documented` only. `documented` is not in
+`openvave.models.Confidence` (`confirmed`, `observed`, `hypothesis`), which types byte-map rows;
+it is the word `openvave.protocol.names` uses for "from the vendor's material, not checked on the
+pedal". `PanelGroup.enabled_confidence` has its own literal type; `models.py` is not touched.
+
+**Not in the rule**: the off zones between effect types (raw 40–43 and 84–87 of `mod_fx`,
+`delay_mix`, `reverb_decay`). The manual says the module is off there; `docs/tank-g.md` lists it
+as unverified. `type_parts()` already tells an application when a knob sits in such a zone.
+
+**Protocol document**: `specs/protocol/command-layer.md` gets a "Front panel" section with this
+table (six rules; MASTER as "none"); `tests/unit/test_panel_doc.py` parses it and compares it with
+`PANEL_GROUPS`, as `test_names_doc.py` does for names. The byte map and the write table are not
+edited.
+
+**Alternatives rejected**: `enabled(preset) -> dict` only, without the data (the app could not
+show the confidence or which control to dim); a callable stored in the table (not serialisable,
+harder to mirror in the protocol document); accepting a `RegionRead` (ties a pure function to a
+session type; `read.data` is one attribute away).

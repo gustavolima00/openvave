@@ -14,7 +14,7 @@ an unfinished task.
 
 | # | Milestone | PR | Tasks | Builds on | Needs the pedal? |
 |---|---|---|---|---|---|
-| 1 | Milestone 1: Panel data, preset position helpers, simulated pedal and release 0.7.0 | 1 | T001–T018 | none | no |
+| 1 | Milestone 1: Panel data, preset position helpers, simulated pedal and release 0.7.0 | 1 | T001–T021 | none | no |
 
 Tasks are commits inside the one pull request, never separate pull requests.
 
@@ -35,11 +35,15 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
 - `openvave.protocol.PANEL_CONTROLS` lists 19 controls in the order of the description text of
   `docs/images/tankg-controls.svg`, covers every front-panel field of the byte map, lists MASTER
   without a byte and has nothing for the LED colour bytes (US2).
+- `openvave.protocol.PANEL_GROUPS` lists the seven groups with the field, rule and confidence
+  that say whether each is enabled (GATE `documented`, the other five `confirmed`, MASTER none);
+  `group_enabled()` answers from 21 preset bytes and gives no answer for the bypass placeholder;
+  the rule table in `specs/protocol/command-layer.md` equals the data (US2).
 - `preset_index` and `preset_position` agree with `PedalState.position` for all 36 indexes and
   raise `ValueError` for everything else (US3).
-- The package says `0.7.0`; `CHANGELOG.md` has a `[0.7.0]` section with the three additions and
-  the spec 007 names; `[0.6.0]` is unchanged; nothing public was removed and `schema_version`
-  stays 2 (US4).
+- The package says `0.7.0`; `CHANGELOG.md` has a `[0.7.0]` section with the additions of this
+  feature only; `[0.6.0]` equals the one at tag `v0.6.0`; nothing public was removed and
+  `schema_version` stays 2 (US4).
 
 ### Setup
 
@@ -57,6 +61,24 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   exactly one control (MASTER, order 0) has `field is None and offset is None` (FR-012);
   `panel_control()` returns the entry for each field and `None` for `led_red`, `mode`, `loopback`,
   `"nope"` and `None` (FR-015); `PanelControl` is frozen
+- [ ] T019 [P] [US2] `tests/unit/test_panel_groups.py`: `PANEL_GROUPS` has seven entries with
+  `order == index`, names MASTER, CAB, REVERB, DELAY, MOD, AMP, GATE, in the order in which the
+  groups first appear in `PANEL_CONTROLS`; every `PanelControl.group` is a group name; each
+  `enabled_field` is a control of its own group; field, rule and confidence equal the table in
+  research R11 (GATE `documented`, CAB and the four blocks `confirmed`, MASTER all `None`); the
+  three are `None` together or not at all (FR-026, FR-027); for the `switch` groups the on and off
+  values used equal `on_value` / `off_value` of the field's `BYTE_MAP` entry; `group_enabled` on
+  the preset of `captures/fw96/20261116-probe-connect.jsonl` and on every preset read in the
+  committed block-switch, `ir_cab` and `noise_gate` step captures equals the rule computed
+  independently in the test from the raw byte (SC-008); a preset with `delay_on` 0, `ir_cab` 3,
+  `noise_gate` 0 gives DELAY `False`, CAB `True`, GATE `False`, MASTER `None`; a switch byte of 2
+  gives `None`; `bytes(21)` gives `None` for all seven groups (FR-028); an unknown group, a
+  lower-case name, 20 and 22 bytes raise `ValueError` (FR-029); `panel_group()` returns the entry
+  or `None`; `PanelGroup` is frozen
+- [ ] T020 [P] [US2] `tests/unit/test_panel_doc.py` (modelled on `tests/unit/test_names_doc.py`):
+  parse the group-enabled table under "Front panel" in `specs/protocol/command-layer.md` and
+  assert its rows equal `PANEL_GROUPS` (group, field, rule, confidence; MASTER as none) and that
+  the GATE row says `documented` and the CAB row cites gate session C (FR-030)
 - [ ] T003 [P] [US3] `tests/unit/test_preset_positions.py`: for every index 0–35,
   `preset_position(i) == PedalState(kind="normal", index=i, bank=i // 4).position` and
   `preset_index(preset_position(i)) == i` (FR-019); `preset_index` raises `ValueError` for `"0A"`,
@@ -101,19 +123,24 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
 - [ ] T006 [P] [US4] `tests/contract/test_changelog_070.py` (modelled on
   `tests/contract/test_changelog_060.py`): the `[0.7.0]` section exists between `[Unreleased]` and
   `[0.6.0]`, opens with a summary paragraph, names `FakeTransport.simulated`, `PANEL_CONTROLS`,
-  `PanelControl`, `panel_control`, `preset_index`, `preset_position`, `POSITION_NAMES` and
-  "amp type and IR cab names", says "`schema_version` stays 2", has a `### Tested` subsection
-  saying no pedal was needed; `[Unreleased]` has no entry; `openvave.__version__`, `pyproject.toml`
+  `PanelControl`, `panel_control`, `PANEL_GROUPS`, `PanelGroup`, `panel_group`, `group_enabled`,
+  `preset_index` and `preset_position`, says that GATE's rule is `documented`, says
+  "`schema_version` stays 2", has a `### Tested` subsection saying no pedal was needed, and does
+  not repeat the spec 007 US4 names section (it was released in 0.6.0); `[Unreleased]` has no
+  entry; `openvave.__version__`, `pyproject.toml`
   and `openvave --version` say `0.7.0` (FR-022, FR-023). In the same commit move the three version
-  assertions out of `tests/contract/test_changelog_060.py` (its section checks stay)
+  assertions out of `tests/contract/test_changelog_060.py` (commit `fc0a6ae`, tag `v0.6.0`, left
+  them there; its section checks stay)
 - [ ] T007 [P] [US4] `tests/contract/test_public_api.py`: add `preset_index` and `preset_position`
-  to `CONTRACT_EXPORTS`, and a test that `{"PANEL_CONTROLS", "PanelControl", "panel_control",
+  to `CONTRACT_EXPORTS`, and a test that `{"PANEL_CONTROLS", "PanelControl", "panel_control", "PANEL_GROUPS", "PanelGroup",
+  "panel_group", "group_enabled",
   "preset_index", "preset_position"} <= set(openvave.protocol.__all__)`; no existing expectation
   is removed or weakened (SC-005)
 - [ ] T008 [P] [US4] `tests/integration/test_example_simulated_pedal.py` (new; no existing test
   runs the scripts in `docs/examples/`): run `docs/examples/simulated_pedal.py` with
   `runpy.run_path(..., run_name="__main__")` and assert it finishes without error and prints the
-  panel's first (`MASTER`) and last (`D/AMP`) labels and a verified save; marked
+  panel's first (`MASTER`) and last (`D/AMP`) labels, one enabled line per group and a verified
+  save; marked
   `persistent_writes` because the example saves and restores on the simulated pedal (FR-024,
   quickstart §2)
 
@@ -125,9 +152,15 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
 - [ ] T010 [P] [US2] `src/openvave/protocol/panel.py` (new): `PanelControl` (frozen dataclass),
   `PANEL_CONTROLS` (the 19 rows of research R5) and `panel_control(field)`; pure data, imports
   nothing but the standard library (data-model.md)
+- [ ] T021 [US2] `src/openvave/protocol/panel.py`: `PanelGroup` (frozen dataclass), `PANEL_GROUPS`
+  (the seven rows of research R11), `panel_group(name)` and `group_enabled(group, preset)`
+  (`None` for the bypass placeholder, for MASTER and for a switch byte that is neither value;
+  `ValueError` for an unknown group or a wrong length). The docstrings state each rule's
+  confidence and evidence, GATE's `documented` plainly (after T010, same file)
 - [ ] T011 [US2] [US3] `src/openvave/protocol/__init__.py`: export `PANEL_CONTROLS`,
-  `PanelControl`, `panel_control`, `preset_index`, `preset_position`; `src/openvave/__init__.py`:
-  export `preset_index`, `preset_position` (after T009, T010)
+  `PanelControl`, `panel_control`, `PANEL_GROUPS`, `PanelGroup`, `panel_group`, `group_enabled`,
+  `preset_index`, `preset_position`; `src/openvave/__init__.py`:
+  export `preset_index`, `preset_position` (after T009, T010, T021)
 - [ ] T012 [US1] `src/openvave/transport/fake.py`: `FakeTransport.simulated(path, *, image=None,
   faults=None, select_transient=0, chunk_size=None)` with two private helpers: one that splits the
   parsed capture into the script (query, non-type-4 reads) and the memory blocks (global, edit
@@ -138,7 +171,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   not evidence. Update the module docstring's first line ("for tests and simulations") only if
   needed
 - [ ] T013 [US1] `docs/examples/simulated_pedal.py` (new, runnable without a pedal, public imports
-  only): build the simulated pedal, print `PANEL_CONTROLS`, edit two fields, select 2C through
+  only): build the simulated pedal, print `PANEL_CONTROLS` and `group_enabled` for each of `PANEL_GROUPS`, edit two fields, select 2C through
   `preset_index("2C")`, backup, save with `unsafe=True` and `on_backup`, restore, print
   `len(fake.sent)` (after T011, T012)
 
@@ -149,20 +182,25 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   not evidence") and replace the pointer to `tests/support/write_fixture.py`; under "Writing"
   replace "There is no name parser in the public API…" with `preset_index` / `preset_position`
   (strict; the CLI stays lenient); under "The protocol layer" add `PANEL_CONTROLS`,
-  `PanelControl`, `panel_control` with a short example; add 008's contract to the list of
+  `PanelControl`, `panel_control`, `PANEL_GROUPS`, `PanelGroup`, `panel_group` and `group_enabled`
+  with a short example, the rule table with confidences (GATE `documented`: the vendor app shows
+  0 as OFF, not checked on the pedal), and the three cautions of FR-031 (MASTER has no state; the
+  bypass placeholder gives no answer, read `state()`; effect off zones are not part of the rule); add 008's contract to the list of
   contracts at the top; link `examples/simulated_pedal.py` (FR-024)
 - [ ] T015 [P] [US4] `docs/tank-g.md` (one sentence after the knob table pointing to
-  `openvave.protocol.PANEL_CONTROLS`), `docs/images/README.md` (the drawing's description text is
+  `openvave.protocol.PANEL_CONTROLS`, and one under "Signal chain" pointing to `PANEL_GROUPS` for
+  the on/off rules, keeping "a gate of 0 is shown as off" as the app's display), `docs/images/README.md` (the drawing's description text is
   checked against the panel data by `tests/unit/test_panel.py`; change both together),
-  `specs/protocol/command-layer.md` (a short "Front panel" pointer to `docs/tank-g.md` and the
-  panel data; no byte-map or write-table row changes, so `tests/unit/test_bytemap_doc.py` and
+  `specs/protocol/command-layer.md` (a "Front panel" section: a pointer to `docs/tank-g.md` and the
+  panel data, and the group-enabled rule table of research R11 with confidence and evidence per
+  row, FR-030; no byte-map or write-table row changes, so `tests/unit/test_bytemap_doc.py` and
   `test_writes_doc.py` stay green), `docs/README.md` and `README.md` (current version 0.7.0, one
   line on what it adds), `docs/examples/README.md` (the new example), and `docs/cli-reference.md` only if a sentence
   there names the current version
 - [ ] T016 [US4] `CHANGELOG.md`: new `## [0.7.0]` with a summary paragraph, "Added (spec 008)"
-  entries for the simulated pedal, the panel data and the position helpers, the existing
-  "Added (spec 007 US4)" subsection moved unchanged from `[Unreleased]`, and `### Tested`
-  (hardware-free suite; no pedal message added; names `documented`); leave `## [Unreleased]`
+  entries for the simulated pedal, the panel data with the group enabled state (confidences
+  stated) and the position helpers, and `### Tested` (hardware-free suite; no pedal message
+  added); nothing of spec 007 moves (its US4 section is already in `[0.6.0]`); leave `## [Unreleased]`
   empty; do not touch `[0.6.0]` or anything below it (FR-023, research R10)
 - [ ] T017 [US4] `pyproject.toml` (`version = "0.7.0"`), `src/openvave/__init__.py`
   (`__version__ = "0.7.0"`), then `uv lock` so `uv.lock` carries 0.7.0 (FR-022)
@@ -175,7 +213,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
     and no expectation changed apart from the moved version assertions (SC-005).
   - `uv run python docs/examples/simulated_pedal.py` exits 0 (SC-001).
   - `uv run openvave --version` prints `openvave 0.7.0`.
-  - The `[0.6.0]` section equals the one in `git show 61fdf6a:CHANGELOG.md` (quickstart §3 prints
+  - The `[0.6.0]` section equals the one in `git show v0.6.0:CHANGELOG.md` (quickstart §3 prints
     `0.6.0 unchanged`).
   - `git diff --stat origin/main -- src/openvave/cli src/openvave/mcp_server
     src/openvave/session.py src/openvave/models.py src/openvave/protocol/bytemap.py
@@ -183,7 +221,7 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
     byte map and the allowlist are untouched (FR-009, FR-020, FR-021).
   - No pedal is needed: nothing in this milestone sends a new message.
   - Not part of the pull request (owner, after the merge): tag `v0.7.0` on the merge commit, then
-    quickstart §4; `v0.6.0` on `61fdf6a` is the owner's separate step (FR-025, SC-007).
+    quickstart §4 (`v0.6.0` already exists on `fc0a6ae`) (FR-025, SC-007).
 
 **Checkpoint**: Milestone 1 DONE — the suite, linters and type check are green, the three
 additions are public and documented, the version is 0.7.0, and the pull request waits for the
@@ -193,8 +231,10 @@ owner's merge and tag `v0.7.0`.
 
 ## Dependencies
 
-- T001 first. T002–T008 (tests) before T009–T013 (code); they must fail first.
-- T009 and T010 are independent; T011 needs both; T012 is independent of them; T013 needs T011
+- T001 first. T002–T008, T019 and T020 (tests) before T009–T013 and T021 (code); they must fail
+  first. Task numbers T019–T021 were added by the revision of 2026-11-26 and keep the earlier
+  numbers stable; the order is the one of the sections, not of the numbers.
+- T009 and T010 are independent; T021 follows T010 (same file); T011 needs all three; T012 is independent of them; T013 needs T011
   and T012.
 - T014–T017 after the code (docs describe the final names); T016 before T006 can pass; T017 last
   before the gate.
@@ -202,14 +242,14 @@ owner's merge and tag `v0.7.0`.
 
 ## Parallel opportunities
 
-- T002–T008: seven test files, no shared edits.
+- T002–T008, T019, T020: nine test files, no shared edits.
 - T009, T010 and T012: three source files.
 - T015 beside T014.
 
 ## Implementation strategy
 
-One pull request. A useful order of commits inside it: tests (T002–T008), position helpers and
-panel (T009–T011), simulated pedal and example (T012–T013), docs (T014–T015), release
+One pull request. A useful order of commits inside it: tests (T002–T008, T019, T020), position helpers and
+panel (T009–T011, T021), simulated pedal and example (T012–T013), docs (T014–T015), release
 (T016–T017), gate (T018). US1 is the part the app waits for; US2 and US3 are small and can land in
 any order before the release commit.
 
@@ -220,6 +260,9 @@ any order before the release commit.
 | FR-001–FR-003, FR-008 | T004, T012 |
 | FR-004–FR-007, FR-009 | T005, T012 |
 | FR-010–FR-015 | T002, T010, T011 |
+| FR-026–FR-029 | T019, T021, T011 |
+| FR-030 | T020, T015 |
+| FR-031 | T014, T015, T021 |
 | FR-016–FR-019 | T003, T009, T011 |
 | FR-020, FR-021 | T003, T004, T007, T018 |
 | FR-022, FR-023 | T006, T016, T017, T018 |
@@ -228,6 +271,7 @@ any order before the release commit.
 | SC-001, SC-002 | T005, T018 |
 | SC-003 | T002 |
 | SC-004 | T003 |
+| SC-008 | T019, T020 |
 | SC-005 | T007, T018 |
 | SC-006 | T005 (suite audit in `tests/conftest.py`), T018 |
 | SC-007 | T018 (owner, after the tag) |

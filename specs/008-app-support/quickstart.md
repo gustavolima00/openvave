@@ -12,7 +12,8 @@ uv run mypy src
 uv run pytest
 ```
 
-Expected: all green. New files: `tests/unit/test_panel.py`, `tests/unit/test_preset_positions.py`,
+Expected: all green. New files: `tests/unit/test_panel.py`, `tests/unit/test_panel_groups.py`,
+`tests/unit/test_panel_doc.py`, `tests/unit/test_preset_positions.py`,
 `tests/unit/test_simulated_build.py`, `tests/integration/test_simulated_pedal.py`,
 `tests/integration/test_example_simulated_pedal.py`,
 `tests/contract/test_changelog_070.py`.
@@ -25,7 +26,7 @@ uv run python docs/examples/simulated_pedal.py
 
 Expected: the script builds a simulated pedal from
 `captures/fw96/20261116-probe-connect.jsonl`, prints the panel in order (MASTER first, D/AMP
-last), edits two fields, selects 2C with `preset_index("2C")`, takes a backup, saves and restores,
+last) and which groups are enabled, edits two fields, selects 2C with `preset_index("2C")`, takes a backup, saves and restores,
 and ends with the number of frames sent. It imports only from `openvave` and `openvave.protocol`.
 Contract: [contracts/library-api.md](contracts/library-api.md).
 
@@ -34,7 +35,7 @@ Contract: [contracts/library-api.md](contracts/library-api.md).
 ```bash
 uv run openvave --version                      # openvave 0.7.0
 section() { awk '/^## \[0\.6\.0\]/{on=1} /^## \[0\.5\.0\]/{on=0} on'; }
-diff <(git show 61fdf6a:CHANGELOG.md | section) <(section < CHANGELOG.md) && echo "0.6.0 unchanged"
+diff <(git show v0.6.0:CHANGELOG.md | section) <(section < CHANGELOG.md) && echo "0.6.0 unchanged"
 git diff --stat origin/main -- src/openvave/cli src/openvave/mcp_server src/openvave/session.py \
   src/openvave/models.py src/openvave/protocol/bytemap.py src/openvave/protocol/writes.py
 # no output: CLI, MCP server, session, byte map and allowlist untouched

@@ -1,6 +1,6 @@
 # Data model: spec 008
 
-No persistent data and no JSON document changes. Three in-memory shapes.
+No persistent data and no JSON document changes. Four in-memory shapes.
 
 ## PanelControl (`openvave.protocol.panel`, frozen dataclass)
 
@@ -20,6 +20,29 @@ bytes, global and status fields, unknown names, `None`).
 Relationship: every `CURRENT_PRESET` byte-map entry with encoding `CONTINUOUS`, `SELECTOR` or
 `SWITCH`, except `led_red`, `led_green` and `led_blue`, has exactly one `PanelControl`; MASTER is
 the only `PanelControl` without an entry.
+
+## PanelGroup (`openvave.protocol.panel`, frozen dataclass)
+
+| Field | Type | Meaning | Rules |
+|---|---|---|---|
+| `name` | `str` | the printed group: `MASTER`, `CAB`, `REVERB`, `DELAY`, `MOD`, `AMP`, `GATE` | unique; every `PanelControl.group` is one of them |
+| `order` | `int` | panel order of the group, 0-based | `PANEL_GROUPS[i].order == i`; follows the first control of each group |
+| `enabled_field` | `str` or `None` | the current-preset field that says whether the group is enabled | a control of this group; `None` for MASTER |
+| `enabled_rule` | `"switch"`, `"nonzero"` or `None` | `switch`: enabled when the byte is the field's on value; `nonzero`: enabled when the byte is not 0 | `None` iff `enabled_field` is `None` |
+| `enabled_confidence` | `"confirmed"`, `"documented"` or `None` | evidence level of the rule | `None` iff `enabled_field` is `None`; GATE is `documented`, the other five `confirmed` |
+
+`PANEL_GROUPS` holds the seven rows of research R11. `panel_group(name)` returns the row or
+`None`.
+
+`group_enabled(group, preset) -> bool | None`:
+
+| Input | Result |
+|---|---|
+| `preset` is 21 zero bytes (the bypass placeholder) | `None` for every group |
+| group without a rule (MASTER) | `None` |
+| `switch` rule, byte = on value / off value / anything else | `True` / `False` / `None` |
+| `nonzero` rule | `byte != 0` |
+| unknown group name, or `preset` not 21 bytes | `ValueError` |
 
 ## Preset position
 
