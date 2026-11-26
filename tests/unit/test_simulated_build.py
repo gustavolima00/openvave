@@ -380,3 +380,20 @@ def test_constructor_keeps_accepting_those_faults() -> None:
     from tests.support.write_fixture import make_fake
 
     make_fake(faults={"commit": "corrupt"})
+
+
+# -- Codex round 4 ------------------------------------------------------------------------------
+
+
+def test_malformed_recorded_image_is_refused(tmp_path: Path) -> None:
+    good = sf.read_reply(0, sf.synthetic_image())
+    short = set_echo(sf.read_reply(0, sf.synthetic_image()[:-1]), length=758)  # 757 data bytes
+    path = derive(tmp_path, extra=[("img", sf.read_request(0, 758), short)])
+    with pytest.raises(ValueError, match="whole-image"):
+        FakeTransport.simulated(path)
+    FakeTransport.simulated(path, image=sf.synthetic_image())  # the caller's image replaces it
+    retried = derive(
+        tmp_path,
+        extra=[("img", sf.read_request(0, 758), short), ("img2", sf.read_request(0, 758), good)],
+    )
+    FakeTransport.simulated(retried)  # a good retry is used

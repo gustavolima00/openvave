@@ -198,6 +198,7 @@ def _simulated_parts(
     script: dict[str, tuple[bytes, Replies]] = {}
     scripted: set[bytes] = set()
     memory: dict[int, bytes] = {}
+    bad_image = False
     for _, raw_request, raw_reply in _exchanges(path):
         try:
             request = decode_frame(raw_request)
@@ -211,6 +212,8 @@ def _simulated_parts(
             data = _valid_reply(request, raw_reply)
             if data is not None:
                 memory[shape[0]] = data
+            elif shape == _IMAGE_READ:
+                bad_image = True
             continue
         is_query = raw_request == _QUERY_REQUEST
         is_other_read = request.command == READ and len(body) == ECHO_LEN
@@ -240,6 +243,8 @@ def _simulated_parts(
             info,
             encode_frame(READ, _DEVICE_INFO_ECHO + bytes(32)),
         )
+    if bad_image and STORE_ADDRESS not in memory:
+        memory[STORE_ADDRESS] = b""  # a malformed recorded image: refused unless image= is given
     return script, memory, state.index
 
 
@@ -441,8 +446,9 @@ class FakeTransport:
         Raises :class:`ValueError` when the handshake, the global read or the current-preset
         read is missing, when the recorded state is not a preset in normal or edit mode
         (bypass, tuner), when ``image`` (or the recorded image) is not 758 bytes or does not
-        start with ``a5 5a``, for an unknown fault kind or action, or for a ``corrupt`` fault on
-        ``preset_select``, ``bypass`` or ``commit`` (it would change nothing; use another action).
+        start with ``a5 5a`` (a malformed recorded image is refused unless ``image`` is given),
+        for an unknown fault kind or action, or for a ``corrupt`` fault on ``preset_select``,
+        ``bypass`` or ``commit`` (it would change nothing; use another action).
 
         It is a model of the pedal built from the protocol document, not evidence of what a
         pedal does: only a capture proves behaviour.
@@ -458,6 +464,11 @@ class FakeTransport:
         script, memory, loaded = _simulated_parts(path)
         if image is not None:
             memory[STORE_ADDRESS] = bytes(image)
+        elif memory.get(STORE_ADDRESS) == b"":
+            raise ValueError(
+                f"{path}: the recorded whole-image read has no valid reply "
+                f"(not {IMAGE_SIZE} bytes or a wrong echo); pass image= to replace it"
+            )
         elif STORE_ADDRESS not in memory:
             memory[STORE_ADDRESS] = _generated_image(memory[EDIT_BUFFER], loaded)
         header = memory[STORE_ADDRESS][:STORE_OFFSET]
