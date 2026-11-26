@@ -60,7 +60,8 @@ def test_unreleased_is_empty() -> None:
 
 @pytest.mark.parametrize("name", NAMES)
 def test_names_every_addition(name: str) -> None:
-    assert f"`{name}" in _section(VERSION), f"CHANGELOG [{VERSION}] does not name {name}"
+    pattern = rf"`(?:[\w.]+\.)?{re.escape(name)}[`(]"  # `name`, `module.name`, `name(...)`
+    assert re.search(pattern, _section(VERSION)), f"CHANGELOG [{VERSION}] does not name {name}"
 
 
 def test_summary_paragraph_before_first_subsection() -> None:
