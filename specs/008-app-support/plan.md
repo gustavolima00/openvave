@@ -117,7 +117,8 @@ tests/
 │   ├── test_preset_positions.py# NEW (US3)
 │   └── test_simulated_build.py # NEW (US1: start state, image rules, ValueErrors)
 ├── integration/
-│   └── test_simulated_pedal.py # NEW (US1: every operation and fault, against write_fixture)
+│   ├── test_simulated_pedal.py # NEW (US1: every operation and fault, against write_fixture)
+│   └── test_example_simulated_pedal.py # NEW (the documented example runs)
 └── contract/
     ├── test_public_api.py      # + the new names (the list only grows)
     ├── test_changelog_060.py   # version assertions move out; section checks stay

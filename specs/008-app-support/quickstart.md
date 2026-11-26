@@ -14,6 +14,7 @@ uv run pytest
 
 Expected: all green. New files: `tests/unit/test_panel.py`, `tests/unit/test_preset_positions.py`,
 `tests/unit/test_simulated_build.py`, `tests/integration/test_simulated_pedal.py`,
+`tests/integration/test_example_simulated_pedal.py`,
 `tests/contract/test_changelog_070.py`.
 
 ## 2. The three additions with public imports only
