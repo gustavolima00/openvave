@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0]
+
+AI assistants and preset management. `openvave mcp` runs a Model Context Protocol server, so an
+assistant such as Claude Code or Claude Desktop can do everything the command line does with a
+Tank-G: read the pedal, change the current sound, select, bypass, back up, and (with
+`unsafe: true`, an automatic backup first and, where the client supports elicitation, the
+owner's confirmation) save, restore, copy, swap and import presets. It holds one connection
+between tool calls and releases it after `--idle-release` seconds or on `pedal_disconnect`, so
+the phone app can connect; `--read-only` offers no write tool. It needs the optional extra
+`openvave[mcp]`; `pip install openvave` is unchanged. Spec 007 adds `preset copy`, `swap`,
+`export` and `import` to the command line and the library, names every byte of the preset and
+status regions on firmware 96, and confirms every write openvave can send on fw 96. The
+automatic backups of the persistent commands now go to a per-user folder instead of the current
+directory, and the amp type and IR cab positions show the model names from the manual shipped
+with firmware 96 pedals. No new pedal message; JSON only gains keys and `schema_version` stays
+2. Guide: [docs/mcp.md](docs/mcp.md).
+
 ### Added (spec 007 US4): amp type and IR cab names, from the manual
 
 - `amp_type` and `ir_cab` positions show the model the Tank-G manual printed with firmware 96
@@ -32,22 +49,6 @@ All notable changes to this project are documented here. The format follows
   describe the sound character, as the vendor's manual does.
 - Library: `openvave.protocol.POSITION_NAMES`, `PositionName` and `position_name()`; both vendor
   lists and the per-position choice live in `openvave.protocol.names`.
-
-## [0.6.0]
-
-AI assistants and preset management. `openvave mcp` runs a Model Context Protocol server, so an
-assistant such as Claude Code or Claude Desktop can do everything the command line does with a
-Tank-G: read the pedal, change the current sound, select, bypass, back up, and (with
-`unsafe: true`, an automatic backup first and, where the client supports elicitation, the
-owner's confirmation) save, restore, copy, swap and import presets. It holds one connection
-between tool calls and releases it after `--idle-release` seconds or on `pedal_disconnect`, so
-the phone app can connect; `--read-only` offers no write tool. It needs the optional extra
-`openvave[mcp]`; `pip install openvave` is unchanged. Spec 007 adds `preset copy`, `swap`,
-`export` and `import` to the command line and the library, names every byte of the preset and
-status regions on firmware 96, and confirms every write openvave can send on fw 96. The
-automatic backups of the persistent commands now go to a per-user folder instead of the current
-directory. No new pedal message; JSON only gains keys and `schema_version` stays 2. Guide:
-[docs/mcp.md](docs/mcp.md).
 
 ### Added (spec 006 milestone 0): `openvave mcp`, an MCP server for AI assistants
 
