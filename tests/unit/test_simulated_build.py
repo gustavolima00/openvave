@@ -68,6 +68,17 @@ async def read(fake: FakeTransport, address: int, length: int) -> bytes:
     return reply[14:-1]
 
 
+def by_echo(path: Path, address: int, length: int) -> tuple[bytes, list[bytes]]:
+    """The request and every reply of a type-4 read, found by its echo (labels differ between
+    capture tools)."""
+    echo = bytes([4]) + address.to_bytes(4, "little") + length.to_bytes(3, "little")
+    cap = load_capture(path)
+    for label, (tx, _) in cap.pairs.items():
+        if tx[6:14] == echo:
+            return tx, cap.rx_all(label)
+    raise AssertionError(f"{path.name} has no read of 0x{address:08x} x{length}")
+
+
 def records(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
@@ -162,19 +173,20 @@ async def test_without_status_read_loopback_starts_off(tmp_path: Path) -> None:
 
 
 async def test_watch_capture_starts_from_the_first_reply_of_each() -> None:
-    cap = load_capture(STEP_GAIN)
+    glob_tx, glob_rx = by_echo(STEP_GAIN, GLOBAL_ADDR, 4)
+    preset_tx, preset_rx = by_echo(STEP_GAIN, BUFFER_ADDR, 21)
+    assert len(set(preset_rx)) > 1, "the watch record changes the preset"
     fake = FakeTransport.simulated(STEP_GAIN)
-    assert await ask(fake, cap.tx(GLOBAL)) == cap.rx_all(GLOBAL)[0]
-    assert await ask(fake, cap.tx(PRESET)) == cap.rx_all(PRESET)[0]
+    assert await ask(fake, glob_tx) == glob_rx[0]
+    assert await ask(fake, preset_tx) == preset_rx[0]
     # a second read still answers the starting state: nothing replays the watch record
-    assert await ask(fake, cap.tx(PRESET)) == cap.rx_all(PRESET)[0]
+    assert await ask(fake, preset_tx) == preset_rx[0]
 
 
 async def test_edit_mode_capture_stores_the_buffer_at_the_loaded_position() -> None:
-    cap = load_capture(STEP_GAIN)
-    glob = cap.rx(GLOBAL)[14:-1]
+    glob = by_echo(STEP_GAIN, GLOBAL_ADDR, 4)[1][0][14:-1]
     assert glob[3] == 0, "the step captures are recorded in edit mode"
-    buffer = cap.rx(PRESET)[14:-1]
+    buffer = by_echo(STEP_GAIN, BUFFER_ADDR, 21)[1][0][14:-1]
     index = glob[1] * 4 + glob[2]
     fake = FakeTransport.simulated(STEP_GAIN)
     assert await read(fake, 2 + 21 * index, 21) == buffer

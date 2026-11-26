@@ -9,6 +9,7 @@ equal (SC-002). The fixture is the oracle; the simulated pedal is the code under
 from __future__ import annotations
 
 import dataclasses
+import functools
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from enum import Enum
@@ -47,8 +48,10 @@ def simulated(**options: Any) -> FakeTransport:
     return FakeTransport.simulated(FW96_CONNECT, **options)
 
 
-def oracle(**options: Any) -> FakeTransport:
-    return make_fake(NORMAL, status=b"\x01", **options)
+def oracle(*, chunk_size: int | None = None, **options: Any) -> FakeTransport:
+    """The write fixture (it has no ``chunk_size`` option: pass it to the class it builds)."""
+    cls = functools.partial(FakeTransport, chunk_size=chunk_size)
+    return make_fake(NORMAL, status=b"\x01", cls=cls, **options)  # type: ignore[arg-type]
 
 
 def normal(value: Any) -> Any:
