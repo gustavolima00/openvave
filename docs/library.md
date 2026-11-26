@@ -180,10 +180,10 @@ Indexes are 0–35 (`4 × (bank − 1) + slot`; 1B = 1, 2C = 6). `preset_index` 
 ```python
 from openvave import preset_index, preset_position
 
-preset_index("2C")      # 6
-preset_position(6)      # "2C"
-preset_index("2c")      # ValueError: exactly "1A"…"9D" (also "0A", "10A", "1E", "", "6", 6, None)
-preset_position(36)     # ValueError: exactly the ints 0–35 (also -1, True, 1.0, "1")
+preset_index("2C")  # 6
+preset_position(6)  # "2C"
+preset_index("2c")  # ValueError: exactly "1A"…"9D" (also "0A", "10A", "1E", "", "6", 6, None)
+preset_position(36)  # ValueError: exactly the ints 0–35 (also -1, True, 1.0, "1")
 ```
 
 They are strict on purpose. The command line and the MCP tools stay lenient and also accept lower
@@ -361,16 +361,18 @@ use `FakeTransport.simulated`:
 ```python
 from openvave import Backup, FakeTransport, TankG
 
+
 def keep(backup: Backup) -> None:
-    ...  # a real program writes the automatic backup to a file
+    """A real program writes the automatic backup to a file."""
+
 
 fake = FakeTransport.simulated("captures/fw96/20261116-probe-connect.jsonl")
 async with TankG.over(fake) as pedal:
     await pedal.set_fields({"gain": 95, "delay_on": False})
-    await pedal.select_preset(6)                      # 2C
-    backup = await pedal.backup()                     # 36 presets, cross-checked
+    await pedal.select_preset(6)  # 2C
+    backup = await pedal.backup()  # 36 presets, cross-checked
     await pedal.save_preset(unsafe=True, on_backup=keep)
-fake.sent                                             # every request, in order
+fake.sent  # every request, in order
 ```
 
 `FakeTransport.simulated(path, *, image=None, faults=None, select_transient=0, chunk_size=None)`:
@@ -422,17 +424,24 @@ transport or to decode captures: `encode_frame` / `decode_frame`, `build_read`, 
 
 ```python
 from openvave import Region
-from openvave.protocol import PANEL_CONTROLS, PANEL_GROUPS, group_enabled, panel_control, panel_group
+from openvave.protocol import (
+    PANEL_CONTROLS,
+    PANEL_GROUPS,
+    group_enabled,
+    panel_control,
+    panel_group,
+)
 
-for control in PANEL_CONTROLS:   # PanelControl(order, label, group, kind, field, offset)
+for control in PANEL_CONTROLS:  # PanelControl(order, label, group, kind, field, offset)
     print(control.order, control.label, control.group, control.kind, control.field, control.offset)
-panel_control("reverb_decay")    # order 3, "RVB DECAY", group "REVERB", knob, byte 15
-panel_control("led_red")         # None: the LED colour bytes are not panel controls
+panel_control("reverb_decay")  # order 3, "RVB DECAY", group "REVERB", knob, byte 15
+panel_control("led_red")  # None: the LED colour bytes are not panel controls
 
 preset = (await pedal.read(Region.CURRENT_PRESET)).data
-for group in PANEL_GROUPS:       # PanelGroup(name, order, enabled_field, enabled_rule, enabled_confidence)
+# PanelGroup(name, order, enabled_field, enabled_rule, enabled_confidence)
+for group in PANEL_GROUPS:
     print(group.name, group_enabled(group.name, preset), group.enabled_confidence)
-panel_group("GATE").enabled_confidence   # "documented"
+panel_group("GATE").enabled_confidence  # "documented"
 ```
 
 | Group | Enabled when | Confidence |
