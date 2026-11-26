@@ -1,26 +1,21 @@
-"""CHANGELOG 0.6.0 and the package version describe the release of spec 006 (T059), with the
+"""CHANGELOG 0.6.0 describes the release of spec 006 (T059), with the
 spec 007 work merged before it.
 
 0.6.0 adds ``openvave mcp``, an MCP server for AI assistants, and spec 007's preset management.
 Its section must open with a summary, name the command, the extra, the options and every tool,
 the opt-ins and the owner's confirmation, keep ``schema_version`` 2, and say what was tested on
-fw 96; the version printed by ``openvave --version`` must match it.
+fw 96. The version assertions moved to ``test_changelog_070.py`` with the 0.7.0 release.
 """
 
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
 
-import openvave
-from openvave.cli import main
-
 ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = ROOT / "CHANGELOG.md"
-PYPROJECT = ROOT / "pyproject.toml"
 
 VERSION = "0.6.0"
 
@@ -120,14 +115,3 @@ def test_release_is_not_left_under_unreleased() -> None:
     unreleased = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", text, re.S | re.M)
     assert unreleased is not None
     assert "openvave mcp" not in unreleased.group(1), "0.6.0 left unreleased"
-
-
-def test_versions_agree() -> None:
-    assert openvave.__version__ == VERSION
-    with PYPROJECT.open("rb") as fh:
-        assert tomllib.load(fh)["project"]["version"] == VERSION
-
-
-def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["--version"]) == 0
-    assert VERSION in capsys.readouterr().out

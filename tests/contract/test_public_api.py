@@ -68,6 +68,8 @@ CONTRACT_EXPORTS = {
     "scan",  # spec 005 M1
     "identify",
     "ScanEntry",
+    "preset_index",  # spec 008
+    "preset_position",
 } | ERRORS
 PROTOCOL_EXPORTS = {
     "encode_frame",
@@ -224,6 +226,21 @@ def test_protocol_module_exposes_position_names() -> None:
     assert {"POSITION_NAMES", "PositionName", "position_name"} <= set(openvave.protocol.__all__)
     name = openvave.protocol.position_name("amp_type", 0)
     assert isinstance(name, openvave.protocol.PositionName)
+
+
+def test_protocol_module_exposes_panel_and_positions() -> None:
+    """Spec 008: the front panel, its groups and the strict position helpers."""
+    assert {
+        "PANEL_CONTROLS",
+        "PanelControl",
+        "panel_control",
+        "PANEL_GROUPS",
+        "PanelGroup",
+        "panel_group",
+        "group_enabled",
+        "preset_index",
+        "preset_position",
+    } <= set(openvave.protocol.__all__)
 
 
 def test_protocol_module_exposes_storage_read() -> None:
