@@ -35,7 +35,9 @@ Contract: [contracts/library-api.md](contracts/library-api.md).
 uv run openvave --version                      # openvave 0.7.0
 section() { awk '/^## \[0\.6\.0\]/{on=1} /^## \[0\.5\.0\]/{on=0} on'; }
 diff <(git show 61fdf6a:CHANGELOG.md | section) <(section < CHANGELOG.md) && echo "0.6.0 unchanged"
-git diff --stat origin/main -- src/openvave/cli src/openvave/mcp_server   # no output: CLI and MCP untouched
+git diff --stat origin/main -- src/openvave/cli src/openvave/mcp_server src/openvave/session.py \
+  src/openvave/models.py src/openvave/protocol/bytemap.py src/openvave/protocol/writes.py
+# no output: CLI, MCP server, session, byte map and allowlist untouched
 ```
 
 ## 4. After the merge (owner)

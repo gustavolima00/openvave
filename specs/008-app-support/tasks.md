@@ -72,7 +72,10 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   image, FR-003, research R3); from `captures/fw96/20261117-storage-synthetic.jsonl` plus nothing
   else it raises `ValueError` naming the missing global read (FR-008); from a temporary capture
   that adds a whole-image read, that image is used; `image=` replaces both and a 757-byte image
-  raises `ValueError`; a capture without a status read starts with status `00`; a capture whose
+  raises `ValueError`; a capture without a status read starts with status `00`; a capture that repeats the global
+  and preset reads (a `watch` step capture such as `captures/fw96/20261116-step-gain.jsonl`)
+  starts from the first reply of each; a capture whose global block says edit mode builds, with
+  the recorded buffer as the stored preset at the loaded position; a capture whose
   recorded state is bypass raises `ValueError`; a capture without the query raises `ValueError`;
   a recorded write and a recorded stored-slot read are not replayed (a later read shows memory,
   research R2); unknown fault kind or action raises `ValueError`; `FakeTransport(...)` and
@@ -82,7 +85,8 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   only (`TankG.over(FakeTransport.simulated(...))`), each case run twice (simulated pedal, and
   `tests.support.write_fixture.make_fake(NORMAL, status=b"\x01")` as the oracle: the capture
   records 1B, normal mode, loopback on) and compared on
-  result objects, `sent` frames and a final `backup()`: `set_field` (a knob, a typed knob, a
+  result objects, `sent` frames and a final `backup()`: the opening `state()` (normal, `1B`) and current preset
+  equal the capture's; `set_field` (a knob, a typed knob, a
   block switch, `led_colour`), `set_fields` (several kinds in one call), `select_preset`,
   `reload_preset`, `bypass_on` then `bypass_off`, `set_loopback`, `backup` (36 presets, loaded
   position equals the recorded preset), `save_preset` in place and `to=` another slot, `restore`
@@ -153,7 +157,8 @@ data (US2) and the strict position helpers (US3), and is ready to be tagged `v0.
   `specs/protocol/command-layer.md` (a short "Front panel" pointer to `docs/tank-g.md` and the
   panel data; no byte-map or write-table row changes, so `tests/unit/test_bytemap_doc.py` and
   `test_writes_doc.py` stay green), `docs/README.md` and `README.md` (current version 0.7.0, one
-  line on what it adds), `docs/examples/` index if one lists the examples
+  line on what it adds), `docs/examples/README.md` (the new example), and `docs/cli-reference.md` only if a sentence
+  there names the current version
 - [ ] T016 [US4] `CHANGELOG.md`: new `## [0.7.0]` with a summary paragraph, "Added (spec 008)"
   entries for the simulated pedal, the panel data and the position helpers, the existing
   "Added (spec 007 US4)" subsection moved unchanged from `[Unreleased]`, and `### Tested`
