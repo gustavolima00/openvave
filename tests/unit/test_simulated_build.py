@@ -148,14 +148,14 @@ def test_storage_only_capture_names_the_missing_global_read() -> None:
 
 
 async def test_recorded_whole_image_is_used(tmp_path: Path) -> None:
-    image = bytes.fromhex("12 34") + bytes(range(21)) * 36
+    image = bytes.fromhex("a5 5a") + bytes(range(21)) * 36
     path = derive(tmp_path, extra=[("img", sf.read_request(0, 758), sf.read_reply(0, image))])
     assert await read(FakeTransport.simulated(path), 0, 758) == image
 
 
 async def test_image_argument_wins(tmp_path: Path) -> None:
-    recorded = bytes(758)
-    given = bytes([7]) * 758
+    recorded = bytes.fromhex("a5 5a") + bytes(756)
+    given = bytes.fromhex("a5 5a") + bytes([7]) * 756
     path = derive(tmp_path, extra=[("img", sf.read_request(0, 758), sf.read_reply(0, recorded))])
     assert await read(FakeTransport.simulated(path, image=given), 0, 758) == given
     assert await read(FakeTransport.simulated(FW96_CONNECT, image=given), 0, 758) == given
@@ -355,3 +355,28 @@ def test_handshake_must_be_the_query_the_session_sends(tmp_path: Path) -> None:
     path = derive(tmp_path, drop=[QUERY], extra=[("query", other_query, CAP.rx(QUERY))])
     with pytest.raises(ValueError, match="handshake"):
         FakeTransport.simulated(path)
+
+
+# -- Codex round 3 ------------------------------------------------------------------------------
+
+
+def test_image_with_another_header_is_refused(tmp_path: Path) -> None:
+    other = bytes.fromhex("00 00") + sf.synthetic_image()[2:]
+    with pytest.raises(ValueError, match="a5 5a"):
+        FakeTransport.simulated(FW96_CONNECT, image=other)
+    path = derive(tmp_path, extra=[("img", sf.read_request(0, 758), sf.read_reply(0, other))])
+    with pytest.raises(ValueError, match="a5 5a"):
+        FakeTransport.simulated(path)
+
+
+@pytest.mark.parametrize("kind", ["preset_select", "bypass", "commit"])
+def test_corrupt_fault_that_changes_nothing_is_refused(kind: str) -> None:
+    with pytest.raises(ValueError, match="corrupt"):
+        FakeTransport.simulated(FW96_CONNECT, faults={kind: "corrupt"})
+    FakeTransport.simulated(FW96_CONNECT, faults={kind: "nak"})
+
+
+def test_constructor_keeps_accepting_those_faults() -> None:
+    from tests.support.write_fixture import make_fake
+
+    make_fake(faults={"commit": "corrupt"})

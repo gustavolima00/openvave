@@ -169,6 +169,9 @@ def _valid_reply(request: Frame, reply: bytes) -> bytes | None:
     return decoded.body[ECHO_LEN:]
 
 
+_NO_CORRUPTION = frozenset({"preset_select", "bypass", "commit"})
+"""Write kinds a ``corrupt`` fault cannot change (the select and bypass data byte is ignored, a
+commit has none): :meth:`FakeTransport.simulated` refuses that combination."""
 _QUERY_REQUEST = encode_frame(QUERY, b"")
 """The handshake request the session sends (``build_query()``: command ``0x11``, empty body)."""
 _DEVICE_INFO_ECHO = bytes([5]) + LOOPBACK_ADDRESS.to_bytes(4, "little") + (32).to_bytes(3, "little")
@@ -437,18 +440,33 @@ class FakeTransport:
 
         Raises :class:`ValueError` when the handshake, the global read or the current-preset
         read is missing, when the recorded state is not a preset in normal or edit mode
-        (bypass, tuner), when ``image`` is not 758 bytes, or for an unknown fault kind or action.
+        (bypass, tuner), when ``image`` (or the recorded image) is not 758 bytes or does not
+        start with ``a5 5a``, for an unknown fault kind or action, or for a ``corrupt`` fault on
+        ``preset_select``, ``bypass`` or ``commit`` (it would change nothing; use another action).
 
         It is a model of the pedal built from the protocol document, not evidence of what a
         pedal does: only a capture proves behaviour.
         """
         if image is not None and len(image) != IMAGE_SIZE:
             raise ValueError(f"image must be {IMAGE_SIZE} bytes, got {len(image)}")
+        for kind, action in (faults or {}).items():
+            if action == "corrupt" and kind in _NO_CORRUPTION:
+                raise ValueError(
+                    f"a corrupt fault does not change a {kind} write on the simulated pedal "
+                    "(it carries no data the pedal uses); use nak, no_reply, disconnect or ignore"
+                )
         script, memory, loaded = _simulated_parts(path)
         if image is not None:
             memory[STORE_ADDRESS] = bytes(image)
         elif STORE_ADDRESS not in memory:
             memory[STORE_ADDRESS] = _generated_image(memory[EDIT_BUFFER], loaded)
+        header = memory[STORE_ADDRESS][:STORE_OFFSET]
+        if header != STORED_HEADER:
+            source = "image" if image is not None else f"{path}: the recorded image"
+            raise ValueError(
+                f"{source} has header {header.hex(' ')}, not {STORED_HEADER.hex(' ')}: backups "
+                "of it could not be restored"
+            )
         return cls(
             script,
             memory=memory,

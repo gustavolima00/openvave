@@ -52,10 +52,11 @@ def test_section_sits_between_unreleased_and_060() -> None:
     assert text.index(f"## [{VERSION}]") < text.index("## [0.6.0]")
 
 
-def test_unreleased_is_empty() -> None:
+def test_release_is_not_left_under_unreleased() -> None:
     match = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", _text(), re.S | re.M)
     assert match is not None
-    assert match.group(1).strip() == ""
+    # Later changes may be listed under [Unreleased]; the 0.7.0 entries must not be.
+    assert "FakeTransport.simulated" not in match.group(1), "0.7.0 left unreleased"
 
 
 @pytest.mark.parametrize("name", NAMES)

@@ -34,8 +34,9 @@ FakeTransport.simulated(
 - Accepts every allowlisted write and applies it to its memory; answers every read from that
   memory. A frame outside the allowlist raises `AssertionError`, as on any `FakeTransport`.
 - Raises `ValueError` when the session lacks the handshake, the global read or the current-preset
-  read, when the recorded state is not a preset in normal or edit mode, when `image` is not 758 bytes, or for an
-  unknown fault kind or action.
+  read, when the recorded state is not a preset in normal or edit mode, when the stored image is
+  not 758 bytes or does not start with `a5 5a`, for an unknown fault kind or action, or for
+  `corrupt` on `preset_select`, `bypass` or `commit` (it would change nothing).
 - The returned object is a plain `FakeTransport`: `sent`, `commits`, `lose_link()` and the
   transport methods work as documented there.
 - It is a model built from the protocol document, not evidence of what a pedal does.
