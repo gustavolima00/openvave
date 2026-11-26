@@ -28,8 +28,17 @@ from openvave.protocol.decode import decode_region, diff
 from openvave.protocol.frame import ALLOWED_COMMANDS, Frame, checksum, decode_frame, encode_frame
 from openvave.protocol.identity import TESTED_FIRMWARE, parse_identity
 from openvave.protocol.names import POSITION_NAMES, PositionName, position_name
+from openvave.protocol.panel import (
+    PANEL_CONTROLS,
+    PANEL_GROUPS,
+    PanelControl,
+    PanelGroup,
+    group_enabled,
+    panel_control,
+    panel_group,
+)
 from openvave.protocol.state import classify
-from openvave.protocol.storage import StorageRead
+from openvave.protocol.storage import StorageRead, preset_index, preset_position
 from openvave.protocol.writes import WRITE_MESSAGES, WriteMessage, WriteTarget
 
 __all__ = [
@@ -38,7 +47,11 @@ __all__ = [
     "Frame",
     "FrameAssembler",
     "MAP_FIRMWARE",
+    "PANEL_CONTROLS",
+    "PANEL_GROUPS",
     "POSITION_NAMES",
+    "PanelControl",
+    "PanelGroup",
     "PositionName",
     "REVERB_SECTIONS",
     "REVERB_SECTION_SIZE",
@@ -61,7 +74,12 @@ __all__ = [
     "decode_frame",
     "decode_region",
     "diff",
+    "group_enabled",
+    "panel_control",
+    "panel_group",
     "position_name",
+    "preset_index",
+    "preset_position",
     "encode_frame",
     "parse_identity",
     "parse_read_reply",

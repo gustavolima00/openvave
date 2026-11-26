@@ -47,7 +47,7 @@ def drawing_order() -> list[str]:
     text = DRAWING.read_text(encoding="utf-8")
     match = re.search(r"<desc[^>]*>(.*?)</desc>", text, re.S)
     assert match is not None, "the drawing has no <desc>"
-    return re.findall(r"\b(master|[a-z]+_[a-z_]+)\b", match.group(1))
+    return re.findall(r"\b([a-z][a-z_]*) (?:\(not mapped\)|(?:byte )?\d+)", match.group(1))
 
 
 def test_nineteen_controls_with_order_equal_to_index() -> None:
@@ -71,7 +71,7 @@ def test_every_front_panel_field_has_exactly_one_control() -> None:
         for e in BYTE_MAP
         if e.region is Region.CURRENT_PRESET and e.encoding in KIND and e.name not in LED
     ]
-    assert len(entries) == 17
+    assert len(entries) == 18  # 12 continuous knobs, 2 selectors, 4 block switches
     for entry in entries:
         matches = [c for c in PANEL_CONTROLS if c.field == entry.name]
         assert len(matches) == 1, entry.name

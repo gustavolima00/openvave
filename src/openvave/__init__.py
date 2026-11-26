@@ -37,6 +37,10 @@ Public API (semver-governed; see ``specs/001-readonly-ble-connection/contracts/l
     fake = openvave.FakeTransport.from_capture("captures/fw96/20261116-probe-connect.jsonl")
     async with openvave.TankG.over(fake) as pedal:        # any Transport
         ...
+    fake = openvave.FakeTransport.simulated("captures/fw96/20261116-probe-connect.jsonl")
+    # a simulated pedal that accepts writes: 36 stored presets, faults on request
+
+    openvave.preset_index("2C"), openvave.preset_position(6)   # 6, "2C" (strict)
 
     async with openvave.TankG.connect() as pedal:        # the only polling API
         async for event in pedal.watch(interval=0.5):    # WatchStart, then WatchChange
@@ -108,6 +112,7 @@ from openvave.models import (
     WriteResult,
 )
 from openvave.protocol.identity import TESTED_FIRMWARE
+from openvave.protocol.storage import preset_index, preset_position
 from openvave.session import TankG
 from openvave.transport import Transport
 from openvave.transport.ble import discover, identify, scan
@@ -168,6 +173,8 @@ __all__ = [
     "default_config_path",
     "discover",
     "identify",
+    "preset_index",
+    "preset_position",
     "resolve_target",
     "scan",
 ]

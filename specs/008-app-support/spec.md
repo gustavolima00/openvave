@@ -269,8 +269,8 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
   the printed group, the kind of control (knob, selector or footswitch), and the field name and
   preset byte it drives, or neither when no byte follows it.
 - **FR-011**: The data MUST have one entry for every current-preset entry of the byte map that is
-  a front-panel control (the eleven knobs, the two selectors, the four block switches) and none
-  for the three LED colour bytes.
+  a front-panel control (the twelve continuous knobs, the two selectors, the four block switches)
+  and none for the three LED colour bytes.
 - **FR-012**: The data MUST list MASTER as a control with no field and no byte, in its panel
   place (first).
 - **FR-013**: The order MUST equal the order of `docs/images/tankg-controls.svg` as stated in that
@@ -364,7 +364,7 @@ addition, the 0.6.0 section is unchanged, and the full 0.6.0 test suite still pa
   file, with public imports only, and all nine operations named in FR-004 succeed on it.
 - **SC-002**: For those operations and for every documented fault action, the simulated pedal and
   the internal write fixture give equal results in 100% of the compared cases.
-- **SC-003**: The panel data covers 17 of 17 front-panel fields of the byte map plus MASTER (19
+- **SC-003**: The panel data covers 18 of 18 front-panel fields of the byte map plus MASTER (19
   entries), and its order matches the drawing's description text in 19 of 19 places.
 - **SC-004**: The position helpers agree with `PedalState.position` for 36 of 36 indexes and
   reject 100% of the invalid inputs listed in User Story 3.
