@@ -21,7 +21,8 @@ added and `schema_version` stays 2. Guide: [docs/library.md](docs/library.md).
 - `FakeTransport.simulated(path, *, image=None, faults=None, select_transient=0,
   chunk_size=None)` builds, from one recorded session (for example
   `captures/fw96/20261116-probe-connect.jsonl`), a `FakeTransport` that starts in the recorded
-  state (identity, global block, current preset, status byte, device information) and holds 36
+  state (identity, global block, current preset, status byte, device information; loopback off
+  and zero device information when not recorded) and holds 36
   stored presets: `image`, else the session's whole-image read, else a generated image with the
   recorded preset at the loaded position and a deterministic, in-range pattern elsewhere (no
   vendor content). Every allowlisted write is applied to its memory and every read answers from

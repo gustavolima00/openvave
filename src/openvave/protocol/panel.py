@@ -148,10 +148,11 @@ def group_enabled(group: str, preset: bytes) -> bool | None:
     entry = _BY_NAME.get(group)
     if entry is None:
         raise ValueError(f"unknown panel group {group!r} (expected one of {', '.join(_BY_NAME)})")
-    if not isinstance(preset, bytes | bytearray | memoryview) or len(preset) != PRESET_SIZE:
-        size = len(preset) if isinstance(preset, bytes | bytearray | memoryview) else None
-        raise ValueError(f"a current preset is {PRESET_SIZE} bytes, got {size!r}")
-    data = bytes(preset)
+    if not isinstance(preset, bytes | bytearray | memoryview):
+        raise ValueError(f"a current preset is {PRESET_SIZE} bytes, got {type(preset).__name__}")
+    data = bytes(preset)  # a memoryview of another format is counted in bytes, not elements
+    if len(data) != PRESET_SIZE:
+        raise ValueError(f"a current preset is {PRESET_SIZE} bytes, got {len(data)}")
     if entry.enabled_field is None or not any(data):
         return None
     control = _BY_FIELD[entry.enabled_field]

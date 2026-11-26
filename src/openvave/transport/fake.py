@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from openvave.errors import ConnectionLostError, ProtocolError
-from openvave.protocol.frame import QUERY, READ, WRITE, decode_frame, encode_frame
+from openvave.protocol.frame import QUERY, READ, WRITE, Frame, decode_frame, encode_frame
 
 ECHO_LEN = 8
 MEMORY_TYPE = 4
@@ -116,42 +116,108 @@ _IMAGE_READ = (STORE_ADDRESS, IMAGE_SIZE)
 _MEMORY_READS = (_GLOBAL_READ, _BUFFER_READ, _STATUS_READ, _IMAGE_READ)
 
 
+def _exchanges(path: str | Path) -> list[tuple[str, bytes, bytes]]:
+    """Every ``(label, request, reply)`` of a capture file, in reply order.
+
+    Each reply is paired with the latest request of its label. Unlike :func:`_read_capture` this
+    accepts a label reused for different requests (two writes of one kind with different
+    values): the simulated pedal drops writes, so it must not refuse such a session.
+    """
+    latest: dict[str, bytes] = {}
+    out: list[tuple[str, bytes, bytes]] = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            event = record["event"]
+            if event == "tx":
+                latest[_label(record["label"])] = bytes.fromhex(record["hex"])
+            elif event == "rx":
+                label = _label(record["label"])
+                if label not in latest:
+                    raise ValueError(f"{path}: rx {label!r} before its tx")
+                out.append((label, latest[label], bytes.fromhex(record["hex"])))
+    return out
+
+
+def _valid_reply(request: Frame, reply: bytes) -> bytes | None:
+    """The payload of ``reply`` if it answers ``request``, else ``None``.
+
+    A read reply must carry the read command and echo the request's 8 bytes (type, address,
+    length) followed by exactly ``length`` data bytes; a handshake reply must parse as an
+    identity. Returns the data (reads) or the identity payload (handshake).
+    """
+    from openvave.protocol.identity import parse_identity
+
+    try:
+        decoded = decode_frame(reply)
+    except ProtocolError:
+        return None
+    if decoded.command != request.command:
+        return None
+    if request.command == QUERY:
+        try:
+            parse_identity(decoded.body)
+        except ProtocolError:
+            return None
+        return decoded.body
+    body = request.body
+    length = int.from_bytes(body[5:8], "little")
+    if decoded.body[:ECHO_LEN] != body or len(decoded.body) != ECHO_LEN + length:
+        return None
+    return decoded.body[ECHO_LEN:]
+
+
+_DEVICE_INFO_ECHO = bytes([5]) + LOOPBACK_ADDRESS.to_bytes(4, "little") + (32).to_bytes(3, "little")
+"""The device-information read (type 5, ``0xD0000000``, 32 bytes) the session's snapshot sends."""
+
+
 def _simulated_parts(
     path: str | Path,
 ) -> tuple[dict[str, tuple[bytes, Replies]], dict[int, bytes], int]:
     """Split a recorded session into the script, the memory blocks and the loaded index.
 
-    Requests are recognised by their decoded frame, not by their label. The handshake query and
-    reads that are not type 4 (device information) stay scripted with their first reply; the
-    first reply of the global, edit-buffer, status and whole-image reads becomes memory; every
-    other request (other type-4 reads, writes) is dropped, so later reads answer from memory and
-    writes are applied to it. Raises :class:`ValueError` when the handshake, the global read or
-    the current-preset read is missing, or when the recorded state has no loaded preset.
+    Requests are recognised by their decoded frame, not by their label, and only replies that
+    answer them (right command and echo; a handshake reply that parses) count, so a retried
+    request uses its first good reply. The handshake query and reads that are not type 4 (device
+    information) stay scripted; the first good reply of the global, edit-buffer, status and
+    whole-image reads becomes memory; every other request (other type-4 reads, writes) is
+    dropped, so later reads answer from memory and writes are applied to it. A session without a
+    device-information reply answers that read with 32 zero bytes. Raises :class:`ValueError`
+    when the handshake, the global read or the current-preset read has no good reply, or when
+    the recorded state has no loaded preset.
     """
     from openvave.protocol.state import classify
 
     script: dict[str, tuple[bytes, Replies]] = {}
+    scripted: set[bytes] = set()
     memory: dict[int, bytes] = {}
-    for label, (request, replies) in _read_capture(path).items():
+    for label, raw_request, raw_reply in _exchanges(path):
         try:
-            decoded = decode_frame(request)
-            reply = decode_frame(replies[0])
-        except ProtocolError as err:
-            raise ValueError(f"{path}: malformed frame under {label!r}: {err}") from err
-        body = decoded.body
-        if decoded.command == QUERY:
-            script.setdefault(label, (request, replies[0]))
-        elif decoded.command != READ or len(body) != ECHO_LEN:
+            request = decode_frame(raw_request)
+        except ProtocolError:
             continue
-        elif body[0] != MEMORY_TYPE:
-            script.setdefault(label, (request, replies[0]))
-        else:
+        body = request.body
+        if request.command == READ and len(body) == ECHO_LEN and body[0] == MEMORY_TYPE:
             shape = (int.from_bytes(body[1:5], "little"), int.from_bytes(body[5:8], "little"))
-            data = reply.body[ECHO_LEN:]
-            if shape in _MEMORY_READS and len(data) == shape[1]:
-                memory.setdefault(shape[0], data)
-    if not any(decode_frame(tx).command == QUERY for tx, _ in script.values()):
-        raise ValueError(f"{path}: no handshake (query 0x11) in the recorded session")
+            if shape not in _MEMORY_READS or shape[0] in memory:
+                continue
+            data = _valid_reply(request, raw_reply)
+            if data is not None:
+                memory[shape[0]] = data
+            continue
+        is_query = request.command == QUERY
+        is_other_read = request.command == READ and len(body) == ECHO_LEN
+        if not (is_query or is_other_read) or raw_request in scripted:
+            continue
+        if _valid_reply(request, raw_reply) is None:
+            continue
+        key = label if label not in script else f"{label} ({len(script)})"
+        script[key] = (raw_request, raw_reply)
+        scripted.add(raw_request)
+    if not any(decode_frame(tx).command == QUERY for tx in scripted):
+        raise ValueError(f"{path}: no valid handshake (query 0x11) reply in the recorded session")
     if GLOBAL_ADDRESS not in memory:
         raise ValueError(f"{path}: no global block read (type 4, 0x20000000 x4) in the session")
     if EDIT_BUFFER not in memory:
@@ -163,6 +229,12 @@ def _simulated_parts(
             "(a simulated pedal needs a session recorded on a preset)"
         )
     memory.setdefault(LOOPBACK_ADDRESS, b"\x00")
+    info = encode_frame(READ, _DEVICE_INFO_ECHO)
+    if info not in scripted:
+        script["device info (not recorded)"] = (
+            info,
+            encode_frame(READ, _DEVICE_INFO_ECHO + bytes(32)),
+        )
     return script, memory, state.index
 
 
@@ -344,7 +416,9 @@ class FakeTransport:
         loaded (normal or edit mode). The pedal starts in the recorded state: the identity from
         the handshake, the global block, current preset and status byte (loopback; ``00`` when
         not recorded) from the first recorded read of each, and the device information reply
-        when the session has one. Requests are recognised by their frames, not their labels;
+        (32 zero bytes when not recorded). Only replies that answer their request count (right
+        command and echo, a handshake that parses), so a retried request uses its first good
+        reply. Requests are recognised by their frames, not their labels;
         every other recorded request is ignored, so reads answer from the pedal's memory and
         writes change it.
 

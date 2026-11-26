@@ -184,3 +184,16 @@ def test_lookup() -> None:
 def test_panel_group_is_frozen() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         PANEL_GROUPS[0].name = "X"  # type: ignore[misc]
+
+
+def test_memoryview_is_counted_in_bytes() -> None:
+    wide = memoryview(bytes(range(42))).cast("H")
+    assert len(wide) == 21
+    with pytest.raises(ValueError):
+        group_enabled("AMP", wide)  # type: ignore[arg-type]
+    assert group_enabled("AMP", memoryview(bytes([1] + [60] * 20))) is True
+
+
+def test_not_bytes() -> None:
+    with pytest.raises(ValueError):
+        group_enabled("AMP", 21)  # type: ignore[arg-type]

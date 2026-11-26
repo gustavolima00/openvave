@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from openvave import FakeTransport
+from openvave import FakeTransport, Region, TankG
 from tests.support import storage_fixture as sf
 from tests.support.captures import (
     CAPTURES_DIR,
@@ -28,7 +28,7 @@ from tests.support.captures import (
     STATUS,
     load_capture,
 )
-from tests.support.mutations import with_payload
+from tests.support.mutations import set_command, set_echo, with_payload
 from tests.support.write_fixture import write_frame
 
 CAP = load_capture(FW96_CONNECT)
@@ -267,3 +267,60 @@ def test_simulated_signature() -> None:
     params = inspect.signature(FakeTransport.simulated).parameters
     assert list(params) == ["path", "image", "faults", "select_transient", "chunk_size"]
     assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in list(params.values())[1:])
+
+
+# -- replies that do not answer their request (Codex round 1) -----------------------------------
+
+
+def test_reply_with_a_wrong_echo_is_not_memory(tmp_path: Path) -> None:
+    wrong = set_echo(CAP.rx(GLOBAL), address=BUFFER_ADDR)
+    with pytest.raises(ValueError, match="global"):
+        FakeTransport.simulated(derive(tmp_path, replace={GLOBAL: wrong}))
+
+
+def test_reply_with_a_wrong_command_is_not_memory(tmp_path: Path) -> None:
+    wrong = set_command(CAP.rx(GLOBAL), 0x22)
+    with pytest.raises(ValueError, match="global"):
+        FakeTransport.simulated(derive(tmp_path, replace={GLOBAL: wrong}))
+
+
+async def test_retried_read_uses_its_first_good_reply(tmp_path: Path) -> None:
+    wrong = set_echo(with_payload(CAP.rx(GLOBAL), bytes([0, 0, 2, 1])), address=BUFFER_ADDR)
+    path = derive(
+        tmp_path, replace={GLOBAL: wrong}, extra=[("again", CAP.tx(GLOBAL), CAP.rx(GLOBAL))]
+    )
+    fake = FakeTransport.simulated(path)
+    assert await ask(fake, CAP.tx(GLOBAL)) == CAP.rx(GLOBAL)
+
+
+async def test_retried_handshake_uses_the_good_identity(tmp_path: Path) -> None:
+    bad = with_payload(CAP.rx(QUERY), b"garbage")
+    path = derive(tmp_path, replace={QUERY: bad}, extra=[("retry", CAP.tx(QUERY), CAP.rx(QUERY))])
+    fake = FakeTransport.simulated(path)
+    assert await ask(fake, CAP.tx(QUERY)) == CAP.rx(QUERY)
+    async with TankG.over(fake) as pedal:
+        assert pedal.identity.firmware == 96
+
+
+def test_handshake_without_a_good_identity(tmp_path: Path) -> None:
+    bad = with_payload(CAP.rx(QUERY), b"garbage")
+    with pytest.raises(ValueError, match="handshake"):
+        FakeTransport.simulated(derive(tmp_path, replace={QUERY: bad}))
+
+
+async def test_snapshot_without_recorded_device_information() -> None:
+    fake = FakeTransport.simulated(STEP_GAIN)
+    async with TankG.over(fake, timeout=1.0) as pedal:
+        snap = await pedal.snapshot()
+    assert snap.regions[Region.DEVICE_INFO].data == bytes(32)
+
+
+def test_one_label_for_two_different_writes(tmp_path: Path) -> None:
+    label = "write knob_block"
+    first = write_frame(BUFFER_ADDR + 4, bytes(14))
+    second = write_frame(BUFFER_ADDR + 4, bytes([1]) * 14)
+    ack = bytes.fromhex("00 59 00 01 00 00 00 ff")
+    path = derive(tmp_path, extra=[(label, first, ack), (label, second, ack)])
+    with pytest.raises(ValueError, match="two different requests"):
+        FakeTransport.from_capture(path)  # replay keeps its rule
+    FakeTransport.simulated(path)  # the simulated pedal drops writes

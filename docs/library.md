@@ -368,8 +368,8 @@ def keep(backup: Backup) -> None:
 
 fake = FakeTransport.simulated("captures/fw96/20261116-probe-connect.jsonl")
 async with TankG.over(fake) as pedal:
-    await pedal.set_fields({"gain": 95, "delay_on": False})
     await pedal.select_preset(6)  # 2C
+    await pedal.set_fields({"gain": 95, "delay_on": False})
     backup = await pedal.backup()  # 36 presets, cross-checked
     await pedal.save_preset(unsafe=True, on_backup=keep)
 fake.sent  # every request, in order
@@ -380,7 +380,8 @@ fake.sent  # every request, in order
 - **Starting state.** The recorded session must hold the handshake, a read of the global block
   and a read of the current preset, recorded while a preset was loaded. The pedal starts with
   that identity, global block and current preset, the recorded status byte (loopback; off when
-  not recorded) and the recorded device information. Requests are matched by their frames, not
+  not recorded) and the recorded device information (32 zero bytes when not recorded). Requests
+  are matched by their frames, not
   their labels; other recorded requests are ignored, so reads answer from the pedal's memory and
   writes change it.
 - **Stored presets.** `image` (758 bytes) when given, else the session's whole-image read, else a

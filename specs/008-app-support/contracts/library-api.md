@@ -11,8 +11,8 @@ from openvave import FakeTransport, TankG
 
 fake = FakeTransport.simulated("captures/fw96/20261116-probe-connect.jsonl")
 async with TankG.over(fake) as pedal:
-    await pedal.set_fields({"gain": 95, "delay_on": True})
     await pedal.select_preset(6)                      # 2C
+    await pedal.set_fields({"gain": 95, "delay_on": True})
     backup = await pedal.backup()                     # 36 presets, cross-checked
 fake.sent                                             # every request, in order
 ```
