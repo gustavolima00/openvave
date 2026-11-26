@@ -415,6 +415,32 @@ Not yet known: whether other controls exist that we have not tried. Amp type and
 positions each (0–8; IR cab `0` = cab off, heard 2026-11-19), and every knob reaches 0 and 127
 (session 19:17).
 
+### Front panel
+
+The panel's controls in panel order, with their printed labels and groups, are drawn in
+[`docs/tank-g.md`](../../docs/tank-g.md) (`docs/images/tankg-controls.svg`) and published as
+library data in `openvave.protocol.PANEL_CONTROLS` (spec 008). Whether each printed group is
+enabled is read from one byte of the current preset; `openvave.protocol.PANEL_GROUPS` mirrors this
+table row for row (`tests/unit/test_panel_doc.py`). No new observation: each rule restates a
+finding above with its evidence.
+
+| Group | Field | Rule | Confidence | Evidence |
+|---|---|---|---|---|
+| MASTER | none | none | none | no byte follows the knob (control inventory above, spec 007 gate session C, observed) |
+| CAB | `ir_cab` | `nonzero` | confirmed | manual; the vendor app shows 0 as OFF; cab off heard at 0 in spec 007 gate session C, 2026-11-19 |
+| REVERB | `reverb_on` | `switch` | confirmed | byte-map row (preset 3) and the `block_switch` write row |
+| DELAY | `delay_on` | `switch` | confirmed | byte-map row (preset 2) and the `block_switch` write row |
+| MOD | `mod_on` | `switch` | confirmed | byte-map row (preset 1) and the `block_switch` write row |
+| AMP | `amp_on` | `switch` | confirmed | byte-map row (preset 0) and the `block_switch` write row |
+| GATE | `noise_gate` | `nonzero` | documented | the vendor app shows 0 as `OFF` ([app-features.md](app-features.md), GATE row); never heard as off |
+
+`switch`: enabled when the byte is the field's on value (1), not enabled at the off value (0), no
+answer otherwise. `nonzero`: enabled when the byte is not 0. `documented` means shown by the
+vendor's own material, not checked on the pedal. Two limits: the bypass placeholder (21 zero
+bytes, see "Pedal state") is not a preset and gives no answer for any group; and the off zones
+between two effect types of MOD FX, DLY MIX and RVB DECAY (manual, not verified) are not part of
+the MOD, DELAY and REVERB rules.
+
 ### Background polling
 
 While connected and when the command queue is idle, the app reads the global block about once

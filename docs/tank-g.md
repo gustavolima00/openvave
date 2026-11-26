@@ -37,6 +37,9 @@ Knobs, in panel order:
 | 14 | TYPE (amp type) | `amp_type` | 5 | 9 positions, 0–8 | confirmed |
 | 15 | NOISE GATE | `noise_gate` | 4 | 0–127 (the app shows 0 as `OFF`) | confirmed |
 
+The same order, labels and groups, with the footswitches, are library data:
+`openvave.protocol.PANEL_CONTROLS` ([library guide](library.md#the-front-panel)).
+
 Not knobs:
 
 | Control | Field | Preset byte | Values | Confidence |
@@ -100,6 +103,10 @@ order:
 5. **RVB**: reverb; RVB DECAY picks room, spring or cloud and how long, plus mix (15–16), switched
    by `reverb_on`.
 6. **CAB**: cabinet impulse response, 9 positions (17). No on/off switch.
+
+How to read whether each group is on, with the confidence of each rule (a gate of 0 shown as off
+is the app's display, `documented`; IR cab 0 = off is `confirmed`), is library data too:
+`openvave.protocol.PANEL_GROUPS` and `group_enabled()`.
 
 **Not verified:** the order in which the pedal actually processes audio. The list above is the
 app's drawing order and the byte order. Many modelling pedals put the cabinet right after the amp,
