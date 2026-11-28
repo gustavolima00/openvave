@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from openvave.errors import ConnectionLostError, ProtocolError
-from openvave.protocol.frame import READ, WRITE, decode_frame, encode_frame
+from openvave.protocol.frame import QUERY, READ, WRITE, Frame, decode_frame, encode_frame
 
 ECHO_LEN = 8
 MEMORY_TYPE = 4
@@ -26,6 +26,8 @@ LOOPBACK_ADDRESS = 0xD0000000
 PRESET_SIZE = 21
 STORE_OFFSET = 2
 IMAGE_SIZE = STORE_OFFSET + PRESET_SIZE * 36
+STORED_HEADER = bytes.fromhex("a5 5a")
+"""Header of the stored image seen on hardware (2026-11-17; meaning unknown)."""
 WRITE_ACK = bytes.fromhex("00 59 00 01 00 00 00 ff")
 WRITE_NAK = bytes.fromhex("00 59 00 01 00 00 01 fe")
 """A write reply with status 1 (no NAK has been seen on hardware; any non-zero status is one)."""
@@ -78,6 +80,194 @@ def _reply_list(label: str, replies: Replies) -> list[bytes]:
     if not frames:
         raise ValueError(f"no reply for label {label!r}")
     return frames
+
+
+def _read_capture(path: str | Path) -> dict[str, tuple[bytes, list[bytes]]]:
+    """``label → (request, replies)`` of a capture file, in order of each label's first reply.
+
+    Labels are whitespace-normalised; several ``rx`` lines with one label keep their order.
+    Events other than ``tx``/``rx`` are ignored.
+    """
+    tx: dict[str, bytes] = {}
+    rx: dict[str, list[bytes]] = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            event = record["event"]
+            if event == "tx":
+                label = _label(record["label"])
+                frame = bytes.fromhex(record["hex"])
+                if tx.setdefault(label, frame) != frame:
+                    raise ValueError(f"{path}: label {label!r} names two different requests")
+            elif event == "rx":
+                label = _label(record["label"])
+                if label not in tx:
+                    raise ValueError(f"{path}: rx {label!r} before its tx")
+                rx.setdefault(label, []).append(bytes.fromhex(record["hex"]))
+    return {label: (tx[label], rx[label]) for label in rx}
+
+
+_GLOBAL_READ = (GLOBAL_ADDRESS, 4)
+_BUFFER_READ = (EDIT_BUFFER, PRESET_SIZE)
+_STATUS_READ = (LOOPBACK_ADDRESS, 1)
+_IMAGE_READ = (STORE_ADDRESS, IMAGE_SIZE)
+_MEMORY_READS = (_GLOBAL_READ, _BUFFER_READ, _STATUS_READ, _IMAGE_READ)
+
+
+def _exchanges(path: str | Path) -> list[tuple[str, bytes, bytes]]:
+    """Every ``(label, request, reply)`` of a capture file, in reply order.
+
+    Each reply is paired with the latest request of its label. Unlike :func:`_read_capture` this
+    accepts a label reused for different requests (two writes of one kind with different
+    values): the simulated pedal drops writes, so it must not refuse such a session.
+    """
+    latest: dict[str, bytes] = {}
+    out: list[tuple[str, bytes, bytes]] = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            event = record["event"]
+            if event == "tx":
+                latest[_label(record["label"])] = bytes.fromhex(record["hex"])
+            elif event == "rx":
+                label = _label(record["label"])
+                if label not in latest:
+                    raise ValueError(f"{path}: rx {label!r} before its tx")
+                out.append((label, latest[label], bytes.fromhex(record["hex"])))
+    return out
+
+
+def _valid_reply(request: Frame, reply: bytes) -> bytes | None:
+    """The payload of ``reply`` if it answers ``request``, else ``None``.
+
+    A read reply must carry the read command and echo the request's 8 bytes (type, address,
+    length) followed by exactly ``length`` data bytes; a handshake reply must parse as an
+    identity. Returns the data (reads) or the identity payload (handshake).
+    """
+    from openvave.protocol.identity import parse_identity
+
+    try:
+        decoded = decode_frame(reply)
+    except ProtocolError:
+        return None
+    if decoded.command != request.command:
+        return None
+    if request.command == QUERY:
+        try:
+            parse_identity(decoded.body)
+        except ProtocolError:
+            return None
+        return decoded.body
+    body = request.body
+    length = int.from_bytes(body[5:8], "little")
+    if decoded.body[:ECHO_LEN] != body or len(decoded.body) != ECHO_LEN + length:
+        return None
+    return decoded.body[ECHO_LEN:]
+
+
+_NO_CORRUPTION = frozenset({"preset_select", "bypass", "commit"})
+"""Write kinds a ``corrupt`` fault cannot change (the select and bypass data byte is ignored, a
+commit has none): :meth:`FakeTransport.simulated` refuses that combination."""
+_QUERY_REQUEST = encode_frame(QUERY, b"")
+"""The handshake request the session sends (``build_query()``: command ``0x11``, empty body)."""
+_DEVICE_INFO_ECHO = bytes([5]) + LOOPBACK_ADDRESS.to_bytes(4, "little") + (32).to_bytes(3, "little")
+"""The device-information read (type 5, ``0xD0000000``, 32 bytes) the session's snapshot sends."""
+
+
+def _simulated_parts(
+    path: str | Path,
+) -> tuple[dict[str, tuple[bytes, Replies]], dict[int, bytes], int]:
+    """Split a recorded session into the script, the memory blocks and the loaded index.
+
+    Requests are recognised by their decoded frame, not by their label, and only replies that
+    answer them (right command and echo; a handshake reply that parses) count, so a retried
+    request uses its first good reply. The handshake query and reads that are not type 4 (device
+    information) stay scripted; the first good reply of the global, edit-buffer, status and
+    whole-image reads becomes memory; every other request (other type-4 reads, writes) is
+    dropped, so later reads answer from memory and writes are applied to it. A session without a
+    device-information reply answers that read with 32 zero bytes. Raises :class:`ValueError`
+    when the handshake, the global read or the current-preset read has no good reply, or when
+    the recorded state is not a preset in normal or edit mode.
+    """
+    from openvave.protocol.state import classify
+
+    script: dict[str, tuple[bytes, Replies]] = {}
+    scripted: set[bytes] = set()
+    memory: dict[int, bytes] = {}
+    bad_image = False
+    for _, raw_request, raw_reply in _exchanges(path):
+        try:
+            request = decode_frame(raw_request)
+        except ProtocolError:
+            continue
+        body = request.body
+        if request.command == READ and len(body) == ECHO_LEN and body[0] == MEMORY_TYPE:
+            shape = (int.from_bytes(body[1:5], "little"), int.from_bytes(body[5:8], "little"))
+            if shape not in _MEMORY_READS or shape[0] in memory:
+                continue
+            data = _valid_reply(request, raw_reply)
+            if data is not None:
+                memory[shape[0]] = data
+            elif shape == _IMAGE_READ:
+                bad_image = True
+            continue
+        is_query = raw_request == _QUERY_REQUEST
+        is_other_read = request.command == READ and len(body) == ECHO_LEN
+        if not (is_query or is_other_read) or raw_request in scripted:
+            continue
+        if _valid_reply(request, raw_reply) is None:
+            continue
+        script[raw_request.hex(" ")] = (raw_request, raw_reply)  # keyed by frame, not label
+        scripted.add(raw_request)
+    if _QUERY_REQUEST not in scripted:
+        raise ValueError(f"{path}: no valid handshake (query 0x11) reply in the recorded session")
+    if GLOBAL_ADDRESS not in memory:
+        raise ValueError(f"{path}: no global block read (type 4, 0x20000000 x4) in the session")
+    if EDIT_BUFFER not in memory:
+        raise ValueError(f"{path}: no current preset read (type 4, 0x10000000 x21) in the session")
+    state = classify(memory[GLOBAL_ADDRESS], memory[EDIT_BUFFER])
+    if state.kind not in ("normal", "edit"):
+        raise ValueError(
+            f"{path}: the recorded state is {state.kind}, not a loaded preset in normal or edit "
+            "mode (a simulated pedal needs a session recorded on a preset, not bypass or tuner)"
+        )
+    assert state.index is not None
+    memory.setdefault(LOOPBACK_ADDRESS, b"\x00")
+    info = encode_frame(READ, _DEVICE_INFO_ECHO)
+    if info not in scripted:
+        script[info.hex(" ")] = (
+            info,
+            encode_frame(READ, _DEVICE_INFO_ECHO + bytes(32)),
+        )
+    if bad_image and STORE_ADDRESS not in memory:
+        memory[STORE_ADDRESS] = b""  # a malformed recorded image: refused unless image= is given
+    return script, memory, state.index
+
+
+def _generated_image(buffer: bytes, loaded: int) -> bytes:
+    """The stored image of a simulated pedal when none was given or recorded (758 bytes).
+
+    Header ``a5 5a`` (seen on hardware), ``buffer`` at index ``loaded``, and at every other index
+    ``i``: bytes 0–3 (block switches) = bits 0–3 of ``i``; byte 4 = ``3·i mod 128``; byte 5 =
+    ``i mod 9``; bytes 6–16 = ``(7·i + 11·offset) mod 128``; byte 17 = ``(i + 3) mod 9``; bytes
+    18–20 = ``i``, ``0x40 + i``, ``0x80 + i``. Every mapped byte is in range, positions differ, and
+    none of it is vendor preset content.
+    """
+    presets = []
+    for i in range(36):
+        if i == loaded:
+            presets.append(bytes(buffer))
+            continue
+        data = [(i >> bit) & 1 for bit in range(4)]
+        data += [(3 * i) % 128, i % 9]
+        data += [(7 * i + 11 * offset) % 128 for offset in range(6, 17)]
+        data += [(i + 3) % 9, i, 0x40 + i, 0x80 + i]
+        presets.append(bytes(data))
+    return STORED_HEADER + b"".join(presets)
 
 
 class FakeTransport:
@@ -203,25 +393,9 @@ class FakeTransport:
         Several ``rx`` lines with the same label (e.g. a ``watch`` session record) become an
         ordered reply sequence. Events other than ``tx``/``rx`` are ignored.
         """
-        tx: dict[str, bytes] = {}
-        rx: dict[str, list[bytes]] = {}
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                record = json.loads(line)
-                event = record["event"]
-                if event == "tx":
-                    label = _label(record["label"])
-                    frame = bytes.fromhex(record["hex"])
-                    if tx.setdefault(label, frame) != frame:
-                        raise ValueError(f"{path}: label {label!r} names two different requests")
-                elif event == "rx":
-                    label = _label(record["label"])
-                    if label not in tx:
-                        raise ValueError(f"{path}: rx {label!r} before its tx")
-                    rx.setdefault(label, []).append(bytes.fromhex(record["hex"]))
-        script: dict[str, tuple[bytes, Replies]] = {label: (tx[label], rx[label]) for label in rx}
+        script: dict[str, tuple[bytes, Replies]] = {
+            label: (tx, rx) for label, (tx, rx) in _read_capture(path).items()
+        }
         return cls(
             script,
             split=split,
@@ -233,6 +407,84 @@ class FakeTransport:
             apply_writes=apply_writes,
             select_transient=select_transient,
             faults=faults,
+        )
+
+    @classmethod
+    def simulated(
+        cls,
+        path: str | Path,
+        *,
+        image: bytes | None = None,
+        faults: Mapping[str, str] | None = None,
+        select_transient: int = 0,
+        chunk_size: int | None = None,
+    ) -> FakeTransport:
+        """A simulated pedal that accepts writes, built from one recorded session.
+
+        ``path`` is a capture file (``captures/README.md``) that holds at least the handshake,
+        a read of the global block and a read of the current preset, recorded while a preset was
+        loaded (normal or edit mode). The pedal starts in the recorded state: the identity from
+        the handshake, the global block, current preset and status byte (loopback; ``00`` when
+        not recorded) from the first recorded read of each, and the device information reply
+        (32 zero bytes when not recorded). Only replies that answer their request count (right
+        command and echo, a handshake that parses), so a retried request uses its first good
+        reply. Requests are recognised by their frames, not their labels;
+        every other recorded request is ignored, so reads answer from the pedal's memory and
+        writes change it.
+
+        It holds 36 stored presets: ``image`` (758 bytes) when given, else the session's
+        whole-image read, else a generated image: header ``a5 5a``, the recorded preset at the
+        loaded position (for a session recorded in edit mode, the edited buffer stands for the
+        stored preset), and a deterministic pattern, different at every position and inside
+        every byte-map range, elsewhere.
+
+        It accepts every allowlisted write and applies it as ``apply_writes`` describes (a frame
+        outside the allowlist raises ``AssertionError``). ``faults`` (``{write kind: action}``,
+        each used once), ``select_transient`` and ``chunk_size`` have their meaning on the
+        constructor. :attr:`sent`, :attr:`commits` and :meth:`lose_link` work as on any fake.
+
+        Raises :class:`ValueError` when the handshake, the global read or the current-preset
+        read is missing, when the recorded state is not a preset in normal or edit mode
+        (bypass, tuner), when ``image`` (or the recorded image) is not 758 bytes or does not
+        start with ``a5 5a`` (a malformed recorded image is refused unless ``image`` is given),
+        for an unknown fault kind or action, or for a ``corrupt`` fault on ``preset_select``,
+        ``bypass`` or ``commit`` (it would change nothing; use another action).
+
+        It is a model of the pedal built from the protocol document, not evidence of what a
+        pedal does: only a capture proves behaviour.
+        """
+        if image is not None and len(image) != IMAGE_SIZE:
+            raise ValueError(f"image must be {IMAGE_SIZE} bytes, got {len(image)}")
+        for kind, action in (faults or {}).items():
+            if action == "corrupt" and kind in _NO_CORRUPTION:
+                raise ValueError(
+                    f"a corrupt fault does not change a {kind} write on the simulated pedal "
+                    "(it carries no data the pedal uses); use nak, no_reply, disconnect or ignore"
+                )
+        script, memory, loaded = _simulated_parts(path)
+        if image is not None:
+            memory[STORE_ADDRESS] = bytes(image)
+        elif memory.get(STORE_ADDRESS) == b"":
+            raise ValueError(
+                f"{path}: the recorded whole-image read has no valid reply "
+                f"(not {IMAGE_SIZE} bytes or a wrong echo); pass image= to replace it"
+            )
+        elif STORE_ADDRESS not in memory:
+            memory[STORE_ADDRESS] = _generated_image(memory[EDIT_BUFFER], loaded)
+        header = memory[STORE_ADDRESS][:STORE_OFFSET]
+        if header != STORED_HEADER:
+            source = "image" if image is not None else f"{path}: the recorded image"
+            raise ValueError(
+                f"{source} has header {header.hex(' ')}, not {STORED_HEADER.hex(' ')}: backups "
+                "of it could not be restored"
+            )
+        return cls(
+            script,
+            memory=memory,
+            apply_writes=True,
+            faults=faults,
+            select_transient=select_transient,
+            chunk_size=chunk_size,
         )
 
     async def open(self) -> None:

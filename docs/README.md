@@ -3,8 +3,9 @@
 openvave talks to the **M-VAVE Tank-G** guitar multi-effects pedal over Bluetooth LE: it reads
 the pedal, backs up its 36 presets, changes the current sound remotely, and (behind `--unsafe`)
 saves and restores stored presets. These pages explain the pedal, the command-line tool and the
-Python library, and how to use it from an AI assistant. They describe version **0.6.0**,
-tested on firmware **96**.
+Python library, and how to use it from an AI assistant. They describe version **0.7.0**,
+tested on firmware **96**. 0.7.0 adds, for developers, a simulated pedal that accepts writes, the
+front panel as data and strict preset position helpers ([library guide](library.md)).
 
 > Unofficial project. Not affiliated with or endorsed by M-VAVE / Cuvave. Every diagram here is an
 > original drawing; no vendor photos, manual pages or app screenshots are used.

@@ -54,6 +54,34 @@ def parse_position(text: str) -> int:
     raise ValueError(f"invalid preset position {text!r} (expected 1A–9D or 0–{PRESET_COUNT - 1})")
 
 
+_STRICT_POSITION = re.compile(r"[1-9][A-D]")
+
+
+def preset_index(position: str) -> int:
+    """Strict position text → index: ``"1A" → 0``, ``"2C" → 6``, ``"9D" → 35``.
+
+    Accepts exactly the 36 texts ``"1A"``…``"9D"`` (one digit 1–9, one upper-case letter A–D)
+    and raises :class:`ValueError` for every other value, including lower case (``"2c"``), an
+    index as text (``"6"``), surrounding spaces and values that are not ``str``. The command line
+    and the MCP tools keep their own, more lenient parsing.
+    """
+    if not isinstance(position, str) or _STRICT_POSITION.fullmatch(position) is None:
+        raise ValueError(f"invalid preset position {position!r} (expected 1A–9D)")
+    return (int(position[0]) - 1) * 4 + SLOTS.index(position[1])
+
+
+def preset_position(index: int) -> str:
+    """Strict index → position text: ``0 → "1A"``, ``6 → "2C"``, ``35 → "9D"``.
+
+    Accepts exactly the integers 0–35 (``bool`` excluded) and raises :class:`ValueError` for
+    every other value, including other types. Equals :attr:`openvave.PedalState.position` for a
+    state on that index.
+    """
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < PRESET_COUNT:
+        raise ValueError(f"invalid preset index {index!r} (expected 0–{PRESET_COUNT - 1})")
+    return f"{index // 4 + 1}{SLOTS[index % 4]}"
+
+
 _KEY = object()
 
 

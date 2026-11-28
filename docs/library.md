@@ -9,8 +9,9 @@ The authoritative API contracts are in the specs:
 [0.1.0](../specs/001-readonly-ble-connection/contracts/library-api.md),
 [0.2.0](../specs/002-preset-byte-map/contracts/library-api.md),
 [0.3.0](../specs/003-preset-backup-edit-writes/contracts/library-api.md),
-[0.4.0](../specs/004-remote-edit-save-restore/contracts/library-api.md) and
-[0.5.0](../specs/005-device-selection/contracts/library-api.md) additions. Runnable
+[0.4.0](../specs/004-remote-edit-save-restore/contracts/library-api.md),
+[0.5.0](../specs/005-device-selection/contracts/library-api.md) and
+[0.7.0](../specs/008-app-support/contracts/library-api.md) additions. Runnable
 scripts are in [`examples/`](examples/).
 
 ## Sessions
@@ -173,8 +174,20 @@ Keyword options mirror the CLI flags: `experimental=True` (`--experimental`),
 `discard_edits=True` (`--discard-edits`), `unsafe=True` (`--unsafe`). A plan is the CLI's
 `--dry-run`.
 
-Indexes are 0–35 (`4 × (bank − 1) + slot`; 1B = 1, 2C = 6). There is no name parser in the
-public API; [`examples/backup_and_save.py`](examples/backup_and_save.py) has a three-line one.
+Indexes are 0–35 (`4 × (bank − 1) + slot`; 1B = 1, 2C = 6). `preset_index` and
+`preset_position` (from `openvave`, also in `openvave.protocol`) convert between the two:
+
+```python
+from openvave import preset_index, preset_position
+
+preset_index("2C")  # 6
+preset_position(6)  # "2C"
+preset_index("2c")  # ValueError: exactly "1A"…"9D" (also "0A", "10A", "1E", "", "6", 6, None)
+preset_position(36)  # ValueError: exactly the ints 0–35 (also -1, True, 1.0, "1")
+```
+
+They are strict on purpose. The command line and the MCP tools stay lenient and also accept lower
+case and an index as text (`2c`, `6`).
 
 ### Values
 
@@ -342,10 +355,60 @@ async with TankG.over(fake) as pedal:
     print((await pedal.state()).kind)  # normal
 ```
 
-`FakeTransport.from_capture(path, *, replies=…, memory=…, apply_writes=False, …)` can also serve
-extra replies, emulate pedal memory and apply allowlisted writes to it, which is how openvave's own
-test suite exercises the write paths (see `tests/support/write_fixture.py`). `fake.sent` lists
-every frame the session sent.
+`from_capture` only replays: a write it did not record fails. For a pedal that accepts writes,
+use `FakeTransport.simulated`:
+
+```python
+from openvave import Backup, FakeTransport, TankG
+
+
+def keep(backup: Backup) -> None:
+    """A real program writes the automatic backup to a file."""
+
+
+fake = FakeTransport.simulated("captures/fw96/20261116-probe-connect.jsonl")
+async with TankG.over(fake) as pedal:
+    await pedal.select_preset(6)  # 2C
+    await pedal.set_fields({"gain": 95, "delay_on": False})
+    backup = await pedal.backup()  # 36 presets, cross-checked
+    await pedal.save_preset(unsafe=True, on_backup=keep)
+fake.sent  # every request, in order
+```
+
+`FakeTransport.simulated(path, *, image=None, faults=None, select_transient=0, chunk_size=None)`:
+
+- **Starting state.** The recorded session must hold the handshake, a read of the global block
+  and a read of the current preset, recorded while a preset was loaded. The pedal starts with
+  that identity, global block and current preset, the recorded status byte (loopback; off when
+  not recorded) and the recorded device information (32 zero bytes when not recorded). Requests
+  are matched by their frames, not
+  their labels; other recorded requests are ignored, so reads answer from the pedal's memory and
+  writes change it.
+- **Stored presets.** `image` (758 bytes) when given, else the session's whole-image read, else a
+  generated image: header `a5 5a`, the recorded preset at the loaded position (a session recorded
+  in edit mode counts its edited buffer as the stored preset), and at every other position a
+  deterministic pattern that differs per position, stays inside every byte-map range and holds no
+  vendor content.
+- **Writes and faults.** Every allowlisted write is accepted and applied (select copies a stored
+  preset into the buffer, bypass clears it, saves and restores change the stored image). A frame
+  outside the allowlist raises `AssertionError`. `faults={kind: action}` makes the first write of
+  a kind (`knob_block`, `block_switch`, `led_colour`, `preset_select`, `bypass`, `loopback`,
+  `stored_slot`, `commit`, `stored_image`) misbehave once: `nak`, `no_reply`, `disconnect`,
+  `corrupt` or `ignore`. `select_transient=n` shows the loading state on the next `n` global
+  reads after a select; `chunk_size=182` splits replies as the pedal does at ATT MTU 185.
+- **Errors.** `ValueError` for a missing handshake, global or current-preset read, a recorded
+  state that is not a preset in normal or edit mode (bypass, tuner), an `image` that is not 758
+  bytes or does not start with `a5 5a`, an unknown fault, or `corrupt` on `preset_select`, `bypass`
+  or `commit` (it would change nothing).
+- `fake.sent` lists every request in order, `fake.commits` counts commits and `fake.lose_link()`
+  drops the link at any moment.
+
+The simulated pedal is a **model** built from the protocol document, **not evidence** of what a
+pedal does: only a capture proves behaviour. [`examples/simulated_pedal.py`](examples/simulated_pedal.py)
+runs every step above without a pedal.
+
+`FakeTransport.from_capture(path, *, replies=…, memory=…, apply_writes=False, …)` keeps its
+lower-level options (extra replies by label, your own memory blocks) for tests that need them.
 
 ## The protocol layer
 
@@ -353,8 +416,58 @@ every frame the session sent.
 transport or to decode captures: `encode_frame` / `decode_frame`, `build_read`, `build_write`
 (only allowlisted `WriteTarget`s), `parse_read_reply`, `decode_region`, `diff`, `classify`
 (pedal state from the global block and buffer), `BYTE_MAP`, `WRITE_MESSAGES`, `TYPED_FIELDS`,
-`type_raw`, `type_parts`. The wire format is documented in
+`type_raw`, `type_parts`, `position_name`. The wire format is documented in
 [`command-layer.md`](../specs/protocol/command-layer.md).
+
+### The front panel
+
+`PANEL_CONTROLS` lists the 19 controls printed on the panel, in the order of the
+[drawing](images/tankg-controls.svg): the 15 knobs left to right, then the 4 footswitches.
+`PANEL_GROUPS` lists the 7 printed groups and how to read whether each is enabled:
+
+```python
+from openvave import Region
+from openvave.protocol import (
+    PANEL_CONTROLS,
+    PANEL_GROUPS,
+    group_enabled,
+    panel_control,
+    panel_group,
+)
+
+for control in PANEL_CONTROLS:  # PanelControl(order, label, group, kind, field, offset)
+    print(control.order, control.label, control.group, control.kind, control.field, control.offset)
+panel_control("reverb_decay")  # order 3, "RVB DECAY", group "REVERB", knob, byte 15
+panel_control("led_red")  # None: the LED colour bytes are not panel controls
+
+preset = (await pedal.read(Region.CURRENT_PRESET)).data
+# PanelGroup(name, order, enabled_field, enabled_rule, enabled_confidence)
+for group in PANEL_GROUPS:
+    print(group.name, group_enabled(group.name, preset), group.enabled_confidence)
+panel_group("GATE").enabled_confidence  # "documented"
+```
+
+| Group | Enabled when | Confidence |
+|---|---|---|
+| MASTER | no on/off notion (`None`) | — |
+| CAB | `ir_cab` is not 0 | confirmed |
+| REVERB, DELAY, MOD, AMP | the block switch (`reverb_on`, `delay_on`, `mod_on`, `amp_on`) is on | confirmed |
+| GATE | `noise_gate` is not 0 | **documented** |
+
+`group_enabled(group, preset)` returns `True`, `False` or `None`, and raises `ValueError` for an
+unknown group name (names are upper case, as printed) or bytes that are not 21 long. Three cautions:
+
+- **GATE is `documented` only**: the vendor's phone app shows a noise gate of 0 as `OFF`; openvave
+  has not checked on the pedal that 0 turns the gate off.
+- **MASTER has no state**: no byte follows the knob, so there is nothing to read
+  (`field` and `offset` are `None`).
+- **Bypass gives no answer**: while the pedal is bypassed the current preset reads as 21 zero
+  bytes, which is not a preset, so every group gives `None`. Read `pedal.state()` (`kind ==
+  "bypass"`) for that. A block switch byte that is neither 0 nor 1 also gives `None`.
+
+MOD, DELAY and REVERB follow their block switch only: the off zones between two effect types of
+MOD FX, DLY MIX and RVB DECAY (the manual says the effect is off there; not verified) are not part
+of the rule. `type_parts()` tells you when a knob sits in one.
 
 ## JSON documents
 

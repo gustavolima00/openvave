@@ -6,6 +6,69 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0]
+
+Pedal knowledge for applications. Three things openvave already knew are now public, documented
+library API, so an application such as a pedal editor can build on them instead of copying
+them: a simulated pedal that accepts every allowlisted write (`FakeTransport.simulated`), the
+front panel as data with, per printed group, how to read whether it is enabled and how sure
+openvave is of that rule, and strict preset position helpers. All additions: no public name
+changes meaning, the command line and the MCP server print what they printed, no pedal message is
+added and `schema_version` stays 2. Guide: [docs/library.md](docs/library.md).
+
+### Added (spec 008): a simulated pedal that accepts writes
+
+- `FakeTransport.simulated(path, *, image=None, faults=None, select_transient=0,
+  chunk_size=None)` builds, from one recorded session (for example
+  `captures/fw96/20261116-probe-connect.jsonl`), a `FakeTransport` that starts in the recorded
+  state (identity, global block, current preset, status byte, device information; loopback off
+  and zero device information when not recorded) and holds 36
+  stored presets: `image`, else the session's whole-image read, else a generated image with the
+  recorded preset at the loaded position and a deterministic, in-range pattern elsewhere (no
+  vendor content). Every allowlisted write is applied to its memory and every read answers from
+  it, so `set_field`, `set_fields`, `select_preset`, `reload_preset`, `bypass_on` / `bypass_off`,
+  `set_loopback`, `backup`, `save_preset`, `restore`, `copy_preset`, `swap_presets`,
+  `export_preset` and `import_preset` all work through `TankG.over(...)`. `faults` makes one
+  write of a kind misbehave once (`nak`, `no_reply`, `disconnect`, `corrupt`, `ignore`).
+- `ValueError` when the session lacks the handshake, the global read or the current-preset read,
+  when it was recorded with no preset loaded (bypass), for an image that is not 758 bytes, or for
+  an unknown fault. It is a model built from the protocol document, not evidence of what a pedal
+  does. `FakeTransport(...)` and `FakeTransport.from_capture(...)` are unchanged.
+- New example: [docs/examples/simulated_pedal.py](docs/examples/simulated_pedal.py), runnable
+  without a pedal.
+
+### Added (spec 008): the front panel as data, with each group's enabled state
+
+- `openvave.protocol.PANEL_CONTROLS` (a tuple of `PanelControl`: `order`, `label`, `group`,
+  `kind`, `field`, `offset`) lists the 19 controls printed on the panel in the order of
+  `docs/images/tankg-controls.svg`: 15 knobs, then the 4 footswitches. MASTER has no field and no
+  byte; the LED colour bytes are not panel controls. `panel_control(field)` looks a control up
+  by field name.
+- `openvave.protocol.PANEL_GROUPS` (a tuple of `PanelGroup`: `name`, `order`, `enabled_field`,
+  `enabled_rule`, `enabled_confidence`) lists the 7 printed groups; `panel_group(name)` looks one
+  up and `group_enabled(group, preset)` answers `True`, `False` or `None` from the 21 bytes of a
+  current preset. AMP, MOD, DELAY and REVERB follow their block switch and CAB is enabled when
+  `ir_cab` is not 0, all `confirmed`; GATE is enabled when `noise_gate` is not 0, `documented`
+  only (the vendor app shows 0 as `OFF`; not checked on the pedal); MASTER has no on/off notion.
+  The bypass placeholder (21 zero bytes) gives no answer for any group: bypass is read from
+  `pedal.state()`. The rule table is also in `specs/protocol/command-layer.md` ("Front panel"),
+  checked against the data by the test suite.
+
+### Added (spec 008): strict preset position helpers
+
+- `preset_index("2C") == 6` and `preset_position(6) == "2C"`, from `openvave` and
+  `openvave.protocol`. They accept exactly `"1A"`…`"9D"` and the integers 0–35 and raise
+  `ValueError` for anything else (lower case, an index as text, `bool`, other types). The command
+  line and the MCP tools keep their lenient parsing (`2c`, `6`).
+
+### Tested
+
+- Hardware-free test suite only: no pedal was needed and no pedal message was added. The
+  simulated pedal is compared, for every operation and every fault action, with the internal
+  write fixture of the test suite; the panel order is read from the drawing's description text;
+  the group answers are checked against the rule on every current preset of the committed
+  block-switch, IR cab and noise gate captures.
+
 ## [0.6.0]
 
 AI assistants and preset management. `openvave mcp` runs a Model Context Protocol server, so an

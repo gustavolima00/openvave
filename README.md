@@ -13,8 +13,11 @@ Open-source, reverse-engineered protocol and client library for the **M-VAVE Tan
 
 ## Status
 
-Version 0.6.0 adds an [MCP server](docs/mcp.md) (`openvave mcp`), so an AI assistant can do all of
-the following for you. openvave finds and remembers pedals (`scan`, `select`, `device`, `forget`) and never connects
+Version 0.7.0 adds, for developers, a simulated pedal that accepts writes
+(`FakeTransport.simulated`), the front panel as data with each group's on/off rule, and strict
+preset position helpers ([library guide](docs/library.md)). Version 0.6.0 added an
+[MCP server](docs/mcp.md) (`openvave mcp`), so an AI assistant can do all of the following for
+you. openvave finds and remembers pedals (`scan`, `select`, `device`, `forget`) and never connects
 to a pedal you did not choose. It identifies a connected pedal, decodes every byte of the current preset and global
 settings (all 26 bytes are named on firmware 96) and **backs up** the 36 stored presets. It edits the
 current preset **remotely in normal mode**, as the phone app does (one field, or several over one
